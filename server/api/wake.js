@@ -1,10 +1,10 @@
-const admin = require('firebase-admin');
+const { cert, getApps, initializeApp } = require('firebase-admin/app');
+const { getAuth } = require('firebase-admin/auth');
+const { getMessaging } = require('firebase-admin/messaging');
 
 // La clé de service vit uniquement dans les variables d'environnement de Vercel.
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)),
-  });
+if (!getApps().length) {
+  initializeApp({ credential: cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)) });
 }
 
 const MAX_CALLS_PER_MINUTE = 30;
@@ -26,7 +26,7 @@ module.exports = async (req, res) => {
   const idToken = (req.headers.authorization || '').replace(/^Bearer /, '');
   let uid;
   try {
-    uid = (await admin.auth().verifyIdToken(idToken)).uid;
+    uid = (await getAuth().verifyIdToken(idToken)).uid;
   } catch {
     return res.status(401).end();
   }
@@ -37,7 +37,7 @@ module.exports = async (req, res) => {
 
   try {
     // Push "data-only" : il réveille l'app mais ne contient ni message ni expéditeur.
-    await admin.messaging().send({
+    await getMessaging().send({
       token,
       data: { type: 'wake' },
       android: { priority: 'high', ttl: 120000 },
