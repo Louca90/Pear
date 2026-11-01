@@ -1,7 +1,8 @@
 const { withAppBuildGradle } = require('expo/config-plugins');
 
 // La clé et son mot de passe restent hors du dépôt, dans ~/.gradle/gradle.properties.
-// Sans ces réglages, l'APK de release n'est pas signé : il ne part jamais avec la clé de debug.
+// Sans ces réglages, l'APK n'est pas signé : il ne part jamais avec la clé de debug.
+// La version de test utilise la même clé : on passe de l'une à l'autre sans désinstaller ni perdre les données.
 const RELEASE_CONFIG = `
         release {
             if (project.hasProperty('PEAR_KEYSTORE')) {
@@ -15,7 +16,7 @@ const RELEASE_CONFIG = `
 module.exports = (config) =>
   withAppBuildGradle(config, (result) => {
     result.modResults.contents = result.modResults.contents
-      .replace(/(release \{[\s\S]*?signingConfig signingConfigs\.)debug/, '$1release')
+      .replace(/signingConfig signingConfigs\.debug/g, 'signingConfig signingConfigs.release')
       .replace(/(signingConfigs \{\s*debug \{[\s\S]*?\n {8}\})/, `$1${RELEASE_CONFIG}`);
     return result;
   });

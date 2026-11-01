@@ -4,22 +4,31 @@ import { File, FileHandle, FileMode, Paths } from 'expo-file-system';
 import { addNetworkStateListener, getNetworkStateAsync, NetworkState } from 'expo-network';
 import { from_base64, randombytes_buf, to_base64 } from 'react-native-libsodium';
 
+import { openBytes, sealBytes } from '../crypto/box';
 import { deriveSharedSecret, Identity } from '../crypto/pairing';
+import { createRatchet, ratchetDecrypt, ratchetEncrypt } from '../crypto/ratchet';
 import { PeerLink, PeerStatus, RouteType } from '../network/peer';
 import { wakeContact } from '../network/wake';
-import { Contact } from '../storage';
+import { Contact, loadRatchet, saveRatchet } from '../storage';
 import {
   addMessage,
+  addOutboxEvent,
+  deleteMessage,
   describeMessage,
+  editMessage,
   finishIncomingFile,
   getContactToken,
   getMessage,
+  getOutboxEvents,
   getPendingReadReceipts,
   getUndelivered,
   markConversationRead,
   Message,
   MessageKind,
+  removeOutboxEvent,
   setContactToken,
+  setFileKey,
+  setReaction,
   setReadReceiptSent,
   setStatus,
 } from './database';
@@ -32,9 +41,10 @@ const OFFLINE_DELAY_MS = 1000;
 // Android pénalise les pushs trop fréquents : on réveille un même contact au plus une fois par minute.
 const WAKE_INTERVAL_MS = 60000;
 const WAKE_CHECK_MS = 15000;
-// En-tête d'un morceau de fichier : l'id du fichier (16 octets) puis le numéro du morceau (4 octets).
+// Un morceau de fichier : l'id du fichier (16 octets), puis son numéro (4 octets) et ses données, chiffrés.
 const FILE_ID_BYTES = 16;
-const CHUNK_HEADER_BYTES = FILE_ID_BYTES + 4;
+const CHUNK_INDEX_BYTES = 4;
+const FILE_KEY_BYTES = 32;
 const PROGRESS_NOTIFY_MS = 500;
 // Le disque est sollicité par paquets : un accès par morceau de 14 Ko ralentirait tout le transfert.
 const DISK_BATCH_BYTES = 32 * CHUNK_BYTES;
@@ -42,15 +52,19 @@ const DISK_BATCH_BYTES = 32 * CHUNK_BYTES;
 // Sans ça, le receveur est débordé : il ne répond plus aux battements de coeur et paraît hors ligne.
 const SEND_WINDOW_CHUNKS = 128;
 const WINDOW_POLL_MS = 10;
+// Une réaction reste courte : un emoji peut compter plusieurs caractères, pas plus.
+const MAX_REACTION_LENGTH = 16;
 
 type Link = {
   peer: PeerLink;
   status: PeerStatus;
   route: RouteType | null;
+  secret: Uint8Array;
 };
 
 type IncomingFile = {
   contact: string;
+  key: Uint8Array;
   handle: FileHandle;
   size: number;
   next: number;
@@ -68,8 +82,11 @@ export type PickedFile = {
   kind: MessageKind;
 };
 
+const fileContext = (id: string) => `pear-file-v2.${id}`;
+
 // Garde une connexion par contact tant que l'app est ouverte, et prévient les écrans à chaque changement.
 class ChatManager {
+  private identity: Identity | null = null;
   private links = new Map<string, Link>();
   private names = new Map<string, string>();
   private lastWake = new Map<string, number>();
@@ -107,6 +124,7 @@ class ChatManager {
 
   // Ouvre les connexions des nouveaux contacts et ferme celles des contacts supprimés.
   sync(identity: Identity, contacts: Contact[]) {
+    this.identity = identity;
     this.watch();
     this.lastActivity = Date.now();
     this.names = new Map(contacts.map((contact) => [contact.publicKey, contact.name]));
@@ -165,7 +183,7 @@ class ChatManager {
     this.notify();
   }
 
-  send(contact: string, text: string) {
+  send(contact: string, text: string, replyTo: string | null = null) {
     addMessage({
       id: to_base64(randombytes_buf(16)),
       contact,
@@ -173,10 +191,49 @@ class ChatManager {
       text,
       status: 'sending',
       created_at: Date.now(),
+      reply_to: replyTo,
     });
     this.flush(contact);
     this.wakeIfNeeded(contact);
     this.notify();
+  }
+
+  edit(contact: string, id: string, text: string) {
+    editMessage(id, contact, 1, text);
+    this.sendEvent(contact, { action: 'edit', id, text });
+  }
+
+  // Une seule réaction par personne : la même une deuxième fois l'enlève.
+  react(contact: string, id: string, emoji: string) {
+    const next = getMessage(id, contact)?.my_reaction === emoji ? null : emoji;
+    setReaction(id, contact, 'my_reaction', next);
+    this.sendEvent(contact, { action: 'react', id, emoji: next });
+  }
+
+  deleteForEveryone(contact: string, id: string) {
+    deleteMessage(id, contact, 1);
+    this.sendEvent(contact, { action: 'delete', id });
+  }
+
+  deleteForMe(contact: string, id: string) {
+    this.dropIncomingFile(contact, id);
+    deleteMessage(id, contact);
+    this.notify();
+  }
+
+  private sendEvent(contact: string, event: object) {
+    addOutboxEvent(to_base64(randombytes_buf(16)), contact, JSON.stringify(event));
+    this.flush(contact);
+    this.wakeIfNeeded(contact);
+    this.notify();
+  }
+
+  private dropIncomingFile(contact: string, id: string) {
+    const incoming = this.incomingFiles.get(id);
+    if (incoming?.contact !== contact) return;
+    this.incomingFiles.delete(id);
+    this.progress.delete(id);
+    this.writeQueue = this.writeQueue.then(() => incoming.handle.close()).catch((e) => console.warn('Pear écriture du fichier :', e));
   }
 
   async sendFile(contact: string, file: PickedFile) {
@@ -262,7 +319,7 @@ class ChatManager {
 
   private wakeIfNeeded(contact: string) {
     if (!this.online || this.links.get(contact)?.status === 'connected') return;
-    if (getUndelivered(contact).length === 0) return;
+    if (getUndelivered(contact).length === 0 && getOutboxEvents(contact).length === 0) return;
     if (Date.now() - (this.lastWake.get(contact) ?? 0) < WAKE_INTERVAL_MS) return;
     const token = getContactToken(contact);
     if (!token) return;
@@ -281,6 +338,7 @@ class ChatManager {
     const link: Link = {
       status: 'starting',
       route: null,
+      secret,
       peer: new PeerLink(identity.publicKey < contact ? 'a' : 'b', secret, {
         onStatus: (status) => {
           link.status = status;
@@ -307,6 +365,46 @@ class ChatManager {
     link.peer.start();
   }
 
+  private loadOrCreateRatchet(contact: string) {
+    const secret = this.links.get(contact)?.secret;
+    if (!secret || !this.identity) throw new Error('Contact non connecté');
+    return loadRatchet(contact) ?? createRatchet(this.identity, contact, secret);
+  }
+
+  // Le contenu passe par le ratchet : chaque envoi utilise une nouvelle clé, enregistrée avant de partir.
+  private sendSecure(contact: string, message: unknown): boolean {
+    const peer = this.links.get(contact)?.peer;
+    if (!peer?.isOpen()) return false;
+    const { state, envelope } = ratchetEncrypt(this.loadOrCreateRatchet(contact), JSON.stringify(message));
+    saveRatchet(contact, state);
+    return peer.send({ type: 'ratchet', ...envelope });
+  }
+
+  // L'état n'est enregistré que si le message est authentique : un message forgé ne change rien.
+  private receiveRatchet(contact: string, envelope: unknown) {
+    const { state, text } = ratchetDecrypt(this.loadOrCreateRatchet(contact), envelope);
+    saveRatchet(contact, state);
+    const message = JSON.parse(text);
+    if (message?.type === 'file-offer') this.receiveFileOffer(contact, message);
+    else if (message?.type === 'message') this.receiveText(contact, message);
+    else if (message?.type === 'event') this.receiveEvent(contact, message);
+  }
+
+  // Refaire la même action ne change rien : un événement renvoyé après une coupure est sans danger.
+  private receiveEvent(contact: string, data: any) {
+    if (typeof data.eventId !== 'string' || typeof data.id !== 'string') return;
+    if (data.action === 'edit' && typeof data.text === 'string') {
+      editMessage(data.id, contact, 0, data.text.slice(0, MAX_TEXT_LENGTH));
+    } else if (data.action === 'react' && (data.emoji === null || (typeof data.emoji === 'string' && data.emoji.length <= MAX_REACTION_LENGTH))) {
+      setReaction(data.id, contact, 'their_reaction', data.emoji);
+    } else if (data.action === 'delete' && getMessage(data.id, contact)?.mine === 0) {
+      this.dropIncomingFile(contact, data.id);
+      deleteMessage(data.id, contact, 0);
+    }
+    this.links.get(contact)?.peer.send({ type: 'event-ack', id: data.eventId });
+    this.notify();
+  }
+
   // Tout ce qui n'a pas été confirmé repart : l'autre téléphone ignore les doublons grâce à l'id.
   private flush(contact: string) {
     const peer = this.links.get(contact)?.peer;
@@ -314,6 +412,11 @@ class ChatManager {
     for (const message of getUndelivered(contact)) {
       if (message.kind !== 'text') {
         if (this.sendingFiles.has(message.id)) continue;
+        let key = message.file_key;
+        if (!key) {
+          key = to_base64(randombytes_buf(FILE_KEY_BYTES));
+          setFileKey(message.id, contact, key);
+        }
         const offer = {
           type: 'file-offer',
           id: message.id,
@@ -321,11 +424,16 @@ class ChatManager {
           size: message.file_size,
           mime: message.file_mime,
           kind: message.kind,
+          key,
         };
-        if (!peer.send(offer)) return;
-      } else if (!peer.send({ type: 'message', id: message.id, text: message.text })) {
+        if (!this.sendSecure(contact, offer)) return;
+      } else if (!this.sendSecure(contact, { type: 'message', id: message.id, text: message.text, reply_to: message.reply_to })) {
         return;
       }
+    }
+    // Après les messages : une modification ou une réaction arrive toujours après ce qu'elle vise.
+    for (const event of getOutboxEvents(contact)) {
+      if (!this.sendSecure(contact, { type: 'event', eventId: event.id, ...JSON.parse(event.payload) })) return;
     }
     // Les confirmations de lecture restées en attente pendant une coupure partent aussi.
     for (const message of getPendingReadReceipts(contact)) {
@@ -347,12 +455,14 @@ class ChatManager {
   private async streamFile(contact: string, id: string, from: number) {
     const peer = this.links.get(contact)?.peer;
     const message = getMessage(id, contact);
-    if (!peer || message?.mine !== 1 || !message.file_uri || this.sendingFiles.has(id)) return;
+    if (!peer || message?.mine !== 1 || !message.file_uri || !message.file_key || this.sendingFiles.has(id)) return;
     if (message.status === 'delivered' || message.status === 'read') return;
 
     this.sendingFiles.add(id);
     const size = message.file_size ?? 0;
     const idBytes = from_base64(id);
+    const key = from_base64(message.file_key);
+    const context = fileContext(id);
     const epoch = peer.epoch;
     const handle = new File(message.file_uri).open(FileMode.ReadOnly);
     this.confirmedChunks.set(id, from);
@@ -360,18 +470,23 @@ class ChatManager {
       handle.offset = from * CHUNK_BYTES;
       let index = from;
       while (index * CHUNK_BYTES < size) {
+        // Le message a été supprimé pendant l'envoi : on arrête.
+        if (!getMessage(id, contact)) return;
         const batch = await handle.readBytes(Math.min(DISK_BATCH_BYTES, size - index * CHUNK_BYTES));
         if (batch.length === 0) throw new Error('Fin de fichier inattendue');
         for (let offset = 0; offset < batch.length; offset += CHUNK_BYTES) {
           const data = batch.subarray(offset, offset + CHUNK_BYTES);
-          const chunk = new Uint8Array(CHUNK_HEADER_BYTES + data.length);
-          chunk.set(idBytes, 0);
-          new DataView(chunk.buffer).setUint32(FILE_ID_BYTES, index);
-          chunk.set(data, CHUNK_HEADER_BYTES);
+          const plain = new Uint8Array(CHUNK_INDEX_BYTES + data.length);
+          new DataView(plain.buffer).setUint32(0, index);
+          plain.set(data, CHUNK_INDEX_BYTES);
           while (index - (this.confirmedChunks.get(id) ?? from) >= SEND_WINDOW_CHUNKS) {
             if (!peer.isCurrent(epoch)) return;
             await new Promise((resolve) => setTimeout(resolve, WINDOW_POLL_MS));
           }
+          const sealed = sealBytes(plain, key, context);
+          const chunk = new Uint8Array(FILE_ID_BYTES + sealed.length);
+          chunk.set(idBytes, 0);
+          chunk.set(sealed, FILE_ID_BYTES);
           if (!(await peer.sendChunk(epoch, chunk))) return;
           index += 1;
         }
@@ -391,6 +506,7 @@ class ChatManager {
     const kinds: MessageKind[] = ['image', 'video', 'file'];
     if (!peer || !isValidFileId(data.id) || typeof data.name !== 'string' || !kinds.includes(data.kind)) return;
     if (!Number.isSafeInteger(size) || size < 0 || size > MAX_FILE_BYTES) return;
+    if (typeof data.key !== 'string' || from_base64(data.key).length !== FILE_KEY_BYTES) return;
 
     const existing = getMessage(data.id, contact);
     if (existing && existing.status !== 'receiving') {
@@ -423,12 +539,15 @@ class ChatManager {
         file_uri: file.uri,
         file_size: size,
         file_mime: typeof data.mime === 'string' ? data.mime.slice(0, 255) : null,
+        file_key: data.key,
       });
       // Reprise : les morceaux déjà écrits ne sont pas redemandés.
       const next = Math.floor(partialSize / CHUNK_BYTES);
       const handle = file.open(FileMode.ReadWrite);
       handle.offset = next * CHUNK_BYTES;
-      incoming = { contact, handle, size, next, received: next * CHUNK_BYTES, pending: [], pendingBytes: 0 };
+      // En cas de reprise, la clé enregistrée reste celle du début du fichier.
+      const key = from_base64(existing?.file_key ?? data.key);
+      incoming = { contact, key, handle, size, next, received: next * CHUNK_BYTES, pending: [], pendingBytes: 0 };
       this.incomingFiles.set(data.id, incoming);
     }
 
@@ -440,10 +559,14 @@ class ChatManager {
   private async receiveChunk(contact: string, bytes: Uint8Array) {
     const id = to_base64(bytes.slice(0, FILE_ID_BYTES));
     const incoming = this.incomingFiles.get(id);
-    const index = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(FILE_ID_BYTES);
-    if (incoming?.contact !== contact || index !== incoming.next) return;
+    if (incoming?.contact !== contact) return;
 
-    const data = bytes.slice(CHUNK_HEADER_BYTES);
+    // Le numéro est chiffré avec les données, et le contexte contient l'id : un morceau ne peut pas être déplacé.
+    const plain = openBytes(bytes.slice(FILE_ID_BYTES), incoming.key, fileContext(id));
+    const index = new DataView(plain.buffer, plain.byteOffset, plain.byteLength).getUint32(0);
+    if (index !== incoming.next) return;
+
+    const data = plain.slice(CHUNK_INDEX_BYTES);
     incoming.pending.push(data);
     incoming.pendingBytes += data.length;
     incoming.next += 1;
@@ -503,10 +626,32 @@ class ChatManager {
     );
   }
 
+  private receiveText(contact: string, data: any) {
+    if (typeof data.id !== 'string' || typeof data.text !== 'string') return;
+    const foreground = AppState.currentState === 'active';
+    const text = data.text.slice(0, MAX_TEXT_LENGTH);
+    const isNew = addMessage({
+      id: data.id,
+      contact,
+      mine: 0,
+      text,
+      status: foreground && this.openConversation === contact ? 'read-pending' : 'delivered',
+      created_at: Date.now(),
+      reply_to: typeof data.reply_to === 'string' ? data.reply_to : null,
+    });
+    this.links.get(contact)?.peer.send({ type: 'ack', id: data.id });
+    this.flush(contact);
+    const message = getMessage(data.id, contact);
+    if (isNew && !foreground && message) this.notifyMessage(contact, message);
+    this.notify();
+  }
+
+  // Le contenu n'est accepté que par le ratchet : ici, seulement des messages de contrôle.
   private receive(contact: string, data: any) {
     this.lastActivity = Date.now();
-    if (data?.type === 'file-offer') {
-      this.receiveFileOffer(contact, data);
+    if (data?.type === 'ratchet') {
+      const { type: _type, ...envelope } = data;
+      this.receiveRatchet(contact, envelope);
     } else if (data?.type === 'file-resume' && isValidFileId(data.id) && Number.isSafeInteger(data.from) && data.from >= 0) {
       this.streamFile(contact, data.id, data.from).catch((e) => console.warn('Pear envoi du fichier :', e));
     } else if (data?.type === 'file-ack' && isValidFileId(data.id) && Number.isSafeInteger(data.next) && data.next >= 0) {
@@ -518,22 +663,8 @@ class ChatManager {
       setStatus(data.id, contact, 'delivered');
       this.progress.delete(data.id);
       this.notify();
-    } else if (data?.type === 'message' && typeof data.id === 'string' && typeof data.text === 'string') {
-      const foreground = AppState.currentState === 'active';
-      const text = data.text.slice(0, MAX_TEXT_LENGTH);
-      const isNew = addMessage({
-        id: data.id,
-        contact,
-        mine: 0,
-        text,
-        status: foreground && this.openConversation === contact ? 'read-pending' : 'delivered',
-        created_at: Date.now(),
-      });
-      this.links.get(contact)?.peer.send({ type: 'ack', id: data.id });
-      this.flush(contact);
-      const message = getMessage(data.id, contact);
-      if (isNew && !foreground && message) this.notifyMessage(contact, message);
-      this.notify();
+    } else if (data?.type === 'event-ack' && typeof data.id === 'string') {
+      removeOutboxEvent(data.id, contact);
     } else if ((data?.type === 'ack' || data?.type === 'read') && typeof data.id === 'string') {
       setStatus(data.id, contact, data.type === 'read' ? 'read' : 'delivered');
       this.notify();

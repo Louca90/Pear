@@ -1,7 +1,7 @@
 import { RTCIceCandidate, RTCPeerConnection, RTCSessionDescription } from 'react-native-webrtc';
 import { randombytes_buf, to_base64 } from 'react-native-libsodium';
 
-import { open, openBytes, seal, sealBytes } from '../crypto/box';
+import { open, seal } from '../crypto/box';
 import { deriveMessageKey } from '../crypto/pairing';
 import { Role, SignalingChannel } from './signaling';
 
@@ -12,7 +12,6 @@ const ICE_SERVERS = [
   { urls: 'stun:stun.cloudflare.com:3478' },
 ];
 const CONTEXT = 'pear-message-v1';
-const FILE_CONTEXT = 'pear-file-v1';
 // Backpressure : au-delà, on attend que le réseau ait vidé la file avant d'envoyer la suite.
 const MAX_BUFFERED_BYTES = 1024 * 1024;
 const DRAIN_POLL_MS = 20;
@@ -89,14 +88,19 @@ export class PeerLink {
     return true;
   }
 
+  // Le morceau est déjà chiffré avec la clé de son fichier.
   // Renvoie false si la connexion a changé : le destinataire redemandera la suite à la reconnexion.
   async sendChunk(epoch: number, bytes: Uint8Array): Promise<boolean> {
     while (this.isCurrent(epoch) && this.channel.bufferedAmount > MAX_BUFFERED_BYTES) {
       await new Promise((resolve) => setTimeout(resolve, DRAIN_POLL_MS));
     }
     if (!this.isCurrent(epoch)) return false;
-    this.channel.send(sealBytes(bytes, this.messageKey, FILE_CONTEXT));
+    this.channel.send(bytes);
     return true;
+  }
+
+  isOpen() {
+    return this.channel?.readyState === 'open';
   }
 
   isCurrent(epoch: number) {
@@ -188,7 +192,7 @@ export class PeerLink {
       this.lastSeen = Date.now();
       try {
         if (typeof event.data !== 'string') {
-          this.callbacks.onBytes(openBytes(new Uint8Array(event.data), this.messageKey, FILE_CONTEXT));
+          this.callbacks.onBytes(new Uint8Array(event.data));
           return;
         }
         const message = JSON.parse(open(event.data, this.messageKey, CONTEXT));

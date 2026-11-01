@@ -19,9 +19,21 @@ export type Message = {
   file_uri: string | null;
   file_size: number | null;
   file_mime: string | null;
+  // Clé aléatoire propre au fichier, transmise dans un message protégé par le ratchet.
+  file_key: string | null;
+  reply_to: string | null;
+  edited: number;
+  my_reaction: string | null;
+  their_reaction: string | null;
 };
 
-export type NewMessage = Omit<Message, 'kind' | 'file_uri' | 'file_size' | 'file_mime'> & Partial<Message>;
+export type NewMessage = Pick<Message, 'id' | 'contact' | 'mine' | 'text' | 'status' | 'created_at'> & Partial<Message>;
+
+// Une action à faire connaître à l'autre téléphone : elle reste ici tant qu'il ne l'a pas confirmée.
+export type OutboxEvent = {
+  id: string;
+  payload: string;
+};
 
 // L'historique vit uniquement dans ce fichier, sur le téléphone.
 const db = openDatabaseSync('pear.db');
@@ -53,13 +65,34 @@ if (schemaVersion < 1) {
     PRAGMA user_version = 1;
   `);
 }
+if (schemaVersion < 2) {
+  db.execSync(`
+    ALTER TABLE messages ADD COLUMN file_key TEXT;
+    PRAGMA user_version = 2;
+  `);
+}
+if (schemaVersion < 3) {
+  db.execSync(`
+    ALTER TABLE messages ADD COLUMN reply_to TEXT;
+    ALTER TABLE messages ADD COLUMN edited INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE messages ADD COLUMN my_reaction TEXT;
+    ALTER TABLE messages ADD COLUMN their_reaction TEXT;
+    CREATE TABLE outbox (
+      id TEXT PRIMARY KEY NOT NULL,
+      contact TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+    PRAGMA user_version = 3;
+  `);
+}
 
 // Renvoie false si le message existait déjà.
 export function addMessage(message: NewMessage): boolean {
   // INSERT OR IGNORE : un message renvoyé après une coupure n'apparaît pas en double.
   const result = db.runSync(
-    `INSERT OR IGNORE INTO messages (id, contact, mine, text, status, created_at, kind, file_uri, file_size, file_mime)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT OR IGNORE INTO messages (id, contact, mine, text, status, created_at, kind, file_uri, file_size, file_mime, file_key, reply_to)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     message.id,
     message.contact,
     message.mine,
@@ -70,8 +103,42 @@ export function addMessage(message: NewMessage): boolean {
     message.file_uri ?? null,
     message.file_size ?? null,
     message.file_mime ?? null,
+    message.file_key ?? null,
+    message.reply_to ?? null,
   );
   return result.changes > 0;
+}
+
+// "mine" vérifie l'auteur : un téléphone ne peut modifier que ses propres messages, ici comme chez l'autre.
+export function editMessage(id: string, contact: string, mine: number, text: string) {
+  db.runSync("UPDATE messages SET text = ?, edited = 1 WHERE id = ? AND contact = ? AND mine = ? AND kind = 'text'", text, id, contact, mine);
+}
+
+export function setReaction(id: string, contact: string, column: 'my_reaction' | 'their_reaction', emoji: string | null) {
+  db.runSync(`UPDATE messages SET ${column} = ? WHERE id = ? AND contact = ?`, emoji, id, contact);
+}
+
+export function deleteMessage(id: string, contact: string, mine?: number) {
+  const message = getMessage(id, contact);
+  if (!message || (mine !== undefined && message.mine !== mine)) return;
+  if (message.file_uri) deleteStoredFile(message.file_uri);
+  db.runSync('DELETE FROM messages WHERE id = ? AND contact = ?', id, contact);
+}
+
+export function addOutboxEvent(id: string, contact: string, payload: string) {
+  db.runSync('INSERT INTO outbox (id, contact, payload, created_at) VALUES (?, ?, ?, ?)', id, contact, payload, Date.now());
+}
+
+export function getOutboxEvents(contact: string): OutboxEvent[] {
+  return db.getAllSync<OutboxEvent>('SELECT id, payload FROM outbox WHERE contact = ? ORDER BY created_at', contact);
+}
+
+export function removeOutboxEvent(id: string, contact: string) {
+  db.runSync('DELETE FROM outbox WHERE id = ? AND contact = ?', id, contact);
+}
+
+export function setFileKey(id: string, contact: string, key: string) {
+  db.runSync('UPDATE messages SET file_key = ? WHERE id = ? AND contact = ?', key, id, contact);
 }
 
 export function getMessage(id: string, contact: string): Message | null {
@@ -142,4 +209,5 @@ export function deleteMessages(contact: string) {
   );
   db.runSync('DELETE FROM messages WHERE contact = ?', contact);
   db.runSync('DELETE FROM contact_tokens WHERE contact = ?', contact);
+  db.runSync('DELETE FROM outbox WHERE contact = ?', contact);
 }
