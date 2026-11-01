@@ -1,6 +1,9 @@
+import { useSyncExternalStore } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
-import { ChevronRight, Plus, User, Users } from 'lucide-react-native';
+import { Plus, User, Users } from 'lucide-react-native';
 
+import { getLastMessage } from '../chat/database';
+import { chat } from '../chat/manager';
 import { Button, Header, Screen } from '../components/ui';
 import { Contact } from '../storage';
 import { colors, radius, spacing } from '../theme';
@@ -12,6 +15,8 @@ type Props = {
 };
 
 export function HomeScreen({ contacts, onAdd, onOpen }: Props) {
+  useSyncExternalStore(chat.subscribe, chat.getVersion);
+
   if (contacts.length === 0) {
     return (
       <Screen>
@@ -41,18 +46,27 @@ export function HomeScreen({ contacts, onAdd, onOpen }: Props) {
       <FlatList
         data={contacts}
         keyExtractor={(contact) => contact.publicKey}
-        renderItem={({ item }) => (
-          <Pressable
-            onPress={() => onOpen(item)}
-            style={({ pressed }) => [styles.row, pressed && styles.pressed]}
-          >
-            <View style={styles.avatar}>
-              <User size={20} color={colors.text} strokeWidth={1.75} />
-            </View>
-            <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
-            <ChevronRight size={20} color={colors.textMuted} strokeWidth={1.75} />
-          </Pressable>
-        )}
+        renderItem={({ item }) => {
+          const last = getLastMessage(item.publicKey);
+          const online = chat.getLink(item.publicKey).status === 'connected';
+          return (
+            <Pressable
+              onPress={() => onOpen(item)}
+              style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+            >
+              <View style={styles.avatar}>
+                <User size={20} color={colors.text} strokeWidth={1.75} />
+                {online && <View style={styles.online} accessibilityLabel="En ligne" />}
+              </View>
+              <View style={styles.rowText}>
+                <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
+                <Text style={styles.preview} numberOfLines={1}>
+                  {last ? last.text : 'Aucun message'}
+                </Text>
+              </View>
+            </Pressable>
+          );
+        }}
       />
     </Screen>
   );
@@ -104,10 +118,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  name: {
+  online: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    width: 12,
+    height: 12,
+    borderRadius: radius.full,
+    borderWidth: 2,
+    borderColor: colors.background,
+    backgroundColor: colors.text,
+  },
+  rowText: {
     flex: 1,
+  },
+  name: {
     fontSize: 16,
     fontWeight: '500',
     color: colors.text,
+  },
+  preview: {
+    fontSize: 14,
+    color: colors.textMuted,
   },
 });

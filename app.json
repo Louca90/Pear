@@ -45,7 +45,8 @@
             "kotlinVersion": "2.4.0"
           }
         }
-      ]
+      ],
+      "expo-sqlite"
     ]
   }
 }

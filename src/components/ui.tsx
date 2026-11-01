@@ -4,11 +4,18 @@ import { ArrowLeft, LucideIcon } from 'lucide-react-native';
 
 import { colors, radius, spacing } from '../theme';
 
-export function Screen({ children }: { children: ReactNode }) {
-  return <View style={styles.screen}>{children}</View>;
+export function Screen({ children, edgeToEdgeBottom }: { children: ReactNode; edgeToEdgeBottom?: boolean }) {
+  return <View style={[styles.screen, edgeToEdgeBottom && styles.noBottom]}>{children}</View>;
 }
 
-export function Header({ title, onBack, action }: { title: string; onBack?: () => void; action?: ReactNode }) {
+type HeaderProps = {
+  title: string;
+  subtitle?: string;
+  onBack?: () => void;
+  action?: ReactNode;
+};
+
+export function Header({ title, subtitle, onBack, action }: HeaderProps) {
   return (
     <View style={styles.header}>
       {onBack && (
@@ -16,7 +23,10 @@ export function Header({ title, onBack, action }: { title: string; onBack?: () =
           <ArrowLeft size={24} color={colors.text} strokeWidth={1.75} />
         </Pressable>
       )}
-      <Text style={styles.headerTitle} numberOfLines={1}>{title}</Text>
+      <View style={styles.headerText}>
+        <Text style={subtitle ? styles.headerTitleSmall : styles.headerTitle} numberOfLines={1}>{title}</Text>
+        {subtitle && <Text style={styles.headerSubtitle} numberOfLines={1}>{subtitle}</Text>}
+      </View>
       {action}
     </View>
   );
@@ -51,6 +61,9 @@ const styles = StyleSheet.create({
     paddingTop: StatusBar.currentHeight,
     paddingBottom: spacing.lg,
   },
+  noBottom: {
+    paddingBottom: 0,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -61,11 +74,22 @@ const styles = StyleSheet.create({
   back: {
     marginLeft: -4,
   },
-  headerTitle: {
+  headerText: {
     flex: 1,
+  },
+  headerTitle: {
     fontSize: 24,
     fontWeight: '600',
     color: colors.text,
+  },
+  headerTitleSmall: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  headerSubtitle: {
+    fontSize: 13,
+    color: colors.textMuted,
   },
   button: {
     flexDirection: 'row',

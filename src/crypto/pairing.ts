@@ -61,6 +61,10 @@ export function deriveSignalingKeys(secret: Uint8Array) {
   };
 }
 
+export function deriveMessageKey(secret: Uint8Array): Uint8Array {
+  return crypto_kdf_derive_from_key(KEY_BYTES, 4, 'pearmsgs', secret);
+}
+
 export function buildPairingLink(publicKey: string): string {
   return `pear://pair?k=${publicKey}`;
 }

@@ -5,6 +5,8 @@ export const colors = {
   border: '#E8E8E8',
   text: '#000000',
   textMuted: '#6B6B6B',
+  onDarkMuted: '#B8B8B8',
+  disabled: '#C4C4C4',
 };
 
 export const spacing = {
@@ -15,5 +17,6 @@ export const spacing = {
 
 export const radius = {
   md: 16,
+  lg: 20,
   full: 999,
 };
