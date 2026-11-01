@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Plus, User, Users } from 'lucide-react-native';
 
-import { getLastMessage } from '../chat/database';
+import { describeMessage, getLastMessage } from '../chat/database';
 import { chat } from '../chat/manager';
 import { Button, Header, Screen } from '../components/ui';
 import { Contact } from '../storage';
@@ -62,7 +62,7 @@ export function HomeScreen({ contacts, onAdd, onOpen }: Props) {
               <View style={styles.rowText}>
                 <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
                 <Text style={[styles.preview, unread && styles.previewUnread]} numberOfLines={1}>
-                  {!last ? 'Aucun message' : last.mine === 1 ? `Vous : ${last.text}` : last.text}
+                  {!last ? 'Aucun message' : last.mine === 1 ? `Vous : ${describeMessage(last)}` : describeMessage(last)}
                 </Text>
               </View>
             </Pressable>

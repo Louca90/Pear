@@ -6,6 +6,8 @@ export const colors = {
   text: '#000000',
   textMuted: '#6B6B6B',
   onDarkMuted: '#B8B8B8',
+  onDarkTrack: '#4A4A4A',
+  overlay: 'rgba(0, 0, 0, 0.55)',
   disabled: '#C4C4C4',
 };
 

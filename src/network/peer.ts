@@ -1,7 +1,7 @@
 import { RTCIceCandidate, RTCPeerConnection, RTCSessionDescription } from 'react-native-webrtc';
 import { randombytes_buf, to_base64 } from 'react-native-libsodium';
 
-import { open, seal } from '../crypto/box';
+import { open, openBytes, seal, sealBytes } from '../crypto/box';
 import { deriveMessageKey } from '../crypto/pairing';
 import { Role, SignalingChannel } from './signaling';
 
@@ -12,6 +12,10 @@ const ICE_SERVERS = [
   { urls: 'stun:stun.cloudflare.com:3478' },
 ];
 const CONTEXT = 'pear-message-v1';
+const FILE_CONTEXT = 'pear-file-v1';
+// Backpressure : au-delà, on attend que le réseau ait vidé la file avant d'envoyer la suite.
+const MAX_BUFFERED_BYTES = 1024 * 1024;
+const DRAIN_POLL_MS = 20;
 // Battement de coeur : sans signe de l'autre téléphone pendant TIMEOUT_MS, la connexion est morte.
 const HEARTBEAT_MS = 4000;
 const TIMEOUT_MS = 12000;
@@ -31,6 +35,7 @@ type Callbacks = {
   onStatus: (status: PeerStatus) => void;
   onRoute: (route: RouteType | null) => void;
   onMessage: (message: unknown) => void;
+  onBytes: (bytes: Uint8Array) => void;
 };
 
 export class PeerLink {
@@ -45,6 +50,8 @@ export class PeerLink {
   private lastSeen = 0;
   private lastAttempt = 0;
   private stopped = false;
+  // Change à chaque nouvelle connexion : un envoi de fichier en cours sait alors qu'il doit s'arrêter.
+  epoch = 0;
 
   // Les deux téléphones calculent le même rôle : un seul lance l'appel, l'autre répond.
   constructor(private role: Role, secret: Uint8Array, private callbacks: Callbacks) {
@@ -80,6 +87,20 @@ export class PeerLink {
     if (this.channel?.readyState !== 'open') return false;
     this.channel.send(seal(JSON.stringify(message), this.messageKey, CONTEXT));
     return true;
+  }
+
+  // Renvoie false si la connexion a changé : le destinataire redemandera la suite à la reconnexion.
+  async sendChunk(epoch: number, bytes: Uint8Array): Promise<boolean> {
+    while (this.isCurrent(epoch) && this.channel.bufferedAmount > MAX_BUFFERED_BYTES) {
+      await new Promise((resolve) => setTimeout(resolve, DRAIN_POLL_MS));
+    }
+    if (!this.isCurrent(epoch)) return false;
+    this.channel.send(sealBytes(bytes, this.messageKey, FILE_CONTEXT));
+    return true;
+  }
+
+  isCurrent(epoch: number) {
+    return !this.stopped && this.epoch === epoch && this.channel?.readyState === 'open';
   }
 
   // Le réseau vient de revenir : inutile d'attendre le prochain essai.
@@ -152,6 +173,7 @@ export class PeerLink {
 
   private attachChannel(channel: any, pc: RTCPeerConnection) {
     this.channel = channel;
+    this.epoch += 1;
     channel.addEventListener('open', () => {
       if (this.pc !== pc) return;
       this.lastSeen = Date.now();
@@ -165,6 +187,10 @@ export class PeerLink {
     channel.addEventListener('message', (event: any) => {
       this.lastSeen = Date.now();
       try {
+        if (typeof event.data !== 'string') {
+          this.callbacks.onBytes(openBytes(new Uint8Array(event.data), this.messageKey, FILE_CONTEXT));
+          return;
+        }
         const message = JSON.parse(open(event.data, this.messageKey, CONTEXT));
         if (message.type !== 'heartbeat') this.callbacks.onMessage(message);
       } catch (e) {
