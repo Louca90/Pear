@@ -1,8 +1,14 @@
-import { ReactNode } from 'react';
-import { Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
-import { ArrowLeft, LucideIcon } from 'lucide-react-native';
+import { ReactNode, useRef } from 'react';
+import { Animated, Image, Pressable, StatusBar, StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
+import { ArrowLeft, LucideIcon, User } from 'lucide-react-native';
 
+import { navigationBarHeight } from '../../modules/pear-native';
 import { colors, radius, spacing } from '../theme';
+
+// La barre d'Android reste visible, sur un fond transparent : l'interface se place juste au-dessus.
+export function useNavigationBarHeight() {
+  return navigationBarHeight();
+}
 
 export function Screen({ children, edgeToEdgeBottom }: { children: ReactNode; edgeToEdgeBottom?: boolean }) {
   return <View style={[styles.screen, edgeToEdgeBottom && styles.noBottom]}>{children}</View>;
@@ -13,20 +19,62 @@ type HeaderProps = {
   subtitle?: string;
   onBack?: () => void;
   action?: ReactNode;
+  avatar?: ReactNode;
+  onTitlePress?: () => void;
 };
 
-export function Header({ title, subtitle, onBack, action }: HeaderProps) {
+type IconButtonProps = {
+  onPress: () => void;
+  label: string;
+  disabled?: boolean;
+  hitSlop?: number;
+  style?: StyleProp<ViewStyle>;
+  children: ReactNode;
+};
+
+// Bouton à icône : il se tasse sous le doigt et revient avec un petit rebond.
+export function IconButton({ onPress, label, disabled, hitSlop = 12, style, children }: IconButtonProps) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const animate = (toValue: number) => Animated.spring(scale, { toValue, useNativeDriver: true, damping: 12, stiffness: 320 }).start();
+  return (
+    <Pressable
+      onPress={onPress}
+      onPressIn={() => animate(0.82)}
+      onPressOut={() => animate(1)}
+      disabled={disabled}
+      hitSlop={hitSlop}
+      accessibilityLabel={label}
+    >
+      <Animated.View style={[style, { transform: [{ scale }] }]}>{children}</Animated.View>
+    </Pressable>
+  );
+}
+
+export function Avatar({ uri, size = 44 }: { uri?: string | null; size?: number }) {
+  const shape = { width: size, height: size, borderRadius: size / 2 };
+  if (uri) return <Image source={{ uri }} style={shape} resizeMode="cover" />;
+  return (
+    <View style={[styles.avatarEmpty, shape]}>
+      <User size={size * 0.46} color={colors.text} strokeWidth={1.75} />
+    </View>
+  );
+}
+
+export function Header({ title, subtitle, onBack, action, avatar, onTitlePress }: HeaderProps) {
   return (
     <View style={styles.header}>
       {onBack && (
-        <Pressable onPress={onBack} hitSlop={12} accessibilityLabel="Retour" style={styles.back}>
+        <IconButton onPress={onBack} label="Retour" style={styles.back}>
           <ArrowLeft size={24} color={colors.text} strokeWidth={1.75} />
-        </Pressable>
+        </IconButton>
       )}
-      <View style={styles.headerText}>
-        <Text style={subtitle ? styles.headerTitleSmall : styles.headerTitle} numberOfLines={1}>{title}</Text>
-        {subtitle && <Text style={styles.headerSubtitle} numberOfLines={1}>{subtitle}</Text>}
-      </View>
+      <Pressable onPress={onTitlePress} disabled={!onTitlePress} style={styles.headerTitleArea}>
+        {avatar}
+        <View style={styles.headerText}>
+          <Text style={subtitle ? styles.headerTitleSmall : styles.headerTitle} numberOfLines={1}>{title}</Text>
+          {subtitle && <Text style={styles.headerSubtitle} numberOfLines={1}>{subtitle}</Text>}
+        </View>
+      </Pressable>
       {action}
     </View>
   );
@@ -42,13 +90,14 @@ type ButtonProps = {
 export function Button({ label, icon: Icon, onPress, variant = 'primary' }: ButtonProps) {
   const primary = variant === 'primary';
   const foreground = primary ? colors.background : colors.text;
+  const scale = useRef(new Animated.Value(1)).current;
+  const animate = (toValue: number) => Animated.spring(scale, { toValue, useNativeDriver: true, damping: 14, stiffness: 320 }).start();
   return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [styles.button, primary ? styles.primary : styles.secondary, pressed && styles.pressed]}
-    >
-      <Icon size={20} color={foreground} strokeWidth={1.75} />
-      <Text style={[styles.buttonLabel, { color: foreground }]}>{label}</Text>
+    <Pressable onPress={onPress} onPressIn={() => animate(0.95)} onPressOut={() => animate(1)}>
+      <Animated.View style={[styles.button, primary ? styles.primary : styles.secondary, { transform: [{ scale }] }]}>
+        <Icon size={20} color={foreground} strokeWidth={1.75} />
+        <Text style={[styles.buttonLabel, { color: foreground }]}>{label}</Text>
+      </Animated.View>
     </Pressable>
   );
 }
@@ -73,6 +122,17 @@ const styles = StyleSheet.create({
   },
   back: {
     marginLeft: -4,
+  },
+  avatarEmpty: {
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitleArea: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
   },
   headerText: {
     flex: 1,
@@ -105,9 +165,6 @@ const styles = StyleSheet.create({
   },
   secondary: {
     backgroundColor: colors.surface,
-  },
-  pressed: {
-    opacity: 0.6,
   },
   buttonLabel: {
     fontSize: 16,

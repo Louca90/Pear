@@ -1,10 +1,11 @@
 import { useSyncExternalStore } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Plus, User, Users } from 'lucide-react-native';
+import { Flame, Plus, Users } from 'lucide-react-native';
 
-import { describeMessage, getLastMessage } from '../chat/database';
+import { describeMessage, getContactProfile, getLastMessage, getStreak } from '../chat/database';
 import { chat } from '../chat/manager';
-import { Button, Header, Screen } from '../components/ui';
+import { useBottomBarSpace } from '../components/BottomBar';
+import { Avatar, Button, Header, IconButton, Screen } from '../components/ui';
 import { Contact } from '../storage';
 import { colors, radius, spacing } from '../theme';
 
@@ -12,15 +13,23 @@ type Props = {
   contacts: Contact[];
   onAdd: () => void;
   onOpen: (contact: Contact) => void;
+  onProfile: () => void;
 };
 
-export function HomeScreen({ contacts, onAdd, onOpen }: Props) {
+export function HomeScreen({ contacts, onAdd, onOpen, onProfile }: Props) {
   useSyncExternalStore(chat.subscribe, chat.getVersion);
+  const barSpace = useBottomBarSpace();
+
+  const profileButton = (
+    <IconButton onPress={onProfile} label="Mon profil">
+      <Avatar uri={chat.getMyProfile().photo} size={32} />
+    </IconButton>
+  );
 
   if (contacts.length === 0) {
     return (
       <Screen>
-        <Header title="Pear" />
+        <Header title="Pear" action={profileButton} />
         <View style={styles.empty}>
           <View style={styles.emptyIcon}>
             <Users size={28} color={colors.text} strokeWidth={1.75} />
@@ -37,26 +46,24 @@ export function HomeScreen({ contacts, onAdd, onOpen }: Props) {
     <Screen>
       <Header
         title="Pear"
-        action={
-          <Pressable onPress={onAdd} hitSlop={12} accessibilityLabel="Ajouter un contact">
-            <Plus size={24} color={colors.text} strokeWidth={1.75} />
-          </Pressable>
-        }
+        action={profileButton}
       />
       <FlatList
         data={contacts}
+        contentContainerStyle={{ paddingBottom: barSpace }}
         keyExtractor={(contact) => contact.publicKey}
         renderItem={({ item }) => {
           const last = getLastMessage(item.publicKey);
           const online = chat.getLink(item.publicKey).status === 'connected';
           const unread = last?.mine === 0 && last.status === 'delivered';
+          const streak = getStreak(item.publicKey);
           return (
             <Pressable
               onPress={() => onOpen(item)}
               style={({ pressed }) => [styles.row, pressed && styles.pressed]}
             >
-              <View style={styles.avatar}>
-                <User size={20} color={colors.text} strokeWidth={1.75} />
+              <View>
+                <Avatar uri={getContactProfile(item.publicKey).photo_uri} />
                 {online && <View style={styles.online} accessibilityLabel="En ligne" />}
               </View>
               <View style={styles.rowText}>
@@ -65,6 +72,12 @@ export function HomeScreen({ contacts, onAdd, onOpen }: Props) {
                   {!last ? 'Aucun message' : last.mine === 1 ? `Vous : ${describeMessage(last)}` : describeMessage(last)}
                 </Text>
               </View>
+              {streak > 0 && (
+                <View style={styles.streak} accessibilityLabel={`Série de ${streak} jours`}>
+                  <Flame size={16} color={colors.text} strokeWidth={1.75} />
+                  <Text style={styles.streakCount}>{streak}</Text>
+                </View>
+              )}
             </Pressable>
           );
         }}
@@ -111,13 +124,15 @@ const styles = StyleSheet.create({
   pressed: {
     backgroundColor: colors.surface,
   },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.full,
-    backgroundColor: colors.surface,
+  streak: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 2,
+  },
+  streakCount: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
   },
   online: {
     position: 'absolute',

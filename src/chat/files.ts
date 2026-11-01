@@ -1,4 +1,5 @@
 import { Directory, File, Paths } from 'expo-file-system';
+import * as MediaLibrary from 'expo-media-library/legacy';
 import { getThumbnailAsync } from 'expo-video-thumbnails';
 
 // Limite d'environ 16 Ko par message DataChannel : on garde de la place pour l'en-tête et le chiffrement.
@@ -23,11 +24,16 @@ export function storedFile(id: string): File {
   return new File(filesDirectory(), id);
 }
 
-// Le fichier choisi arrive dans le cache : le déplacer évite de le copier, même pour une grosse vidéo.
+// Un fichier de notre cache est déplacé, ce qui évite de copier une grosse vidéo.
+// Tout le reste, comme une photo de la galerie, est copié : l'original ne doit jamais quitter sa place.
 // move et copy sont asynchrones : le fichier n'est à sa place qu'une fois la Promise terminée.
 export async function storeOutgoingFile(sourceUri: string, id: string): Promise<string> {
   const source = new File(sourceUri);
   const destination = storedFile(id);
+  if (!sourceUri.startsWith(Paths.cache.uri)) {
+    await source.copy(destination);
+    return destination.uri;
+  }
   try {
     await source.move(destination);
   } catch {
@@ -51,6 +57,13 @@ export async function exportCopy(uri: string, name: string): Promise<string> {
   const copy = new File(Paths.cache, safeName);
   await new File(uri).copy(copy, { overwrite: true });
   return copy.uri;
+}
+
+// Copie le média dans la galerie du téléphone, seulement quand on le demande.
+export async function saveToGallery(uri: string, name: string) {
+  const { granted } = await MediaLibrary.requestPermissionsAsync(true, ['photo', 'video']);
+  if (!granted) throw new Error("L'accès à la galerie a été refusé.");
+  await MediaLibrary.saveToLibraryAsync(await exportCopy(uri, name));
 }
 
 // La miniature est gardée dans le cache : si Android le vide, elle est simplement recréée.

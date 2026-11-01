@@ -1,32 +1,34 @@
-import { Alert, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import QRCode from 'react-native-qrcode-svg';
 import { ClipboardPaste, ScanLine, Share2 } from 'lucide-react-native';
 
+import { useBottomBarSpace } from '../components/BottomBar';
+import { showDialog } from '../components/dialog';
 import { Button, Header, Screen } from '../components/ui';
 import { buildPairingLink, parsePairingLink } from '../crypto/pairing';
 import { colors, radius, spacing } from '../theme';
 
 type Props = {
   publicKey: string;
-  onBack: () => void;
   onScan: () => void;
   onKeyReceived: (publicKey: string) => void;
 };
 
-export function AddContactScreen({ publicKey, onBack, onScan, onKeyReceived }: Props) {
+export function AddContactScreen({ publicKey, onScan, onKeyReceived }: Props) {
   const link = buildPairingLink(publicKey);
+  const barSpace = useBottomBarSpace();
 
   const pasteLink = async () => {
     const key = parsePairingLink(await Clipboard.getStringAsync());
     if (key) onKeyReceived(key);
-    else Alert.alert('Lien non reconnu', "Copiez d'abord le lien Pear de votre contact.");
+    else showDialog('Lien non reconnu', "Copiez d'abord le lien Pear de votre contact.");
   };
 
   return (
     <Screen>
-      <Header title="Ajouter un contact" onBack={onBack} />
-      <ScrollView contentContainerStyle={styles.content}>
+      <Header title="Ajouter un contact" />
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: barSpace }]}>
         <Text style={styles.text}>Chacun scanne le code de l'autre, une seule fois.</Text>
         {/* Le QR code reste noir sur blanc et garde sa marge pour rester lisible. */}
         <View style={styles.qr}>

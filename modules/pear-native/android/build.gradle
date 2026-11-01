@@ -1,0 +1,26 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'com.louca.pear'
+version = '1.0.0'
+
+android {
+  namespace "expo.modules.pearnative"
+  defaultConfig {
+    versionCode 1
+    versionName '1.0.0'
+  }
+}
+
+dependencies {
+  implementation 'com.facebook.react:react-android'
+  implementation "androidx.activity:activity-ktx:1.9.3"
+  implementation "androidx.core:core-ktx:1.13.1"
+  // Même version que celle d'expo-video, pour n'embarquer qu'un seul Media3.
+  def androidxMedia3Version = "1.9.1"
+  implementation "androidx.media3:media3-common:${androidxMedia3Version}"
+  implementation "androidx.media3:media3-effect:${androidxMedia3Version}"
+  implementation "androidx.media3:media3-transformer:${androidxMedia3Version}"
+}

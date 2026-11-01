@@ -1,0 +1,31 @@
+diff --git a/node_modules/expo-camera/android/src/main/java/expo/modules/camera/ExpoCameraView.kt b/node_modules/expo-camera/android/src/main/java/expo/modules/camera/ExpoCameraView.kt
+index a676d64..039064e 100644
+--- a/node_modules/expo-camera/android/src/main/java/expo/modules/camera/ExpoCameraView.kt
++++ b/node_modules/expo-camera/android/src/main/java/expo/modules/camera/ExpoCameraView.kt
+@@ -548,11 +548,25 @@ class ExpoCameraView(
+         }
+       } else {
+         addUseCase(videoCapture)
++        imageCaptureUseCase?.let {
++          addUseCase(it)
++        }
+       }
+     }.build()
+ 
+     cameraProvider.unbindAll()
+-    camera = cameraProvider.bindToLifecycle(currentActivity, cameraSelector, useCases)
++    camera = try {
++      cameraProvider.bindToLifecycle(currentActivity, cameraSelector, useCases)
++    } catch (e: IllegalArgumentException) {
++      if (cameraMode == CameraMode.PICTURE) throw e
++      // This device cannot run photo and video together: keep video working.
++      val videoOnly = UseCaseGroup.Builder().apply {
++        addUseCase(preview)
++        addUseCase(videoCapture)
++      }.build()
++      cameraProvider.unbindAll()
++      cameraProvider.bindToLifecycle(currentActivity, cameraSelector, videoOnly)
++    }
+     camera?.let {
+       observeCameraState(it.cameraInfo)
+     }

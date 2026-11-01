@@ -5,7 +5,20 @@ import { deleteStoredFile } from './files';
 // Mes messages : sending (pas encore confirmé), delivered (reçu par l'autre), read (lu par l'autre).
 // Messages reçus : receiving (fichier en cours), delivered (pas lu), read-pending (lu, l'autre n'est pas encore prévenu), read.
 export type MessageStatus = 'sending' | 'receiving' | 'delivered' | 'read-pending' | 'read';
-export type MessageKind = 'text' | 'image' | 'video' | 'file';
+// wallpaper et avatar passent par le transfert de fichiers. avatar n'apparaît jamais dans la conversation.
+export type MessageKind = 'text' | 'image' | 'video' | 'audio' | 'file' | 'wallpaper' | 'avatar' | 'system';
+
+export type ConversationSettings = {
+  my_bubble: string | null;
+  their_bubble: string | null;
+  wallpaper_uri: string | null;
+};
+
+export type ContactProfile = {
+  name: string | null;
+  photo_uri: string | null;
+  sent_version: string | null;
+};
 
 // Pour un fichier, "text" contient son nom.
 export type Message = {
@@ -86,6 +99,27 @@ if (schemaVersion < 3) {
     PRAGMA user_version = 3;
   `);
 }
+if (schemaVersion < 4) {
+  db.execSync(`
+    CREATE TABLE settings (
+      key TEXT PRIMARY KEY NOT NULL,
+      value TEXT
+    );
+    CREATE TABLE conversation_settings (
+      contact TEXT PRIMARY KEY NOT NULL,
+      my_bubble TEXT,
+      their_bubble TEXT,
+      wallpaper_uri TEXT
+    );
+    CREATE TABLE contact_profiles (
+      contact TEXT PRIMARY KEY NOT NULL,
+      name TEXT,
+      photo_uri TEXT,
+      sent_version TEXT
+    );
+    PRAGMA user_version = 4;
+  `);
+}
 
 // Renvoie false si le message existait déjà.
 export function addMessage(message: NewMessage): boolean {
@@ -149,10 +183,83 @@ export function finishIncomingFile(id: string, contact: string, status: MessageS
   db.runSync("UPDATE messages SET status = ? WHERE id = ? AND contact = ? AND mine = 0 AND status = 'receiving'", status, id, contact);
 }
 
+export function getSetting(key: string): string | null {
+  return db.getFirstSync<{ value: string | null }>('SELECT value FROM settings WHERE key = ?', key)?.value ?? null;
+}
+
+export function setSetting(key: string, value: string | null) {
+  db.runSync('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', key, value);
+}
+
+export function getConversationSettings(contact: string): ConversationSettings {
+  return (
+    db.getFirstSync<ConversationSettings>('SELECT my_bubble, their_bubble, wallpaper_uri FROM conversation_settings WHERE contact = ?', contact) ?? {
+      my_bubble: null,
+      their_bubble: null,
+      wallpaper_uri: null,
+    }
+  );
+}
+
+export function setConversationSetting(contact: string, column: keyof ConversationSettings, value: string | null) {
+  db.runSync('INSERT OR IGNORE INTO conversation_settings (contact) VALUES (?)', contact);
+  db.runSync(`UPDATE conversation_settings SET ${column} = ? WHERE contact = ?`, value, contact);
+}
+
+export function getContactProfile(contact: string): ContactProfile {
+  return (
+    db.getFirstSync<ContactProfile>('SELECT name, photo_uri, sent_version FROM contact_profiles WHERE contact = ?', contact) ?? {
+      name: null,
+      photo_uri: null,
+      sent_version: null,
+    }
+  );
+}
+
+export function setContactProfileField(contact: string, column: keyof ContactProfile, value: string | null) {
+  db.runSync('INSERT OR IGNORE INTO contact_profiles (contact) VALUES (?)', contact);
+  db.runSync(`UPDATE contact_profiles SET ${column} = ? WHERE contact = ?`, value, contact);
+}
+
+// Efface les anciennes photos de profil de cette conversation, sauf celle qu'on vient de recevoir.
+export function deleteOldAvatars(contact: string, mine: number, keepId: string | null) {
+  db.getAllSync<{ id: string }>("SELECT id FROM messages WHERE contact = ? AND kind = 'avatar' AND mine = ?", contact, mine)
+    .filter((row) => row.id !== keepId)
+    .forEach((row) => deleteMessage(row.id, contact));
+}
+
+// Jours d'affilée où les deux personnes ont écrit, comme sur Snapchat. La série tient encore si le dernier jour est hier.
+export function getStreak(contact: string): number {
+  const days = db.getAllSync<{ day: string; both: number }>(
+    `SELECT date(created_at / 1000, 'unixepoch', 'localtime') AS day, (SUM(mine = 1) > 0 AND SUM(mine = 0) > 0) AS both
+     FROM messages WHERE contact = ? AND kind IN ('text', 'image', 'video', 'audio', 'file')
+     GROUP BY day ORDER BY day DESC`,
+    contact,
+  );
+  const dayKey = (offset: number) => {
+    const date = new Date();
+    date.setDate(date.getDate() - offset);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  };
+  const byDay = new Map(days.map((row) => [row.day, row.both === 1]));
+  // Aujourd'hui peut ne pas être encore complet : on compte à partir d'hier si besoin.
+  let offset = byDay.get(dayKey(0)) ? 0 : 1;
+  let streak = 0;
+  while (byDay.get(dayKey(offset))) {
+    streak += 1;
+    offset += 1;
+  }
+  return streak;
+}
+
 // Le texte montré sur l'accueil et dans les notifications.
 export function describeMessage(message: Message): string {
+  if (message.kind === 'wallpaper') return 'Fond de discussion changé';
+  if (message.kind === 'system' && message.text.startsWith('saved:')) return message.text.includes(':video') ? 'Vidéo enregistrée' : 'Photo enregistrée';
+  if (message.kind === 'system') return 'Fond de discussion retiré';
   if (message.kind === 'image') return 'Photo';
   if (message.kind === 'video') return 'Vidéo';
+  if (message.kind === 'audio') return 'Message vocal';
   if (message.kind === 'file') return `Fichier : ${message.text}`;
   return message.text;
 }
@@ -167,7 +274,7 @@ export function getContactToken(contact: string): string | null {
 }
 
 export function getMessages(contact: string): Message[] {
-  return db.getAllSync<Message>('SELECT * FROM messages WHERE contact = ? ORDER BY created_at DESC LIMIT 200', contact);
+  return db.getAllSync<Message>("SELECT * FROM messages WHERE contact = ? AND kind != 'avatar' ORDER BY created_at DESC LIMIT 200", contact);
 }
 
 export function getUndelivered(contact: string): Message[] {
@@ -190,7 +297,7 @@ export function setReadReceiptSent(id: string, contact: string) {
 }
 
 export function getLastMessage(contact: string): Message | null {
-  return db.getFirstSync<Message>('SELECT * FROM messages WHERE contact = ? ORDER BY created_at DESC LIMIT 1', contact);
+  return db.getFirstSync<Message>("SELECT * FROM messages WHERE contact = ? AND kind != 'avatar' ORDER BY created_at DESC LIMIT 1", contact);
 }
 
 // "read" ne redescend jamais : un accusé de réception en retard ne doit pas l'écraser.
@@ -210,4 +317,6 @@ export function deleteMessages(contact: string) {
   db.runSync('DELETE FROM messages WHERE contact = ?', contact);
   db.runSync('DELETE FROM contact_tokens WHERE contact = ?', contact);
   db.runSync('DELETE FROM outbox WHERE contact = ?', contact);
+  db.runSync('DELETE FROM conversation_settings WHERE contact = ?', contact);
+  db.runSync('DELETE FROM contact_profiles WHERE contact = ?', contact);
 }

@@ -14,25 +14,31 @@ import {
   addMessage,
   addOutboxEvent,
   deleteMessage,
+  deleteOldAvatars,
   describeMessage,
   editMessage,
   finishIncomingFile,
+  getContactProfile,
   getContactToken,
   getMessage,
   getOutboxEvents,
   getPendingReadReceipts,
+  getSetting,
   getUndelivered,
   markConversationRead,
   Message,
   MessageKind,
   removeOutboxEvent,
+  setContactProfileField,
   setContactToken,
+  setConversationSetting,
   setFileKey,
   setReaction,
   setReadReceiptSent,
+  setSetting,
   setStatus,
 } from './database';
-import { CHUNK_BYTES, deleteStoredFile, isValidFileId, MAX_FILE_BYTES, storedFile, storeOutgoingFile } from './files';
+import { CHUNK_BYTES, deleteStoredFile, exportCopy, isValidFileId, MAX_FILE_BYTES, storedFile, storeOutgoingFile } from './files';
 import { clearMessageNotification, showMessageNotification } from './notifications';
 
 export const MAX_TEXT_LENGTH = 2000;
@@ -53,7 +59,13 @@ const DISK_BATCH_BYTES = 32 * CHUNK_BYTES;
 const SEND_WINDOW_CHUNKS = 128;
 const WINDOW_POLL_MS = 10;
 // Une réaction reste courte : un emoji peut compter plusieurs caractères, pas plus.
+const MAX_SAVED_ID_LENGTH = 64;
 const MAX_REACTION_LENGTH = 16;
+export const MAX_PROFILE_NAME_LENGTH = 40;
+const PROFILE_NAME = 'profile_name';
+const PROFILE_PHOTO = 'profile_photo';
+// Change à chaque modification du profil : un contact qui n'a pas la dernière version la recevra.
+const PROFILE_VERSION = 'profile_version';
 
 type Link = {
   peer: PeerLink;
@@ -141,6 +153,7 @@ class ChatManager {
       this.wakeTimer = setInterval(() => this.links.forEach((_, contact) => this.wakeIfNeeded(contact)), WAKE_CHECK_MS);
     }
     this.markOpenConversationRead();
+    this.names.forEach((_, contact) => this.shareProfile(contact));
     this.notify();
   }
 
@@ -236,6 +249,76 @@ class ChatManager {
     this.writeQueue = this.writeQueue.then(() => incoming.handle.close()).catch((e) => console.warn('Pear écriture du fichier :', e));
   }
 
+  // Prévient les écrans après un réglage enregistré.
+  refresh() {
+    this.notify();
+  }
+
+  // Le fond est transmis comme un fichier : l'autre téléphone l'applique quand il l'a reçu en entier.
+  async setWallpaper(contact: string, file: PickedFile) {
+    const uri = await this.sendFile(contact, { ...file, kind: 'wallpaper' });
+    setConversationSetting(contact, 'wallpaper_uri', uri);
+    this.notify();
+  }
+
+  clearWallpaper(contact: string) {
+    setConversationSetting(contact, 'wallpaper_uri', null);
+    this.addSystemMessage(contact, 1);
+    this.sendEvent(contact, { action: 'wallpaper-clear', id: '' });
+  }
+
+  // Prévient l'autre téléphone qu'une photo ou une vidéo de la conversation vient d'être enregistrée.
+  markSaved(contact: string, id: string, kind: 'image' | 'video') {
+    this.addSystemMessage(contact, 1, `saved:${kind}`);
+    this.sendEvent(contact, { action: 'saved', id });
+    this.notify();
+  }
+
+  // text décrit l'événement. Vide, c'est le retrait du fond de discussion.
+  private addSystemMessage(contact: string, mine: number, text = '', id = to_base64(randombytes_buf(16))) {
+    addMessage({
+      id,
+      contact,
+      mine,
+      text,
+      status: 'delivered',
+      created_at: Date.now(),
+      kind: 'system',
+    });
+  }
+
+  getMyProfile() {
+    return { name: getSetting(PROFILE_NAME), photo: getSetting(PROFILE_PHOTO) };
+  }
+
+  async saveProfile(name: string, photoUri: string | null) {
+    const current = this.getMyProfile();
+    let photo = photoUri;
+    if (photoUri && photoUri !== current.photo) {
+      photo = await storeOutgoingFile(photoUri, to_base64(randombytes_buf(FILE_ID_BYTES)));
+    }
+    if (current.photo && current.photo !== photo) deleteStoredFile(current.photo);
+    setSetting(PROFILE_NAME, name || null);
+    setSetting(PROFILE_PHOTO, photo);
+    setSetting(PROFILE_VERSION, to_base64(randombytes_buf(16)));
+    this.names.forEach((_, contact) => this.shareProfile(contact));
+    this.notify();
+  }
+
+  private shareProfile(contact: string) {
+    const version = getSetting(PROFILE_VERSION);
+    if (!version || getContactProfile(contact).sent_version === version) return;
+    setContactProfileField(contact, 'sent_version', version);
+    const { name, photo } = this.getMyProfile();
+    this.sendEvent(contact, { action: 'profile', id: '', name, hasPhoto: photo !== null });
+    deleteOldAvatars(contact, 1, null);
+    if (!photo) return;
+    // Une copie par contact : l'envoi déplace le fichier qu'il reçoit.
+    exportCopy(photo, `avatar-${to_base64(randombytes_buf(8))}.jpg`)
+      .then((uri) => this.sendFile(contact, { uri, name: 'avatar.jpg', size: 0, mime: 'image/jpeg', kind: 'avatar' }))
+      .catch((e) => console.warn('Pear photo de profil :', e));
+  }
+
   async sendFile(contact: string, file: PickedFile) {
     const id = to_base64(randombytes_buf(FILE_ID_BYTES));
     const uri = await storeOutgoingFile(file.uri, id);
@@ -262,6 +345,7 @@ class ChatManager {
     this.flush(contact);
     this.wakeIfNeeded(contact);
     this.notify();
+    return uri;
   }
 
   private markOpenConversationRead() {
@@ -400,6 +484,21 @@ class ChatManager {
     } else if (data.action === 'delete' && getMessage(data.id, contact)?.mine === 0) {
       this.dropIncomingFile(contact, data.id);
       deleteMessage(data.id, contact, 0);
+    } else if (data.action === 'wallpaper-clear') {
+      setConversationSetting(contact, 'wallpaper_uri', null);
+      this.addSystemMessage(contact, 0);
+    } else if (data.action === 'saved') {
+      const original = getMessage(data.id, contact);
+      // eventId sert d'identifiant : un événement renvoyé après un accusé perdu ne s'affiche qu'une fois.
+      if (original?.kind === 'image' || original?.kind === 'video') {
+        this.addSystemMessage(contact, 0, `saved:${original.kind}:${original.mine === 1 ? 'yours' : 'theirs'}`, data.eventId.slice(0, MAX_SAVED_ID_LENGTH));
+      }
+    } else if (data.action === 'profile') {
+      setContactProfileField(contact, 'name', typeof data.name === 'string' ? data.name.slice(0, MAX_PROFILE_NAME_LENGTH) : null);
+      if (data.hasPhoto === false) {
+        setContactProfileField(contact, 'photo_uri', null);
+        deleteOldAvatars(contact, 0, null);
+      }
     }
     this.links.get(contact)?.peer.send({ type: 'event-ack', id: data.eventId });
     this.notify();
@@ -503,7 +602,7 @@ class ChatManager {
   private receiveFileOffer(contact: string, data: any) {
     const peer = this.links.get(contact)?.peer;
     const size = data.size;
-    const kinds: MessageKind[] = ['image', 'video', 'file'];
+    const kinds: MessageKind[] = ['image', 'video', 'audio', 'file', 'wallpaper', 'avatar'];
     if (!peer || !isValidFileId(data.id) || typeof data.name !== 'string' || !kinds.includes(data.kind)) return;
     if (!Number.isSafeInteger(size) || size < 0 || size > MAX_FILE_BYTES) return;
     if (typeof data.key !== 'string' || from_base64(data.key).length !== FILE_KEY_BYTES) return;
@@ -602,7 +701,13 @@ class ChatManager {
     this.links.get(contact)?.peer.send({ type: 'file-done', id });
     this.flush(contact);
     const message = getMessage(id, contact);
-    if (!foreground && message) this.notifyMessage(contact, message);
+    if (message?.kind === 'wallpaper') {
+      setConversationSetting(contact, 'wallpaper_uri', message.file_uri);
+    } else if (message?.kind === 'avatar') {
+      setContactProfileField(contact, 'photo_uri', message.file_uri);
+      deleteOldAvatars(contact, 0, id);
+    }
+    if (!foreground && message && message.kind !== 'avatar') this.notifyMessage(contact, message);
     this.notify();
   }
 

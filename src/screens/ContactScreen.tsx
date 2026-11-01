@@ -1,12 +1,16 @@
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Check, QrCode, Trash2 } from 'lucide-react-native';
 
-import { Button, Header, Screen } from '../components/ui';
+import { ContactProfile } from '../chat/database';
+import { showDialog } from '../components/dialog';
+import { Avatar, Button, Header, Screen } from '../components/ui';
 import { colors, radius, spacing } from '../theme';
 
 type Props = {
   initialName: string;
+  // Le nom et la photo choisis par le contact lui-même.
+  profile: ContactProfile;
   code: string[];
   isNew: boolean;
   onBack: () => void;
@@ -15,13 +19,13 @@ type Props = {
   onRemove: () => void;
 };
 
-export function ContactScreen({ initialName, code, isNew, onBack, onSave, onShowMyCode, onRemove }: Props) {
+export function ContactScreen({ initialName, profile, code, isNew, onBack, onSave, onShowMyCode, onRemove }: Props) {
   const [name, setName] = useState(initialName);
 
   const confirmRemove = () => {
-    Alert.alert('Supprimer ce contact ?', 'Vos messages avec lui seront effacés de ce téléphone, et il faudra refaire le pairing.', [
-      { text: 'Annuler', style: 'cancel' },
-      { text: 'Supprimer', style: 'destructive', onPress: onRemove },
+    showDialog('Supprimer ce contact ?', 'Vos messages avec lui seront effacés de ce téléphone, et il faudra refaire le pairing.', [
+      { label: 'Supprimer', style: 'danger', onPress: onRemove },
+      { label: 'Annuler', style: 'cancel' },
     ]);
   };
 
@@ -30,6 +34,12 @@ export function ContactScreen({ initialName, code, isNew, onBack, onSave, onShow
       <Header title={isNew ? 'Nouveau contact' : initialName} onBack={onBack} />
       <KeyboardAvoidingView behavior="padding" style={styles.flex}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          {!isNew && (
+            <View style={styles.profile}>
+              <Avatar uri={profile.photo_uri} size={96} />
+              {profile.name && <Text style={styles.profileName}>{profile.name}</Text>}
+            </View>
+          )}
           <Text style={styles.label}>Code de vérification</Text>
           <View style={styles.code}>
             {code.map((group, index) => (
@@ -74,6 +84,16 @@ const styles = StyleSheet.create({
   content: {
     padding: spacing.lg,
     paddingTop: spacing.sm,
+  },
+  profile: {
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  profileName: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: colors.text,
   },
   label: {
     fontSize: 14,
