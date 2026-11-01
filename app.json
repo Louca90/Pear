@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "Pear",
+    "slug": "pear",
+    "scheme": "pear",
+    "version": "1.0.0",
+    "platforms": [
+      "android"
+    ],
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "android": {
+      "package": "com.louca.pear",
+      "adaptiveIcon": {
+        "backgroundColor": "#FFFFFF",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "allowBackup": false
+    },
+    "plugins": [
+      "expo-secure-store",
+      "react-native-libsodium",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Pear utilise la caméra uniquement pour lire le QR code de vos contacts.",
+          "recordAudioAndroid": false
+        }
+      ]
+    ]
+  }
+}

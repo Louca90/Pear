@@ -1,0 +1,12 @@
+diff --git a/node_modules/react-native-libsodium/android/build.gradle b/node_modules/react-native-libsodium/android/build.gradle
+--- a/node_modules/react-native-libsodium/android/build.gradle
++++ b/node_modules/react-native-libsodium/android/build.gradle
+@@ -66,7 +66,7 @@ android {
+         // correctly.
+         // see https://developer.android.com/ndk/guides/cpp-support#selecting_a_c_runtime
+         arguments "-DANDROID_STL=c++_shared",
+-                  "-DNODE_MODULES_DIR=${nodeModules}"
++                  "-DNODE_MODULES_DIR=${nodeModules.replace('\\', '/')}"
+       }
+     }
+   }

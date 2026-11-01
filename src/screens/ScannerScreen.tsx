@@ -1,0 +1,82 @@
+import { useRef, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import { Camera } from 'lucide-react-native';
+
+import { Button, Header, Screen } from '../components/ui';
+import { parsePairingLink } from '../crypto/pairing';
+import { colors, radius, spacing } from '../theme';
+
+type Props = {
+  onBack: () => void;
+  onKeyReceived: (publicKey: string) => void;
+};
+
+export function ScannerScreen({ onBack, onKeyReceived }: Props) {
+  const [permission, requestPermission] = useCameraPermissions();
+  const [invalid, setInvalid] = useState(false);
+  // La caméra signale le même QR code plusieurs fois par seconde : on ne garde que le premier.
+  const done = useRef(false);
+
+  const handleScan = ({ data }: { data: string }) => {
+    if (done.current) return;
+    const key = parsePairingLink(data);
+    if (!key) {
+      setInvalid(true);
+      return;
+    }
+    done.current = true;
+    onKeyReceived(key);
+  };
+
+  if (!permission) return <Screen><Header title="Scanner" onBack={onBack} /></Screen>;
+
+  if (!permission.granted) {
+    return (
+      <Screen>
+        <Header title="Scanner" onBack={onBack} />
+        <View style={styles.permission}>
+          <Text style={styles.text}>La caméra sert uniquement à lire le QR code de votre contact.</Text>
+          <Button label="Autoriser la caméra" icon={Camera} onPress={requestPermission} />
+        </View>
+      </Screen>
+    );
+  }
+
+  return (
+    <Screen>
+      <Header title="Scanner" onBack={onBack} />
+      <View style={styles.cameraBox}>
+        <CameraView
+          style={StyleSheet.absoluteFill}
+          barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+          onBarcodeScanned={handleScan}
+        />
+      </View>
+      <Text style={styles.text}>
+        {invalid ? "Ce QR code n'est pas un code Pear." : "Visez le QR code affiché sur l'autre téléphone."}
+      </Text>
+    </Screen>
+  );
+}
+
+const styles = StyleSheet.create({
+  permission: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: spacing.lg,
+  },
+  cameraBox: {
+    aspectRatio: 1,
+    marginHorizontal: spacing.lg,
+    borderRadius: radius.md,
+    overflow: 'hidden',
+    backgroundColor: colors.surface,
+  },
+  text: {
+    fontSize: 16,
+    color: colors.textMuted,
+    textAlign: 'center',
+    padding: spacing.lg,
+  },
+});
