@@ -52,6 +52,15 @@ export function getVerificationCode(secret: Uint8Array): string[] {
   });
 }
 
+// Le secret donne deux valeurs indépendantes : l'adresse de la "boîte" Firebase, que seuls
+// les deux téléphones peuvent calculer, et la clé qui chiffre ce qui y passe.
+export function deriveSignalingKeys(secret: Uint8Array) {
+  return {
+    roomId: to_base64(crypto_kdf_derive_from_key(KEY_BYTES, 2, 'pearsign', secret)),
+    key: crypto_kdf_derive_from_key(KEY_BYTES, 3, 'pearsign', secret),
+  };
+}
+
 export function buildPairingLink(publicKey: string): string {
   return `pear://pair?k=${publicKey}`;
 }

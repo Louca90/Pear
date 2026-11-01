@@ -5,6 +5,7 @@ import * as Linking from 'expo-linking';
 
 import { deriveSharedSecret, getVerificationCode, Identity, parsePairingLink } from './src/crypto/pairing';
 import { AddContactScreen } from './src/screens/AddContactScreen';
+import { ConnectionScreen } from './src/screens/ConnectionScreen';
 import { ContactScreen } from './src/screens/ContactScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { ScannerScreen } from './src/screens/ScannerScreen';
@@ -15,7 +16,8 @@ type Route =
   | { name: 'home' }
   | { name: 'add' }
   | { name: 'scan' }
-  | { name: 'contact'; publicKey: string };
+  | { name: 'contact'; publicKey: string }
+  | { name: 'connection'; publicKey: string };
 
 export default function App() {
   const [identity, setIdentity] = useState<Identity | null>(null);
@@ -53,26 +55,29 @@ export default function App() {
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
       if (route.name === 'home') return false;
-      setRoute(route.name === 'scan' ? { name: 'add' } : { name: 'home' });
+      if (route.name === 'scan') setRoute({ name: 'add' });
+      else if (route.name === 'connection') setRoute({ name: 'contact', publicKey: route.publicKey });
+      else setRoute({ name: 'home' });
       return true;
     });
     return () => subscription.remove();
   }, [route]);
 
-  const contactKey = route.name === 'contact' ? route.publicKey : null;
+  const contactKey = route.name === 'contact' || route.name === 'connection' ? route.publicKey : null;
 
   // Le secret est recalculé à la demande : seule la clé privée est stockée.
   const pairing = useMemo(() => {
     if (!identity || !contactKey) return null;
     try {
-      return { code: getVerificationCode(deriveSharedSecret(identity, contactKey)) };
+      const secret = deriveSharedSecret(identity, contactKey);
+      return { secret, code: getVerificationCode(secret) };
     } catch {
-      return { code: null };
+      return { secret: null, code: null };
     }
   }, [identity, contactKey]);
 
   useEffect(() => {
-    if (pairing && !pairing.code) {
+    if (pairing && !pairing.secret) {
       Alert.alert('Clé non valide', 'Ce code ne permet pas de créer une connexion sûre.');
       setRoute({ name: 'home' });
     }
@@ -106,6 +111,17 @@ export default function App() {
     if (route.name === 'scan') {
       return <ScannerScreen onBack={() => setRoute({ name: 'add' })} onKeyReceived={openKey} />;
     }
+    if (route.name === 'connection' && pairing?.secret) {
+      const publicKey = route.publicKey;
+      return (
+        <ConnectionScreen
+          name={contacts.find((contact) => contact.publicKey === publicKey)?.name ?? 'Contact'}
+          role={identity.publicKey < publicKey ? 'a' : 'b'}
+          secret={pairing.secret}
+          onBack={() => setRoute({ name: 'contact', publicKey })}
+        />
+      );
+    }
     if (route.name === 'contact' && pairing?.code) {
       const publicKey = route.publicKey;
       const saved = contacts.find((contact) => contact.publicKey === publicKey);
@@ -122,6 +138,7 @@ export default function App() {
             setRoute({ name: 'home' });
           }}
           onShowMyCode={() => setRoute({ name: 'add' })}
+          onTestConnection={() => setRoute({ name: 'connection', publicKey })}
           onRemove={() => {
             updateContacts(others);
             setRoute({ name: 'home' });
