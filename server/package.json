@@ -1,0 +1,8 @@
+{
+  "name": "pear-wake",
+  "private": true,
+  "version": "1.0.0",
+  "dependencies": {
+    "firebase-admin": "^14.5.0"
+  }
+}
