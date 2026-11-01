@@ -19,7 +19,7 @@ export async function showMessageNotification(contact: string, name: string, tex
       channelId: CHANNEL_ID,
       // PRIVATE : le contenu reste caché tant que le téléphone est verrouillé.
       visibility: AndroidVisibility.PRIVATE,
-      smallIcon: 'ic_launcher',
+      smallIcon: 'ic_launcher_monochrome',
       pressAction: { id: 'default' },
     },
   });
