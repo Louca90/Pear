@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Alert, AppState, BackHandler, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as Linking from 'expo-linking';
+import notifee, { EventType } from '@notifee/react-native';
+import { getMessaging, onMessage } from '@react-native-firebase/messaging';
 
 import { deleteMessages } from './src/chat/database';
 import { chat } from './src/chat/manager';
@@ -43,7 +45,26 @@ export default function App() {
     return () => subscription.remove();
   }, []);
 
-  // Les connexions vivent tant que l'app est au premier plan. Le réveil en arrière-plan viendra ensuite.
+  useEffect(() => {
+    notifee.requestPermission().catch((e) => console.warn('Pear notification :', e));
+
+    // Appuyer sur une notification ouvre directement la conversation.
+    const openFrom = (data?: { contact?: unknown }) => {
+      if (typeof data?.contact === 'string') setRoute({ name: 'chat', publicKey: data.contact });
+    };
+    notifee.getInitialNotification().then((initial) => openFrom(initial?.notification.data));
+    const stopEvents = notifee.onForegroundEvent(({ type, detail }) => {
+      if (type === EventType.PRESS) openFrom(detail.notification?.data);
+    });
+    // Un push reçu app ouverte : on tente simplement de se reconnecter tout de suite.
+    const stopPush = onMessage(getMessaging(), async () => chat.retryAll());
+    return () => {
+      stopEvents();
+      stopPush();
+    };
+  }, []);
+
+  // Au premier plan, l'app garde les connexions ouvertes. En arrière-plan, seul un push la réveille.
   useEffect(() => {
     if (!identity) return;
     if (active) chat.sync(identity, contacts);

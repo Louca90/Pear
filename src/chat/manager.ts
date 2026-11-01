@@ -1,21 +1,30 @@
+import { AppState } from 'react-native';
+import { getMessaging, getToken, onTokenRefresh } from '@react-native-firebase/messaging';
 import { addNetworkStateListener, getNetworkStateAsync, NetworkState } from 'expo-network';
 import { randombytes_buf, to_base64 } from 'react-native-libsodium';
 
 import { deriveSharedSecret, Identity } from '../crypto/pairing';
 import { PeerLink, PeerStatus, RouteType } from '../network/peer';
+import { wakeContact } from '../network/wake';
 import { Contact } from '../storage';
 import {
   addMessage,
+  getContactToken,
   getPendingReadReceipts,
   getUndelivered,
   markConversationRead,
+  setContactToken,
   setReadReceiptSent,
   setStatus,
 } from './database';
+import { clearMessageNotification, showMessageNotification } from './notifications';
 
 export const MAX_TEXT_LENGTH = 2000;
 // Evite d'afficher "hors ligne" pendant une micro-coupure, par exemple en passant du Wi-Fi à la 5G.
 const OFFLINE_DELAY_MS = 1000;
+// Android pénalise les pushs trop fréquents : on réveille un même contact au plus une fois par minute.
+const WAKE_INTERVAL_MS = 60000;
+const WAKE_CHECK_MS = 15000;
 
 type Link = {
   peer: PeerLink;
@@ -26,14 +35,19 @@ type Link = {
 // Garde une connexion par contact tant que l'app est ouverte, et prévient les écrans à chaque changement.
 class ChatManager {
   private links = new Map<string, Link>();
+  private names = new Map<string, string>();
+  private lastWake = new Map<string, number>();
+  private wakeTimer?: ReturnType<typeof setInterval>;
   private version = 0;
   private listeners = new Set<() => void>();
   private online = true;
   private offlineTimer?: ReturnType<typeof setTimeout>;
-  private watchingNetwork = false;
+  private watching = false;
+  private myToken: string | null = null;
   private openConversation: string | null = null;
+  private lastActivity = 0;
 
-  subscribe =(listener: () => void) => {
+  subscribe = (listener: () => void) => {
     this.listeners.add(listener);
     return () => {
       this.listeners.delete(listener);
@@ -49,24 +63,41 @@ class ChatManager {
 
   // Ouvre les connexions des nouveaux contacts et ferme celles des contacts supprimés.
   sync(identity: Identity, contacts: Contact[]) {
-    this.watchNetwork();
-    const keys =new Set(contacts.map((contact) => contact.publicKey));
+    this.watch();
+    this.lastActivity = Date.now();
+    this.names = new Map(contacts.map((contact) => [contact.publicKey, contact.name]));
     for (const [key, link] of this.links) {
-      if (!keys.has(key)) {
+      if (!this.names.has(key)) {
         link.peer.stop();
         this.links.delete(key);
       }
     }
-    for (const key of keys) {
+    for (const key of this.names.keys()) {
       if (!this.links.has(key)) this.connect(identity, key);
     }
+    if (!this.wakeTimer) {
+      this.wakeTimer = setInterval(() => this.links.forEach((_, contact) => this.wakeIfNeeded(contact)), WAKE_CHECK_MS);
+    }
+    this.markOpenConversationRead();
     this.notify();
   }
 
   stopAll() {
+    clearInterval(this.wakeTimer);
+    this.wakeTimer = undefined;
     this.links.forEach((link) => link.peer.stop());
     this.links.clear();
     this.notify();
+  }
+
+  retryAll() {
+    this.links.forEach((link) => link.peer.retryNow());
+  }
+
+  // Vrai quand un contact est connecté et que plus rien n'a bougé depuis un moment.
+  isIdleSince(ms: number) {
+    const connected = [...this.links.values()].some((link) => link.status === 'connected');
+    return connected && Date.now() - this.lastActivity > ms;
   }
 
   getLink(contact: string): { status: PeerStatus; route: RouteType | null } {
@@ -80,34 +111,8 @@ class ChatManager {
   // La conversation affichée à l'écran : ses messages comptent comme lus.
   setOpenConversation(contact: string | null) {
     this.openConversation = contact;
-    if (!contact) return;
-    markConversationRead(contact);
-    this.flush(contact);
+    this.markOpenConversationRead();
     this.notify();
-  }
-
-  // Android indique directement si le téléphone a internet : c'est immédiat.
-  private watchNetwork() {
-    if (this.watchingNetwork) return;
-    this.watchingNetwork = true;
-    const update = (state: NetworkState) => this.setOnline(state.isInternetReachable ?? state.isConnected ?? true);
-    getNetworkStateAsync().then(update).catch((e) => console.warn('Pear réseau :', e));
-    addNetworkStateListener(update);
-  }
-
-  private setOnline(online: boolean) {
-    clearTimeout(this.offlineTimer);
-    if (online) {
-      const wasOffline = !this.online;
-      this.online = true;
-      if (wasOffline) this.links.forEach((link) => link.peer.retryNow());
-      this.notify();
-    } else {
-      this.offlineTimer = setTimeout(() => {
-        this.online = false;
-        this.notify();
-      }, OFFLINE_DELAY_MS);
-    }
   }
 
   send(contact: string, text: string) {
@@ -120,7 +125,71 @@ class ChatManager {
       created_at: Date.now(),
     });
     this.flush(contact);
+    this.wakeIfNeeded(contact);
     this.notify();
+  }
+
+  private markOpenConversationRead() {
+    const contact = this.openConversation;
+    if (!contact || AppState.currentState !== 'active') return;
+    markConversationRead(contact);
+    clearMessageNotification(contact);
+    this.flush(contact);
+  }
+
+  private watch() {
+    if (this.watching) return;
+    this.watching = true;
+
+    // Android indique directement si le téléphone a internet : c'est immédiat.
+    const update = (state: NetworkState) => this.setOnline(state.isInternetReachable ?? state.isConnected ?? true);
+    getNetworkStateAsync().then(update).catch((e) => console.warn('Pear réseau :', e));
+    addNetworkStateListener(update);
+
+    const messaging = getMessaging();
+    getToken(messaging)
+      .then((token) => {
+        this.myToken = token;
+        this.shareToken();
+      })
+      .catch((e) => console.warn('Pear token FCM :', e));
+    onTokenRefresh(messaging, (token) => {
+      this.myToken = token;
+      this.shareToken();
+    });
+  }
+
+  // Le token voyage dans la connexion chiffrée : ni le QR code ni Firebase ne le transportent.
+  private shareToken(contact?: string) {
+    if (!this.myToken) return;
+    const message = { type: 'token', token: this.myToken };
+    if (contact) this.links.get(contact)?.peer.send(message);
+    else this.links.forEach((link) => link.peer.send(message));
+  }
+
+  private setOnline(online: boolean) {
+    clearTimeout(this.offlineTimer);
+    if (online) {
+      const wasOffline = !this.online;
+      this.online = true;
+      if (wasOffline) this.retryAll();
+      this.notify();
+    } else {
+      this.offlineTimer = setTimeout(() => {
+        this.online = false;
+        this.notify();
+      }, OFFLINE_DELAY_MS);
+    }
+  }
+
+  private wakeIfNeeded(contact: string) {
+    if (!this.online || this.links.get(contact)?.status === 'connected') return;
+    if (getUndelivered(contact).length === 0) return;
+    if (Date.now() - (this.lastWake.get(contact) ?? 0) < WAKE_INTERVAL_MS) return;
+    const token = getContactToken(contact);
+    if (!token) return;
+    this.lastWake.set(contact, Date.now());
+    wakeContact(token).catch((e) => console.warn('Pear réveil :', e));
   }
 
   private connect(identity: Identity, contact: string) {
@@ -137,7 +206,11 @@ class ChatManager {
       peer: new PeerLink(identity.publicKey < contact ? 'a' : 'b', secret, {
         onStatus: (status) => {
           link.status = status;
-          if (status === 'connected') this.flush(contact);
+          if (status === 'connected') {
+            this.lastActivity = Date.now();
+            this.shareToken(contact);
+            this.flush(contact);
+          }
           this.notify();
         },
         onRoute: (route) => {
@@ -166,21 +239,31 @@ class ChatManager {
   }
 
   private receive(contact: string, data: any) {
+    this.lastActivity = Date.now();
     if (data?.type === 'message' && typeof data.id === 'string' && typeof data.text === 'string') {
-      addMessage({
+      const foreground = AppState.currentState === 'active';
+      const text = data.text.slice(0, MAX_TEXT_LENGTH);
+      const isNew = addMessage({
         id: data.id,
         contact,
         mine: 0,
-        text: data.text.slice(0, MAX_TEXT_LENGTH),
-        status: this.openConversation === contact ? 'read-pending' : 'delivered',
+        text,
+        status: foreground && this.openConversation === contact ? 'read-pending' : 'delivered',
         created_at: Date.now(),
       });
       this.links.get(contact)?.peer.send({ type: 'ack', id: data.id });
       this.flush(contact);
+      if (isNew && !foreground) {
+        showMessageNotification(contact, this.names.get(contact) ?? 'Pear', text).catch((e) =>
+          console.warn('Pear notification :', e),
+        );
+      }
       this.notify();
     } else if ((data?.type === 'ack' || data?.type === 'read') && typeof data.id === 'string') {
       setStatus(data.id, contact, data.type === 'read' ? 'read' : 'delivered');
       this.notify();
+    } else if (data?.type === 'token' && typeof data.token === 'string' && data.token.length <= 4096) {
+      setContactToken(contact, data.token);
     }
   }
 }

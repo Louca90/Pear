@@ -49,6 +49,7 @@ export function HomeScreen({ contacts, onAdd, onOpen }: Props) {
         renderItem={({ item }) => {
           const last = getLastMessage(item.publicKey);
           const online = chat.getLink(item.publicKey).status === 'connected';
+          const unread = last?.mine === 0 && last.status === 'delivered';
           return (
             <Pressable
               onPress={() => onOpen(item)}
@@ -60,8 +61,8 @@ export function HomeScreen({ contacts, onAdd, onOpen }: Props) {
               </View>
               <View style={styles.rowText}>
                 <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
-                <Text style={styles.preview} numberOfLines={1}>
-                  {last ? last.text : 'Aucun message'}
+                <Text style={[styles.preview, unread && styles.previewUnread]} numberOfLines={1}>
+                  {!last ? 'Aucun message' : last.mine === 1 ? `Vous : ${last.text}` : last.text}
                 </Text>
               </View>
             </Pressable>
@@ -140,5 +141,9 @@ const styles = StyleSheet.create({
   preview: {
     fontSize: 14,
     color: colors.textMuted,
+  },
+  previewUnread: {
+    color: colors.text,
+    fontWeight: '700',
   },
 });

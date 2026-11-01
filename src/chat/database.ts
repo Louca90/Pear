@@ -26,11 +26,16 @@ db.execSync(`
     created_at INTEGER NOT NULL
   );
   CREATE INDEX IF NOT EXISTS messages_contact ON messages (contact, created_at);
+  CREATE TABLE IF NOT EXISTS contact_tokens (
+    contact TEXT PRIMARY KEY NOT NULL,
+    token TEXT NOT NULL
+  );
 `);
 
-export function addMessage(message: Message) {
+// Renvoie false si le message existait déjà.
+export function addMessage(message: Message): boolean {
   // INSERT OR IGNORE : un message renvoyé après une coupure n'apparaît pas en double.
-  db.runSync(
+  const result = db.runSync(
     'INSERT OR IGNORE INTO messages (id, contact, mine, text, status, created_at) VALUES (?, ?, ?, ?, ?, ?)',
     message.id,
     message.contact,
@@ -39,6 +44,16 @@ export function addMessage(message: Message) {
     message.status,
     message.created_at,
   );
+  return result.changes > 0;
+}
+
+// Le token FCM du contact, reçu par la connexion chiffrée : il sert à le réveiller.
+export function setContactToken(contact: string, token: string) {
+  db.runSync('INSERT OR REPLACE INTO contact_tokens (contact, token) VALUES (?, ?)', contact, token);
+}
+
+export function getContactToken(contact: string): string | null {
+  return db.getFirstSync<{ token: string }>('SELECT token FROM contact_tokens WHERE contact = ?', contact)?.token ?? null;
 }
 
 export function getMessages(contact: string): Message[] {
@@ -80,4 +95,5 @@ export function setStatus(id: string, contact: string, status: 'delivered' | 're
 
 export function deleteMessages(contact: string) {
   db.runSync('DELETE FROM messages WHERE contact = ?', contact);
+  db.runSync('DELETE FROM contact_tokens WHERE contact = ?', contact);
 }
