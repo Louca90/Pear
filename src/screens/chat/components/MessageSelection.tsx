@@ -166,6 +166,8 @@ const styles = StyleSheet.create({
   },
   actionsMenu: {
     position: 'absolute',
+    // Le fond d'appui des lignes du haut et du bas reste dans les coins arrondis du menu.
+    overflow: 'hidden',
     minWidth: 200,
     paddingVertical: spacing.sm,
     borderRadius: radius.lg,

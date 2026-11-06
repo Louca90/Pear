@@ -87,6 +87,30 @@ export function Header({ title, subtitle, onBack, action, avatar, onTitlePress }
   );
 }
 
+type RowPressableProps = {
+  onPress: () => void;
+  onLongPress?: () => void;
+  style?: StyleProp<ViewStyle>;
+  label?: string;
+  children: ReactNode;
+};
+
+// Une ligne qu'on touche (liste, menu) : le fond d'appui suit ses coins arrondis au lieu de déborder
+// en rectangle sur les bords du conteneur.
+export function RowPressable({ onPress, onLongPress, style, label, children }: RowPressableProps) {
+  return (
+    <Pressable
+      onPress={onPress}
+      onLongPress={onLongPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={({ pressed }) => [styles.rowPressable, style, pressed && styles.rowPressed]}
+    >
+      {children}
+    </Pressable>
+  );
+}
+
 type ButtonProps = {
   label: string;
   icon: LucideIcon;
@@ -156,6 +180,13 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     fontSize: 13,
     color: colors.textMuted,
+  },
+  rowPressable: {
+    borderRadius: radius.md,
+    overflow: 'hidden',
+  },
+  rowPressed: {
+    backgroundColor: colors.surface,
   },
   button: {
     flexDirection: 'row',

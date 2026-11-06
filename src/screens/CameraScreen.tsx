@@ -12,7 +12,7 @@ import { chat } from '../chat/manager';
 import { useBottomBarSpace } from '../components/BottomBar';
 import { showDialog } from '../components/dialog';
 import { MediaEditor, MediaEditorHandle } from '../components/MediaEditor';
-import { Avatar, Button, IconButton, useInsets, useNavigationBarHeight } from '../components/ui';
+import { Avatar, Button, IconButton, RowPressable, useInsets, useNavigationBarHeight } from '../components/ui';
 import { Contact } from '../storage';
 import { colors, radius, spacing } from '../theme';
 
@@ -136,10 +136,10 @@ function CaptureReview({ capture, contacts, onDiscard, onSent }: ReviewProps) {
             data={contacts}
             keyExtractor={(contact) => contact.publicKey}
             renderItem={({ item }) => (
-              <Pressable onPress={() => send(item)} style={({ pressed }) => [styles.contactRow, pressed && styles.pressed]}>
+              <RowPressable onPress={() => send(item)} style={styles.contactRow}>
                 <Avatar uri={getContactProfile(item.publicKey).photo_uri} size={40} />
                 <Text style={styles.contactName} numberOfLines={1}>{item.name}</Text>
-              </Pressable>
+              </RowPressable>
             )}
             ListEmptyComponent={<Text style={styles.sheetEmpty}>Ajoutez d'abord un contact.</Text>}
           />
@@ -612,7 +612,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    paddingHorizontal: spacing.lg,
+    marginHorizontal: spacing.sm,
+    paddingHorizontal: spacing.lg - spacing.sm,
     paddingVertical: spacing.sm + 4,
   },
   contactName: {
@@ -620,8 +621,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     color: colors.text,
-  },
-  pressed: {
-    backgroundColor: colors.surface,
   },
 });

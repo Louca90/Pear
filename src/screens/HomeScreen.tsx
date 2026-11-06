@@ -1,11 +1,11 @@
 import { useSyncExternalStore } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { Flame, Plus, Users } from 'lucide-react-native';
 
 import { describeMessage, getContactProfile, getLastMessage, getStreak } from '../chat/database';
 import { chat } from '../chat/manager';
 import { useBottomBarSpace } from '../components/BottomBar';
-import { Avatar, Button, Header, IconButton, Screen } from '../components/ui';
+import { Avatar, Button, Header, IconButton, RowPressable, Screen } from '../components/ui';
 import { Contact } from '../storage';
 import { colors, radius, spacing } from '../theme';
 
@@ -58,10 +58,7 @@ export function HomeScreen({ contacts, onAdd, onOpen, onProfile }: Props) {
           const unread = last?.mine === 0 && last.status === 'delivered';
           const streak = getStreak(item.publicKey);
           return (
-            <Pressable
-              onPress={() => onOpen(item)}
-              style={({ pressed }) => [styles.row, pressed && styles.pressed]}
-            >
+            <RowPressable onPress={() => onOpen(item)} style={styles.row}>
               <View>
                 <Avatar uri={getContactProfile(item.publicKey).photo_uri} />
                 {online && <View style={styles.online} accessibilityLabel="En ligne" />}
@@ -78,7 +75,7 @@ export function HomeScreen({ contacts, onAdd, onOpen, onProfile }: Props) {
                   <Text style={styles.streakCount}>{streak}</Text>
                 </View>
               )}
-            </Pressable>
+            </RowPressable>
           );
         }}
       />
@@ -118,11 +115,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    paddingHorizontal: spacing.lg,
+    // La ligne est en retrait des bords pour que son fond d'appui arrondi reste visible ; le texte garde son alignement.
+    marginHorizontal: spacing.sm,
+    paddingHorizontal: spacing.lg - spacing.sm,
     paddingVertical: spacing.md,
-  },
-  pressed: {
-    backgroundColor: colors.surface,
   },
   streak: {
     flexDirection: 'row',
