@@ -13,7 +13,7 @@ import { DialogHost, showDialog } from './src/components/dialog';
 import { deriveSharedSecret, getVerificationCode, Identity, parsePairingLink } from './src/crypto/pairing';
 import { AddContactScreen } from './src/screens/AddContactScreen';
 import { CameraScreen } from './src/screens/CameraScreen';
-import { ChatScreen } from './src/screens/ChatScreen';
+import { ChatScreen } from './src/screens/chat/ChatScreen';
 import { ContactScreen } from './src/screens/ContactScreen';
 import { CustomizeScreen } from './src/screens/CustomizeScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
