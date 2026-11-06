@@ -3,6 +3,7 @@ import { crypto_generichash, crypto_kdf_derive_from_key, from_base64, randombyte
 
 import { open, seal } from './box';
 import type { Identity } from './pairing';
+import { MAX_SKIP, MAX_STORED_SKIPPED } from '../config';
 
 // Double Ratchet, selon la spécification publiée par Signal. Chaque message a sa propre clé :
 // - le "cliquet symétrique" dérive une nouvelle clé par message et oublie la précédente ;
@@ -10,9 +11,6 @@ import type { Identity } from './pairing';
 // Voler l'état d'un téléphone ne permet donc pas de relire les anciens messages, et l'accès futur se referme.
 const KEY_BYTES = 32;
 const KDF_CONTEXT = 'pearrtch';
-// Limite les calculs qu'un message forgé pourrait imposer, et la place prise par les clés gardées.
-const MAX_SKIP = 1000;
-const MAX_STORED_SKIPPED = 200;
 
 type KeyPair = { publicKey: string; secretKey: string };
 

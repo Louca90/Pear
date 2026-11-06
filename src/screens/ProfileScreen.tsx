@@ -10,8 +10,7 @@ import { showDialog } from '../components/dialog';
 import { Avatar, Button, Header, IconButton, Screen } from '../components/ui';
 import { colors, radius, spacing } from '../theme';
 import { checkForUpdate, getInstallPermission, previewUpdateScreen, requestInstallPermission, useUpdateState } from '../update/updates';
-
-const PHOTO_QUALITY = 0.7;
+import { PROFILE_PHOTO_QUALITY } from '../config';
 
 export function ProfileScreen({ onBack }: { onBack: () => void }) {
   const saved = chat.getMyProfile();
@@ -41,7 +40,7 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
             : null;
 
   const pickPhoto = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: PHOTO_QUALITY, allowsEditing: true, aspect: [1, 1] });
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: PROFILE_PHOTO_QUALITY, allowsEditing: true, aspect: [1, 1] });
     const asset = result.assets?.[0];
     if (!result.canceled && asset) setPhoto(asset.uri);
   };

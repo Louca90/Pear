@@ -4,11 +4,9 @@ import { Directory, File, Paths } from 'expo-file-system';
 import { addDownloadListener, appVersionCode, canRequestPackageInstalls, downloadFile, installApk, openUnknownAppSourcesSettings, sha256File } from '../../modules/pear-native';
 import { parseRelease, Release } from './release';
 import { log } from '../log';
+import { LATEST_RELEASE_URL, UPDATE_CHECK_INTERVAL_MS, UPDATE_CHECK_TIMEOUT_MS } from '../config';
 
-export const LATEST_RELEASE_URL = 'https://api.github.com/repos/Louca90/Pear/releases/latest';
-// Au premier plan, GitHub n'est pas interrogé plus souvent que ça.
-const CHECK_INTERVAL_MS = 5 * 60 * 1000;
-const CHECK_TIMEOUT_MS = 10000;
+export { LATEST_RELEASE_URL };
 
 export type CheckStatus = 'idle' | 'checking' | 'upToDate' | 'available' | 'offline';
 export type DownloadPhase = 'idle' | 'permission' | 'downloading' | 'verifying' | 'installing' | 'failed';
@@ -60,11 +58,11 @@ function installedVersionCode() {
 // Hors ligne ou GitHub injoignable : rien n'est bloqué, on réessaiera plus tard.
 export async function checkForUpdate(force = false) {
   if (state.status === 'checking') return;
-  if (!force && Date.now() - lastCheck < CHECK_INTERVAL_MS) return;
+  if (!force && Date.now() - lastCheck < UPDATE_CHECK_INTERVAL_MS) return;
   lastCheck = Date.now();
   set({ status: 'checking' });
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), CHECK_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), UPDATE_CHECK_TIMEOUT_MS);
   try {
     const response = await fetch(LATEST_RELEASE_URL, { headers: { Accept: 'application/vnd.github+json' }, signal: controller.signal });
     const release = response.ok ? parseRelease(await response.json()) : null;

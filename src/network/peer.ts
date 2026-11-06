@@ -6,22 +6,9 @@ import { open, seal } from '../crypto/box';
 import { deriveMessageKey } from '../crypto/pairing';
 import { Role, SignalingChannel } from './signaling';
 import { log } from '../log';
+import { DRAIN_POLL_MS, HEARTBEAT_MS, ICE_SERVERS, MAX_BUFFERED_BYTES, PEER_TIMEOUT_MS, RETRY_MS } from '../config';
 
-// STUN aide chaque téléphone à découvrir son adresse publique. Plusieurs serveurs en cas de panne.
-const ICE_SERVERS = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'stun:stun.cloudflare.com:3478' },
-];
 const CONTEXT = 'pear-message-v1';
-// Backpressure : au-delà, on attend que le réseau ait vidé la file avant d'envoyer la suite.
-const MAX_BUFFERED_BYTES = 1024 * 1024;
-const DRAIN_POLL_MS = 20;
-// Battement de coeur : sans signe de l'autre téléphone pendant TIMEOUT_MS, la connexion est morte.
-const HEARTBEAT_MS = 4000;
-const TIMEOUT_MS = 12000;
-// Laisse à une négociation le temps d'aboutir avant d'en relancer une, même sur un réseau lent.
-const RETRY_MS = 20000;
 
 export type PeerStatus = 'starting' | 'searching' | 'connecting' | 'connected' | 'error';
 // host : même réseau. srflx : direct par internet. relay : passe par un serveur relais.
@@ -123,7 +110,7 @@ export class PeerLink {
 
   private tick() {
     if (this.channel?.readyState === 'open') {
-      if (Date.now() - this.lastSeen > TIMEOUT_MS) {
+      if (Date.now() - this.lastSeen > PEER_TIMEOUT_MS) {
         // Réseau coupé sans fermeture propre : la connexion semble ouverte mais ne répond plus.
         this.closeConnection();
         this.markOffline();

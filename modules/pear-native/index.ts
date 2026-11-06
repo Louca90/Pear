@@ -7,7 +7,7 @@ export type DownloadProgress = { received: number; total: number };
 export type Insets = { top: number; bottom: number };
 
 declare class PearNativeModule extends NativeModule<{ onBack: (event: BackEvent) => void; onDownloadProgress: (event: DownloadProgress) => void; onInsetsChange: (event: Insets) => void }> {
-  burnOverlay(videoUri: string, overlayUri: string): Promise<string>;
+  burnOverlay(videoUri: string, overlayUri: string, bitrate: number): Promise<string>;
   navigationBarHeight(): number | null;
   systemInsets(): Insets | null;
   watchInsets(): Promise<void>;
@@ -73,8 +73,8 @@ export function installApk(fileUri: string) {
 }
 
 // Incruste une image transparente dans toute la vidéo, sur le téléphone. Renvoie le nouveau fichier.
-export function burnOverlay(videoUri: string, overlayUri: string) {
-  return PearNative.burnOverlay(videoUri, overlayUri);
+export function burnOverlay(videoUri: string, overlayUri: string, bitrate: number) {
+  return PearNative.burnOverlay(videoUri, overlayUri, bitrate);
 }
 
 // En attendant de pouvoir lire les vraies valeurs : la barre d'état courante et la barre à 3 boutons, la plus haute.

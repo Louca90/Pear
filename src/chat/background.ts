@@ -2,10 +2,7 @@ import { AppState } from 'react-native';
 
 import { loadContacts, loadOrCreateIdentity } from '../storage';
 import { chat } from './manager';
-
-// Android laisse environ 20 secondes à l'app réveillée par un push.
-const MAX_AWAKE_MS = 18000;
-const QUIET_AFTER_ACTIVITY_MS = 4000;
+import { BACKGROUND_MAX_AWAKE_MS, BACKGROUND_QUIET_MS } from '../config';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -20,9 +17,9 @@ export async function handleWake() {
   chat.sync(identity, contacts);
 
   const start = Date.now();
-  while (Date.now() - start < MAX_AWAKE_MS) {
+  while (Date.now() - start < BACKGROUND_MAX_AWAKE_MS) {
     await sleep(500);
-    if (chat.isIdleSince(QUIET_AFTER_ACTIVITY_MS)) break;
+    if (chat.isIdleSince(BACKGROUND_QUIET_MS)) break;
   }
 
   // Si l'utilisateur a ouvert l'app entre-temps, c'est elle qui garde les connexions.

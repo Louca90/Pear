@@ -3,10 +3,12 @@ import { getSetting, setSetting } from '../chat/database';
 import { LATEST_RELEASE_URL } from './updates';
 import { parseRelease } from './release';
 import notes from './release-notes.json';
+import { RELEASES_PAGE } from '../config';
+
+export { RELEASES_PAGE };
 
 // Le dernier versionCode pour lequel le popup « Pear est à jour ! » a été vu.
 const LAST_SEEN_KEY = 'last_seen_version_code';
-export const RELEASES_PAGE = 'https://github.com/Louca90/Pear/releases/tag/';
 
 export type UpdatedInfo = { version: string; summary: string | null; pageUrl: string };
 

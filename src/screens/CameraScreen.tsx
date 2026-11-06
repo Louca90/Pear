@@ -16,6 +16,7 @@ import { Avatar, Button, IconButton, RowPressable, useInsets, useNavigationBarHe
 import { Contact } from '../storage';
 import { colors, radius, spacing } from '../theme';
 import { log } from '../log';
+import { VIDEO_BITRATE } from '../config';
 
 // En dessous de ce temps, c'est une photo. Au-delà, le maintien filme.
 const HOLD_MS = 250;
@@ -24,8 +25,6 @@ const LOCK_DISTANCE = 112;
 const LOCK_REACH = 28;
 const SHUTTER_SIZE = 84;
 const PHOTO_QUALITY = 0.9;
-// Environ 30 Mo par minute au lieu de 100 Mo ou plus, encore très net sur un téléphone.
-const VIDEO_BITRATE = 4_000_000;
 const SHEET_OPEN_MS = 260;
 const SHEET_CLOSE_MS = 200;
 const DOUBLE_TAP_MS = 300;

@@ -7,6 +7,7 @@ import { Check, Type } from 'lucide-react-native';
 import Svg, { G, Image as SvgImage, Rect, Text as SvgText } from 'react-native-svg';
 
 import { burnOverlay } from '../../modules/pear-native';
+import { VIDEO_BITRATE } from '../config';
 import { colors, radius, spacing } from '../theme';
 import { IconButton, useInsets } from './ui';
 import { log } from '../log';
@@ -117,7 +118,7 @@ export function MediaEditor({ uri, kind, takenAt, bottomSpace, ref }: Props) {
         canvas.current.toDataURL((base64: string) => {
           const edited = new File(Paths.cache, `edited-${Date.now()}.png`);
           Promise.resolve(edited.write(base64, { encoding: 'base64' }))
-            .then(() => (kind === 'video' ? burnOverlay(uri, edited.uri) : edited.uri))
+            .then(() => (kind === 'video' ? burnOverlay(uri, edited.uri, VIDEO_BITRATE) : edited.uri))
             .then(resolve)
             .catch(reject);
         });

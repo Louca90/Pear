@@ -2,10 +2,9 @@ import { Directory, File, FileMode, Paths } from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library/legacy';
 import { getThumbnailAsync } from 'expo-video-thumbnails';
 import { log } from '../log';
+import { CHUNK_BYTES, MAX_FILE_BYTES } from '../config';
 
-// Limite d'environ 16 Ko par message DataChannel : on garde de la place pour l'en-tête et le chiffrement.
-export const CHUNK_BYTES = 14 * 1024;
-export const MAX_FILE_BYTES = 2 * 1024 * 1024 * 1024;
+export { CHUNK_BYTES, MAX_FILE_BYTES };
 
 const FILE_ID = /^[A-Za-z0-9_-]{22}$/;
 

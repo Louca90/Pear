@@ -41,8 +41,6 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
 
-// Même débit que l'appareil photo : l'incrustation ne fait pas regonfler la vidéo.
-private const val VIDEO_BITRATE = 4_000_000
 private const val DOWNLOAD_TIMEOUT_MS = 20_000
 private const val DOWNLOAD_PROGRESS_MS = 250L
 private const val APK_MIME = "application/vnd.android.package-archive"
@@ -186,9 +184,10 @@ class PearNativeModule : Module() {
     Function("installApk") { fileUri: String -> installApk(fileUri) }
 
     // Media3 doit être lancé depuis un fil qui a une boucle de messages : ici, le fil principal.
-    AsyncFunction("burnOverlay") { videoUri: String, overlayUri: String, promise: Promise ->
+    // Le débit vient de src/config.ts : le même que l'appareil photo, l'incrustation ne fait pas regonfler la vidéo.
+    AsyncFunction("burnOverlay") { videoUri: String, overlayUri: String, bitrate: Int, promise: Promise ->
       try {
-        burnOverlay(videoUri, overlayUri, promise)
+        burnOverlay(videoUri, overlayUri, bitrate, promise)
       } catch (e: Exception) {
         promise.reject("ERR_PEAR_VIDEO", e.message ?: "Incrustation impossible", e)
       }
@@ -276,7 +275,7 @@ class PearNativeModule : Module() {
     activity.startActivity(intent)
   }
 
-  private fun burnOverlay(videoUri: String, overlayUri: String, promise: Promise) {
+  private fun burnOverlay(videoUri: String, overlayUri: String, bitrate: Int, promise: Promise) {
     val context = appContext.reactContext ?: throw IllegalStateException("L'app n'est pas prête.")
     val videoPath = Uri.parse(videoUri).path ?: throw IllegalArgumentException("Vidéo introuvable.")
     val overlayPath = Uri.parse(overlayUri).path ?: throw IllegalArgumentException("Calque introuvable.")
@@ -291,7 +290,7 @@ class PearNativeModule : Module() {
 
     val output = File(context.cacheDir, "edited-${System.currentTimeMillis()}.mp4")
     val encoder = DefaultEncoderFactory.Builder(context)
-      .setRequestedVideoEncoderSettings(VideoEncoderSettings.Builder().setBitrate(VIDEO_BITRATE).build())
+      .setRequestedVideoEncoderSettings(VideoEncoderSettings.Builder().setBitrate(bitrate).build())
       .build()
 
     Transformer.Builder(context)

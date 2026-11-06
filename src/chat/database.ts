@@ -3,6 +3,7 @@ import { defaultDatabaseDirectory, openDatabaseSync, SQLiteDatabase } from 'expo
 
 import { LATEST_VERSION, migrate, schemaVersion } from './db/migrations';
 import { deleteStoredFile, formatSize } from './files';
+import { DB_NAME } from '../config';
 
 // Mes messages : sending (pas encore confirmé), delivered (reçu par l'autre), read (lu par l'autre),
 // refused (fichier refusé par l'autre : il ne repart plus).
@@ -52,8 +53,6 @@ export type OutboxEvent = {
   payload: string;
 };
 
-// L'historique vit uniquement dans ce fichier, sur le téléphone.
-const DB_NAME = 'pear.db';
 const BACKUP_SUFFIX = '.bak';
 
 let instance: SQLiteDatabase | null = null;

@@ -4,9 +4,8 @@ import { DatabaseReference, getDatabase, onChildAdded, onDisconnect, push, ref, 
 import { open, seal } from '../crypto/box';
 import { deriveSignalingKeys } from '../crypto/pairing';
 import { log } from '../log';
+import { SIGNAL_MAX_AGE_MS } from '../config';
 
-// Au-delà, une offre ne sert plus à rien : le téléphone qui l'a envoyée a déjà réessayé.
-const MAX_AGE_MS = 2 * 60 * 1000;
 const CONTEXT = 'pear-signal-v1';
 
 export type Role = 'a' | 'b';
@@ -37,7 +36,7 @@ export class SignalingChannel {
         const record = snapshot.val();
         if (record.from === this.role) return;
         remove(snapshot.ref).catch(onError);
-        if (Date.now() - record.at > MAX_AGE_MS) return;
+        if (Date.now() - record.at > SIGNAL_MAX_AGE_MS) return;
         try {
           onSignal(JSON.parse(open(record.data, this.key, CONTEXT)));
         } catch (e) {

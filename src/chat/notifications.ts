@@ -1,12 +1,11 @@
 import notifee, { AndroidImportance, AndroidVisibility } from '@notifee/react-native';
 import { log } from '../log';
-
-const CHANNEL_ID = 'messages';
+import { NOTIFICATION_CHANNEL_ID, NOTIFICATION_SMALL_ICON } from '../config';
 
 // La notification est créée ici, après déchiffrement : ni Google ni Vercel n'en voient le contenu.
 export async function showMessageNotification(contact: string, name: string, text: string) {
   await notifee.createChannel({
-    id: CHANNEL_ID,
+    id: NOTIFICATION_CHANNEL_ID,
     name: 'Messages',
     importance: AndroidImportance.HIGH,
     visibility: AndroidVisibility.PRIVATE,
@@ -17,10 +16,10 @@ export async function showMessageNotification(contact: string, name: string, tex
     body: text,
     data: { contact },
     android: {
-      channelId: CHANNEL_ID,
+      channelId: NOTIFICATION_CHANNEL_ID,
       // PRIVATE : le contenu reste caché tant que le téléphone est verrouillé.
       visibility: AndroidVisibility.PRIVATE,
-      smallIcon: 'ic_launcher_monochrome',
+      smallIcon: NOTIFICATION_SMALL_ICON,
       pressAction: { id: 'default' },
     },
   });

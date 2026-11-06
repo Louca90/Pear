@@ -2,10 +2,7 @@ import * as SecureStore from 'expo-secure-store';
 
 import { createIdentity, Identity } from './crypto/pairing';
 import type { RatchetState } from './crypto/ratchet';
-
-const IDENTITY_KEY = 'identity';
-const CONTACTS_KEY = 'contacts';
-const RATCHET_PREFIX = 'ratchet.';
+import { CONTACTS_KEY, IDENTITY_KEY, RATCHET_PREFIX } from './config';
 
 export type Contact = {
   publicKey: string;

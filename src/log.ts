@@ -1,4 +1,5 @@
 import { File, Paths } from 'expo-file-system';
+import { LOG_FILE, LOG_MAX_LINES } from './config';
 
 // Journal de débogage local : les derniers événements (réveils, connexions, erreurs), pour comprendre
 // pourquoi un message ou une notification a raté. Il ne contient JAMAIS de contenu de message ni de
@@ -6,10 +7,8 @@ import { File, Paths } from 'expo-file-system';
 // que si l'utilisateur l'exporte lui-même.
 export type Level = 'debug' | 'info' | 'warn' | 'error';
 
-const MAX_LINES = 500;
 // Les écritures sur le disque sont regroupées : une seule toutes les quelques secondes au plus.
 const SAVE_DELAY_MS = 2000;
-const LOG_FILE = 'pear-log.txt';
 
 let lines: string[] | null = null;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -24,7 +23,7 @@ function buffer() {
   lines = [];
   try {
     const file = logFile();
-    if (file.exists) lines = file.textSync().split('\n').filter(Boolean).slice(-MAX_LINES);
+    if (file.exists) lines = file.textSync().split('\n').filter(Boolean).slice(-LOG_MAX_LINES);
   } catch {
     // Journal illisible : on repart d'un journal vide.
   }
@@ -52,7 +51,7 @@ function write(level: Level, scope: string, detail?: unknown) {
   const line = `${new Date().toISOString()} ${level.toUpperCase()} ${scope}${describe(detail)}`;
   const all = buffer();
   all.push(line);
-  if (all.length > MAX_LINES) all.splice(0, all.length - MAX_LINES);
+  if (all.length > LOG_MAX_LINES) all.splice(0, all.length - LOG_MAX_LINES);
   if (__DEV__) (level === 'error' ? console.error : level === 'warn' ? console.warn : console.log)(`Pear ${scope}${describe(detail)}`);
   saveTimer ??= setTimeout(save, SAVE_DELAY_MS);
 }
