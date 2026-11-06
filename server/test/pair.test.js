@@ -1,5 +1,6 @@
 // Teste inbox.js, pair-request.js et cleanup.js sans Firebase : node server/test/pair.test.js
 const assert = require('assert');
+const { Buffer } = require('node:buffer');
 const { createHash, createHmac, createPublicKey, diffieHellman, generateKeyPairSync } = require('node:crypto');
 const { state, get, loadHandler, call, reset } = require('./harness');
 

@@ -1,3 +1,4 @@
+const { Buffer } = require('node:buffer');
 const { createHash, createHmac, createPrivateKey, createPublicKey, diffieHellman, timingSafeEqual } = require('node:crypto');
 
 // Boîtes de demandes de pairing. Les mêmes calculs sont refaits par l'app : voir DOCS_SERVEUR.md.
