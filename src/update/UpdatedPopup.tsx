@@ -69,7 +69,7 @@ const useStyles = createStyles((colors) => ({
     width: '100%',
     maxWidth: 420,
     borderRadius: radius.lg,
-    backgroundColor: colors.background,
+    backgroundColor: colors.elevated,
     padding: spacing.lg,
     alignItems: 'stretch',
   },

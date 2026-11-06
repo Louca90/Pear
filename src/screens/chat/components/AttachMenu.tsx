@@ -71,7 +71,7 @@ const useStyles = createStyles((colors) => ({
     height: 40,
     paddingHorizontal: spacing.md,
     borderRadius: radius.full,
-    backgroundColor: colors.background,
+    backgroundColor: colors.elevated,
     boxShadow: `0px 4px 16px ${colors.shadow}`,
   },
   attachLabel: {

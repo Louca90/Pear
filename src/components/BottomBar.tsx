@@ -162,7 +162,7 @@ const useStyles = createStyles((colors) => ({
     flexDirection: 'row',
     padding: BAR_PADDING,
     borderRadius: radius.full,
-    backgroundColor: colors.background,
+    backgroundColor: colors.elevated,
     boxShadow: `0px 8px 28px ${colors.shadow}`,
   },
   indicator: {
@@ -172,7 +172,7 @@ const useStyles = createStyles((colors) => ({
     width: SLOT_HEIGHT,
     height: SLOT_HEIGHT,
     borderRadius: radius.full,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.elevatedActive,
   },
   slot: {
     width: SLOT_WIDTH,

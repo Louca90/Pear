@@ -163,7 +163,7 @@ const useStyles = createStyles((colors) => ({
     gap: 2,
     paddingHorizontal: spacing.sm,
     borderRadius: radius.full,
-    backgroundColor: colors.background,
+    backgroundColor: colors.elevated,
   },
   reactionOption: {
     width: 42,
@@ -184,7 +184,7 @@ const useStyles = createStyles((colors) => ({
     minWidth: 200,
     paddingVertical: spacing.sm,
     borderRadius: radius.lg,
-    backgroundColor: colors.background,
+    backgroundColor: colors.elevated,
   },
   action: {
     flexDirection: 'row',

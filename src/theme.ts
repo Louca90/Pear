@@ -10,6 +10,9 @@ export type Palette = {
   scheme: 'light' | 'dark';
   background: string;
   surface: string;
+  // Ce qui flotte au-dessus du fond (barre du bas, menus, saisie, popups) et sa partie active.
+  elevated: string;
+  elevatedActive: string;
   border: string;
   text: string;
   textMuted: string;
@@ -35,6 +38,8 @@ const light: Palette = {
   scheme: 'light',
   background: '#FFFFFF',
   surface: '#F5F5F5',
+  elevated: '#FFFFFF',
+  elevatedActive: '#F0F0F0',
   border: '#E8E8E8',
   text: '#000000',
   textMuted: '#6B6B6B',
@@ -54,23 +59,25 @@ const light: Palette = {
 
 const dark: Palette = {
   scheme: 'dark',
-  background: '#000000',
-  surface: '#161616',
-  border: '#2A2A2A',
-  text: '#FFFFFF',
-  textMuted: '#9A9A9A',
+  background: '#0B0B0C',
+  surface: '#1A1A1C',
+  elevated: '#1F1F22',
+  elevatedActive: '#36363A',
+  border: '#2C2C2F',
+  text: '#F5F5F7',
+  textMuted: '#8E8E93',
   onDarkMuted: '#B8B8B8',
   onDarkTrack: '#4A4A4A',
   overlay: 'rgba(0, 0, 0, 0.7)',
   selectionDim: 'rgba(0, 0, 0, 0.45)',
   disabled: '#4A4A4A',
   danger: '#EF5350',
-  accent: '#FFFFFF',
-  onAccent: '#000000',
+  accent: '#F5F5F7',
+  onAccent: '#0B0B0C',
   shadow: 'rgba(0, 0, 0, 0.6)',
   onMedia: '#FFFFFF',
-  bubbleMine: '#FFFFFF',
-  bubbleTheirs: '#1F1F1F',
+  bubbleMine: '#E9E9EB',
+  bubbleTheirs: '#26262A',
 };
 
 // --- Choix du thème : suit le système, ou forcé clair / sombre (réglage du profil) ---

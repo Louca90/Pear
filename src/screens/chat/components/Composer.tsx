@@ -192,7 +192,7 @@ const useLocalStyles = createStyles((colors) => ({
     width: 44,
     paddingVertical: spacing.sm,
     borderRadius: radius.full,
-    backgroundColor: colors.background,
+    backgroundColor: colors.elevated,
     boxShadow: `0px 4px 16px ${colors.shadow}`,
     alignItems: 'center',
     gap: 2,

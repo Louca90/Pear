@@ -110,7 +110,7 @@ const useStyles = createStyles((colors) => ({
     maxWidth: 360,
     padding: spacing.lg,
     borderRadius: radius.lg,
-    backgroundColor: colors.background,
+    backgroundColor: colors.elevated,
   },
   title: {
     fontSize: 18,
