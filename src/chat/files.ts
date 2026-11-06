@@ -1,4 +1,4 @@
-import { Directory, File, Paths } from 'expo-file-system';
+import { Directory, File, FileMode, Paths } from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library/legacy';
 import { getThumbnailAsync } from 'expo-video-thumbnails';
 
@@ -40,6 +40,19 @@ export async function storeOutgoingFile(sourceUri: string, id: string): Promise<
     await source.copy(destination);
   }
   return destination.uri;
+}
+
+// La taille réelle d'un fichier stocké, 0 si elle est illisible. File.size peut renvoyer 0 :
+// on lit le fichier ouvert.
+export function storedSize(uri: string) {
+  try {
+    const handle = new File(uri).open(FileMode.ReadOnly);
+    const size = handle.size ?? 0;
+    handle.close();
+    return size;
+  } catch {
+    return 0;
+  }
 }
 
 export function deleteStoredFile(uri: string) {

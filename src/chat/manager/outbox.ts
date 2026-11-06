@@ -7,8 +7,10 @@ import {
   getPendingReadReceipts,
   getUndelivered,
   setFileKey,
+  setFileSize,
   setReadReceiptSent,
 } from '../database';
+import { storedSize } from '../files';
 
 import { ChatCore } from './core';
 import { sendSecure } from './secure';
@@ -42,6 +44,13 @@ export function flush(core: ChatCore, contact: string) {
   for (const message of getUndelivered(contact)) {
     if (message.kind !== 'text') {
       if (core.sendingFiles.has(message.id)) continue;
+      // Réparation : une ancienne version pouvait annoncer une taille plus grande que le fichier,
+      // et l'envoi échouait en boucle en arrivant au bout du fichier.
+      const realSize = message.file_uri ? storedSize(message.file_uri) : 0;
+      if (realSize > 0 && realSize !== message.file_size) {
+        setFileSize(message.id, contact, realSize);
+        message.file_size = realSize;
+      }
       let key = message.file_key;
       if (!key) {
         key = to_base64(randombytes_buf(FILE_KEY_BYTES));

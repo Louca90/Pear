@@ -12,7 +12,7 @@ import {
   setContactProfileField,
   setConversationSetting,
 } from '../database';
-import { CHUNK_BYTES, deleteStoredFile, isValidFileId, MAX_FILE_BYTES, storedFile, storeOutgoingFile } from '../files';
+import { CHUNK_BYTES, deleteStoredFile, isValidFileId, MAX_FILE_BYTES, storedFile, storedSize, storeOutgoingFile } from '../files';
 
 import { ChatCore } from './core';
 import { notifyMessage } from './notify';
@@ -34,10 +34,9 @@ import { wakeIfNeeded } from './wake';
 export async function sendFile(core: ChatCore, contact: string, file: PickedFile) {
   const id = to_base64(randombytes_buf(FILE_ID_BYTES));
   const uri = await storeOutgoingFile(file.uri, id);
-  // Le sélecteur ne donne pas toujours la taille, et File.size peut renvoyer 0 : on lit aussi le fichier ouvert.
-  const handle = new File(uri).open(FileMode.ReadOnly);
-  const size = Math.max(file.size, handle.size ?? 0);
-  handle.close();
+  // Seule la taille du fichier stocké compte : le sélecteur donne parfois celle de l'original avant
+  // compression (photo réduite par quality).
+  const size = storedSize(uri) || file.size;
   if (size === 0) {
     deleteStoredFile(uri);
     throw new Error('Ce fichier semble vide.');

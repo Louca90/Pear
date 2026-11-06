@@ -175,6 +175,10 @@ export function setFileKey(id: string, contact: string, key: string) {
   db.runSync('UPDATE messages SET file_key = ? WHERE id = ? AND contact = ?', key, id, contact);
 }
 
+export function setFileSize(id: string, contact: string, size: number) {
+  db.runSync('UPDATE messages SET file_size = ? WHERE id = ? AND contact = ?', size, id, contact);
+}
+
 export function getMessage(id: string, contact: string): Message | null {
   return db.getFirstSync<Message>('SELECT * FROM messages WHERE id = ? AND contact = ?', id, contact);
 }
