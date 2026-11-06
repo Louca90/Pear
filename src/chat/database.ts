@@ -217,6 +217,15 @@ export function getPendingIncomingBytes(contact: string): number {
   );
 }
 
+// États du double ratchet, déjà chiffrés par l'appelant (src/storage.ts).
+export function getRatchetRow(contact: string): string | null {
+  return db().getFirstSync<{ state: string }>('SELECT state FROM ratchets WHERE contact = ?', contact)?.state ?? null;
+}
+
+export function setRatchetRow(contact: string, state: string) {
+  db().runSync('INSERT OR REPLACE INTO ratchets (contact, state, updated_at) VALUES (?, ?, ?)', contact, state, Date.now());
+}
+
 export function getSetting(key: string): string | null {
   return db().getFirstSync<{ value: string | null }>('SELECT value FROM settings WHERE key = ?', key)?.value ?? null;
 }

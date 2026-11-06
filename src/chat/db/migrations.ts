@@ -90,6 +90,18 @@ const MIGRATIONS: Migration[] = [
         );
       `),
   },
+  {
+    // L'état du double ratchet de chaque contact, chiffré avec la clé locale (avant : dans le SecureStore).
+    version: 5,
+    up: (db) =>
+      db.execSync(`
+        CREATE TABLE IF NOT EXISTS ratchets (
+          contact TEXT PRIMARY KEY NOT NULL,
+          state TEXT NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+      `),
+  },
 ];
 
 export const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

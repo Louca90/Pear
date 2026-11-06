@@ -68,7 +68,7 @@ function expectLatest(db: MigrationDb) {
   expect(columns(db, 'messages')).toEqual(
     expect.arrayContaining(['kind', 'file_uri', 'file_size', 'file_mime', 'file_key', 'reply_to', 'edited', 'my_reaction', 'their_reaction']),
   );
-  expect(tables(db)).toEqual(expect.arrayContaining(['messages', 'contact_tokens', 'outbox', 'settings', 'conversation_settings', 'contact_profiles']));
+  expect(tables(db)).toEqual(expect.arrayContaining(['messages', 'contact_tokens', 'outbox', 'settings', 'conversation_settings', 'contact_profiles', 'ratchets']));
 }
 
 describe('migrate', () => {
