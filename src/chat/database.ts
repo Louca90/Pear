@@ -1,5 +1,5 @@
-import { File } from 'expo-file-system';
-import { defaultDatabaseDirectory, openDatabaseSync, SQLiteDatabase } from 'expo-sqlite';
+import { File, Paths } from 'expo-file-system';
+import { openDatabaseSync, SQLiteDatabase } from 'expo-sqlite';
 
 import { decryptFileKey, encryptFileKey, isEncryptedFileKey } from './db/fileKeys';
 import { LATEST_VERSION, migrate, schemaVersion } from './db/migrations';
@@ -67,8 +67,10 @@ export function openDatabase(): SQLiteDatabase {
 
 const db = openDatabase;
 
+// expo-sqlite range ses bases dans files/SQLite. defaultDatabaseDirectory est un chemin brut que File
+// refuse (« URI is not absolute ») : on part de Paths.document, qui est une URI file://.
 function databaseFile(suffix = '') {
-  return new File(defaultDatabaseDirectory, DB_NAME + suffix);
+  return new File(Paths.document, 'SQLite', DB_NAME + suffix);
 }
 
 // Avant toute migration d'une base existante, on garde une copie, supprimée seulement une fois la
