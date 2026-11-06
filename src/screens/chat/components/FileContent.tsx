@@ -46,9 +46,11 @@ type FileContentProps = {
   onLongPress: () => void;
   // Photos et vidéos : deux appuis rapprochés likent au lieu d'ouvrir la visionneuse.
   onDoubleTap?: () => void;
+  // Appelé dès que le doigt touche le média : la visionneuse prépare l'image pendant la fenêtre du double appui.
+  onPrepare?: () => void;
 };
 
-export function FileContent({ message, palette, mediaHidden, onOpen, onLongPress, onDoubleTap }: FileContentProps) {
+export function FileContent({ message, palette, mediaHidden, onOpen, onLongPress, onDoubleTap, onPrepare }: FileContentProps) {
   const media = useRef<ViewRef>(null);
   const bare = isBareMedia(message);
   const foreground = bare ? colors.text : palette.text;
@@ -61,6 +63,7 @@ export function FileContent({ message, palette, mediaHidden, onOpen, onLongPress
     <Pressable
       ref={media}
       onPress={press}
+      onPressIn={onPrepare}
       onLongPress={onLongPress}
       delayLongPress={LONG_PRESS_MS}
       disabled={message.status === 'receiving'}

@@ -61,7 +61,7 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
   useSyncExternalStore(chat.subscribe, chat.getVersion);
 
   const messages = getMessages(contactKey);
-  const scroll = useChatScroll(list, messages);
+  const scroll = useChatScroll(list, messages, preview);
   const settings = getConversationSettings(contactKey);
   const palettes: Palettes = {
     mine: bubblePalette(settings.my_bubble ?? colors.text),
@@ -208,13 +208,30 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
     });
   };
 
+  // L'image et sa taille sont préparées dès le toucher, pendant la fenêtre du double appui : la
+  // visionneuse s'ouvre sans attendre une fois l'appui simple confirmé.
+  const prepared = useRef(new Map<string, Promise<{ poster: string; size: { width: number; height: number } }>>()).current;
+  const prepareMedia = (message: Message) => {
+    if (message.kind !== 'image' && message.kind !== 'video') return null;
+    let media = prepared.get(message.id);
+    if (!media) {
+      const uri = message.file_uri ?? '';
+      media = (async () => {
+        const poster = message.kind === 'video' ? await videoThumbnail(message.id, uri) : uri;
+        return { poster, size: await Image.getSize(poster) };
+      })();
+      media.catch(() => prepared.delete(message.id));
+      prepared.set(message.id, media);
+    }
+    return media;
+  };
+
   const openFile = async (message: Message, rect: Rect) => {
     if (message.kind !== 'file') {
       Keyboard.dismiss();
-      const uri = message.file_uri ?? '';
       try {
-        const poster = message.kind === 'video' ? await videoThumbnail(message.id, uri) : uri;
-        setViewing({ message, rect, poster, size: await Image.getSize(poster) });
+        const media = await (prepareMedia(message) ?? Promise.reject(new Error('Média introuvable.')));
+        setViewing({ message, rect, ...media });
       } catch (e) {
         showDialog('Ouverture impossible', String(e));
       }
@@ -268,6 +285,7 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
                   hidden={selection?.message.id === item.id}
                   mediaHidden={viewing?.message.id === item.id}
                   onOpenFile={openFile}
+                  onPrepareFile={prepareMedia}
                   onSelect={selectMessage}
                   onDoubleTap={likeMessage}
                   onReply={startReply}

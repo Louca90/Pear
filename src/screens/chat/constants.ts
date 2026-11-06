@@ -2,7 +2,7 @@ import { Easing } from 'react-native';
 
 import { RouteType } from '../../network/peer';
 
-export const DOUBLE_TAP_MS = 280;
+export const DOUBLE_TAP_MS = 230;
 export const LIKE = '❤️';
 // En deçà de cette distance du bas, on considère qu'on lit les derniers messages.
 export const AT_BOTTOM_PX = 80;
