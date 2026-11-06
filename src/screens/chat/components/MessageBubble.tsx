@@ -6,6 +6,7 @@ import { Message } from '../../../chat/database';
 import { colors, radius, spacing } from '../../../theme';
 
 import { FileContent } from './FileContent';
+import { FittedText, TextFit } from './FittedText';
 import { MessageMeta } from './MessageMeta';
 import { ReplyQuote } from './ReplyQuote';
 import { SystemRow } from './SystemRow';
@@ -35,11 +36,11 @@ type BubbleProps = {
   onDoubleTap?: (message: Message) => void;
   onReply?: (message: Message) => void;
   onJump?: (id: string) => void;
-  // Sélection d'un message très long : le texte est coupé avec « … » pour tenir à l'écran.
-  maxTextLines?: number;
+  // Sélection d'un message très long : le texte se replie pour tenir à l'écran.
+  fit?: TextFit;
 };
 
-export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, onOpenFile, onPrepareFile, onSelect, onDoubleTap, onReply, onJump, maxTextLines }: BubbleProps) {
+export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, onOpenFile, onPrepareFile, onSelect, onDoubleTap, onReply, onJump, fit }: BubbleProps) {
   const container = useRef<ViewRef>(null);
   const mine = message.mine === 1;
   const bare = isBareMedia(message);
@@ -103,7 +104,7 @@ export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, on
         >
           <ReplyQuote message={message} name={name} palette={palette} onJump={onJump} />
           {message.kind === 'text' ? (
-            <Text style={[styles.text, { color: palette.text }]} numberOfLines={maxTextLines}>{message.text}</Text>
+            <FittedText text={message.text} style={[styles.text, { color: palette.text }]} background={palette.background} fit={fit} />
           ) : message.kind === 'audio' && message.status !== 'receiving' ? (
             <VoiceContent message={message} palette={palette} />
           ) : (

@@ -10,7 +10,7 @@ import { colors, radius, spacing } from '../../../theme';
 
 import { EmojiPicker } from './EmojiPicker';
 import { Bubble } from './MessageBubble';
-import { ACTION_HEIGHT, BUBBLE_CHROME_HEIGHT, REACTIONS_HEIGHT, SELECTION_CLOSE_MS, SELECTION_GAP, SELECTION_TOP, TEXT_LINE_HEIGHT } from '../constants';
+import { ACTION_HEIGHT, REACTIONS_HEIGHT, SELECTION_CLOSE_MS, SELECTION_GAP, SELECTION_SPRING, SELECTION_TOP, TEXT_LINE_HEIGHT } from '../constants';
 import { Action, Palettes, Rect, ViewRef } from '../types';
 
 type SelectionProps = {
@@ -31,6 +31,7 @@ export function MessageSelection({ message, name, palettes, rect, origin, blurTa
   const progress = useRef(new Animated.Value(0)).current;
   const [pickerOpen, setPickerOpen] = useState(false);
   const closing = useRef(false);
+  const [open, setOpen] = useState(true);
   const mine = message.mine === 1;
   const bottom = useNavigationBarHeight();
 
@@ -38,6 +39,7 @@ export function MessageSelection({ message, name, palettes, rect, origin, blurTa
   const dismiss = useRef((after?: () => void) => {
     if (closing.current) return;
     closing.current = true;
+    setOpen(false);
     Animated.timing(progress, { toValue: 0, duration: SELECTION_CLOSE_MS, useNativeDriver: true }).start(() => {
       onClose();
       after?.();
@@ -45,7 +47,7 @@ export function MessageSelection({ message, name, palettes, rect, origin, blurTa
   }).current;
 
   useEffect(() => {
-    Animated.spring(progress, { toValue: 1, useNativeDriver: true, damping: 16, stiffness: 220, mass: 0.8 }).start();
+    Animated.spring(progress, { toValue: 1, useNativeDriver: true, ...SELECTION_SPRING }).start();
     const back = BackHandler.addEventListener('hardwareBackPress', () => {
       dismiss();
       return true;
@@ -65,14 +67,10 @@ export function MessageSelection({ message, name, palettes, rect, origin, blurTa
   const topLimit = SELECTION_TOP + REACTIONS_HEIGHT;
   const maxHeight = Math.max(TEXT_LINE_HEIGHT * 2, origin.height - bottom - spacing.lg - menuHeight - SELECTION_GAP - topLimit);
   const shownHeight = Math.min(rect.height, maxHeight);
-  const maxTextLines = rect.height > maxHeight ? Math.max(1, Math.floor((maxHeight - BUBBLE_CHROME_HEIGHT) / TEXT_LINE_HEIGHT)) : undefined;
+  const fit = rect.height > maxHeight ? { maxHeight, fullHeight: rect.height, open } : undefined;
   const lowest = origin.height - bottom - spacing.lg - menuHeight - SELECTION_GAP - shownHeight;
   const targetY = Math.max(topLimit, Math.min(startY - spacing.sm, lowest));
   const edge = mine ? styles.alignEnd : styles.alignStart;
-  // Raccourci, le message n'a plus la forme de l'original (souvent hors de l'écran) : il apparaît
-  // directement à sa place, en fondu, au lieu de traverser l'écran depuis sa position d'origine.
-  const truncated = maxTextLines !== undefined;
-  const fromY = truncated ? targetY : startY;
 
   const appear = {
     opacity: progress,
@@ -92,20 +90,17 @@ export function MessageSelection({ message, name, palettes, rect, origin, blurTa
         style={[
           styles.selected,
           {
-            top: fromY,
-            opacity: truncated ? progress : 1,
+            top: startY,
             left: spacing.md,
             right: spacing.md,
-            maxHeight,
-            overflow: truncated ? 'hidden' : 'visible',
             transform: [
-              { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [0, targetY - fromY] }) },
-              { scale: progress.interpolate({ inputRange: [0, 1], outputRange: [truncated ? 0.92 : 1, 1.05] }) },
+              { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [0, targetY - startY] }) },
+              { scale: progress.interpolate({ inputRange: [0, 1], outputRange: [1, 1.05] }) },
             ],
           },
         ]}
       >
-        <Bubble message={message} name={name} palettes={palettes} maxTextLines={maxTextLines} />
+        <Bubble message={message} name={name} palettes={palettes} fit={fit} />
       </Animated.View>
 
       <Animated.View style={[styles.reactionBar, edge, { top: targetY - REACTIONS_HEIGHT - spacing.sm }, appear]}>
