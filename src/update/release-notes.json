@@ -1,5 +1,5 @@
 {
-  "version": "1.1.1",
-  "versionCode": 3,
-  "summary": "- Version de test de la mise à jour automatique : si tu lis ceci, elle a marché."
+  "version": "1.2.0",
+  "versionCode": 4,
+  "summary": "- Toucher une notification ouvre directement la bonne conversation, même quand Pear est en arrière-plan.\n- La conversation descend toute seule quand tu envoies, et un bouton « nouveaux messages » apparaît si tu es remonté.\n- Les messages ne sont marqués « lus » qu'une fois que tu es redescendu les voir.\n- Photos et vidéos s'ouvrent instantanément ; un appui long permet d'y réagir.\n- Plusieurs bugs corrigés : barre du haut après le déverrouillage, messages très longs, envois de fichiers bloqués."
 }
