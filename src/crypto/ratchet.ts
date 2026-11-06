@@ -118,11 +118,20 @@ function turnRatchet(state: RatchetState, theirKey: string) {
 
 const isCount = (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) >= 0;
 
+// Une clé publique valide : du base64 de la bonne longueur. Ne lance jamais d'erreur.
+function isPublicKey(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  try {
+    return from_base64(value).length === KEY_BYTES;
+  } catch {
+    return false;
+  }
+}
+
 function isValidEnvelope(value: unknown): value is RatchetEnvelope {
   const envelope = value as Partial<Record<keyof RatchetEnvelope, unknown>> | null;
   return (
-    typeof envelope?.dh === 'string' &&
-    from_base64(envelope.dh).length === KEY_BYTES &&
+    isPublicKey(envelope?.dh) &&
     isCount(envelope.n) &&
     isCount(envelope.pn) &&
     typeof envelope.cipher === 'string'
