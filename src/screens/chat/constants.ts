@@ -2,7 +2,8 @@ import { Easing } from 'react-native';
 
 import { RouteType } from '../../network/peer';
 
-export const DOUBLE_TAP_MS = 300;
+export const DOUBLE_TAP_MS = 280;
+export const LIKE = '❤️';
 export const LONG_PRESS_MS = 350;
 export const EMOJI_COLUMNS = 8;
 // Place réservée autour du message sélectionné : les réactions au-dessus, les actions en dessous.

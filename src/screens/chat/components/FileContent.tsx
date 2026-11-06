@@ -9,6 +9,7 @@ import { BubblePalette, colors, radius, spacing } from '../../../theme';
 
 import { LONG_PRESS_MS } from '../constants';
 import { isBareMedia } from '../format';
+import { useDoubleTap } from '../hooks/useDoubleTap';
 import { sharedStyles } from '../styles';
 import { Rect, ViewRef } from '../types';
 
@@ -37,17 +38,29 @@ function VideoPreview({ message }: { message: Message }) {
   );
 }
 
-export function FileContent({ message, palette, mediaHidden, onOpen, onLongPress }: { message: Message; palette: BubblePalette; mediaHidden?: boolean; onOpen: (rect: Rect) => void; onLongPress: () => void }) {
+type FileContentProps = {
+  message: Message;
+  palette: BubblePalette;
+  mediaHidden?: boolean;
+  onOpen: (rect: Rect) => void;
+  onLongPress: () => void;
+  // Photos et vidéos : deux appuis rapprochés likent au lieu d'ouvrir la visionneuse.
+  onDoubleTap?: () => void;
+};
+
+export function FileContent({ message, palette, mediaHidden, onOpen, onLongPress, onDoubleTap }: FileContentProps) {
   const media = useRef<ViewRef>(null);
   const bare = isBareMedia(message);
   const foreground = bare ? colors.text : palette.text;
   const secondary = bare ? colors.textMuted : palette.muted;
   const progress = chat.getProgress(message.id);
+  const open = () => media.current?.measureInWindow((x, y, width, height) => onOpen({ x, y, width, height }));
+  const press = useDoubleTap(bare ? onDoubleTap : undefined, open);
 
   return (
     <Pressable
       ref={media}
-      onPress={() => media.current?.measureInWindow((x, y, width, height) => onOpen({ x, y, width, height }))}
+      onPress={press}
       onLongPress={onLongPress}
       delayLongPress={LONG_PRESS_MS}
       disabled={message.status === 'receiving'}
@@ -56,7 +69,9 @@ export function FileContent({ message, palette, mediaHidden, onOpen, onLongPress
       {bare && message.kind === 'image' ? (
         <Image source={{ uri: message.file_uri ?? undefined }} style={styles.image} resizeMode="cover" />
       ) : bare ? (
-        <VideoPreview message={message} />
+        <View pointerEvents="none">
+          <VideoPreview message={message} />
+        </View>
       ) : (
         <View style={styles.fileRow}>
           {message.kind === 'video' ? (
