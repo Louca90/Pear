@@ -7,6 +7,7 @@ import { getMessaging, onMessage } from '@react-native-firebase/messaging';
 
 import { addBackListener, completeBack, setBackMode } from './modules/pear-native';
 import { deleteMessages, getContactProfile } from './src/chat/database';
+import { clearNotificationTarget, setNotificationTarget, useNotificationTarget } from './src/chat/notificationTarget';
 import { chat } from './src/chat/manager';
 import { BottomBar, Tab } from './src/components/BottomBar';
 import { DialogHost, showDialog } from './src/components/dialog';
@@ -83,13 +84,11 @@ export default function App() {
   useEffect(() => {
     notifee.requestPermission().catch((e) => console.warn('Pear notification :', e));
 
-    // Appuyer sur une notification ouvre directement la conversation.
-    const openFrom = (data?: { contact?: unknown }) => {
-      if (typeof data?.contact === 'string') setRoute({ name: 'chat', publicKey: data.contact });
-    };
-    notifee.getInitialNotification().then((initial) => openFrom(initial?.notification.data));
+    // Appuyer sur une notification ouvre directement la conversation : app fermée (notification
+    // initiale), au premier plan (ici) ou en arrière-plan (index.ts). L'ouverture se fait plus bas.
+    notifee.getInitialNotification().then((initial) => setNotificationTarget(initial?.notification.data?.contact));
     const stopEvents = notifee.onForegroundEvent(({ type, detail }) => {
-      if (type === EventType.PRESS) openFrom(detail.notification?.data);
+      if (type === EventType.PRESS) setNotificationTarget(detail.notification?.data?.contact);
     });
     // Un push reçu app ouverte : on tente simplement de se reconnecter tout de suite.
     const stopPush = onMessage(getMessaging(), async () => chat.retryAll());
@@ -98,6 +97,15 @@ export default function App() {
       stopPush();
     };
   }, []);
+
+  // On attend l'identité et les contacts. Un contact supprimé depuis ramène simplement à l'accueil.
+  const notificationTarget = useNotificationTarget();
+  useEffect(() => {
+    if (!notificationTarget || !identity) return;
+    clearNotificationTarget();
+    const known = contacts.some((contact) => contact.publicKey === notificationTarget);
+    setRoute(known ? { name: 'chat', publicKey: notificationTarget } : { name: 'home' });
+  }, [notificationTarget, identity, contacts]);
 
   // Au premier plan, l'app garde les connexions ouvertes. En arrière-plan, seul un push la réveille.
   useEffect(() => {
