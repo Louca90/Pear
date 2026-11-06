@@ -71,7 +71,7 @@ export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, on
       ref={container}
       collapsable={false}
       style={[styles.row, mine ? styles.rowMine : styles.rowTheirs, hidden && styles.hidden]}
-      {...(onReply ? swipeHandlers : undefined)}
+      {...swipeHandlers}
     >
       {onReply && (
         <Animated.View
@@ -104,7 +104,7 @@ export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, on
           ) : message.kind === 'audio' && message.status !== 'receiving' ? (
             <VoiceContent message={message} palette={palette} />
           ) : (
-            <FileContent message={message} palette={palette} mediaHidden={mediaHidden} onOpen={(rect) => onOpenFile?.(message, rect)} onLongPress={select} />
+            <FileContent message={message} palette={palette} mediaHidden={mediaHidden} onOpen={(rect) => onOpenFile?.(message, rect)} onLongPress={select} onDoubleTap={onDoubleTap && (() => onDoubleTap(message))} />
           )}
           {bare ? (
             <MessageMeta message={message} tone={palettes.hasWallpaper ? ON_WALLPAPER_TONE : PLAIN_TONE} pill={palettes.hasWallpaper} />
