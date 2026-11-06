@@ -1,6 +1,7 @@
 import { File } from 'expo-file-system';
 import { defaultDatabaseDirectory, openDatabaseSync, SQLiteDatabase } from 'expo-sqlite';
 
+import { decryptFileKey, encryptFileKey, isEncryptedFileKey } from './db/fileKeys';
 import { LATEST_VERSION, migrate, schemaVersion } from './db/migrations';
 import { deleteStoredFile, formatSize } from './files';
 import { DB_NAME } from '../config';
@@ -72,10 +73,28 @@ function databaseFile(suffix = '') {
 
 // Avant toute migration d'une base existante, on garde une copie, supprimée seulement une fois la
 // base migrée vérifiée. En cas d'échec, l'historique reste dans pear.db.bak.
+// Anciennes versions : les clés des transferts terminés sont effacées, celles des transferts en cours
+// chiffrées. Sans effet une fois fait.
+function protectFileKeys(database: SQLiteDatabase) {
+  database.runSync(
+    "UPDATE messages SET file_key = NULL WHERE file_key IS NOT NULL AND ((mine = 1 AND status IN ('delivered', 'read', 'refused')) OR (mine = 0 AND status NOT IN ('offered', 'receiving')))",
+  );
+  const plain = database
+    .getAllSync<{ id: string; contact: string; file_key: string }>('SELECT id, contact, file_key FROM messages WHERE file_key IS NOT NULL')
+    .filter((row) => !isEncryptedFileKey(row.file_key));
+  if (plain.length === 0) return;
+  database.withTransactionSync(() => {
+    for (const row of plain) database.runSync('UPDATE messages SET file_key = ? WHERE id = ? AND contact = ?', encryptFileKey(row.file_key), row.id, row.contact);
+  });
+}
+
 function openAndMigrate() {
   let database = openDatabaseSync(DB_NAME);
   const version = schemaVersion(database);
-  if (version >= LATEST_VERSION) return database;
+  if (version >= LATEST_VERSION) {
+    protectFileKeys(database);
+    return database;
+  }
 
   const existing = version > 0;
   if (existing) {
@@ -92,6 +111,7 @@ function openAndMigrate() {
   if (schemaVersion(database) !== LATEST_VERSION || integrity !== 'ok') {
     throw new Error(`Mise à jour de la base de messages incomplète (version ${schemaVersion(database)}, ${integrity}).`);
   }
+  protectFileKeys(database);
   if (existing) {
     for (const suffix of ['', '-wal']) {
       const backup = databaseFile(suffix + BACKUP_SUFFIX);
@@ -117,7 +137,7 @@ export function addMessage(message: NewMessage): boolean {
     message.file_uri ?? null,
     message.file_size ?? null,
     message.file_mime ?? null,
-    message.file_key ?? null,
+    encryptFileKey(message.file_key),
     message.reply_to ?? null,
   );
   return result.changes > 0;
@@ -152,29 +172,41 @@ export function removeOutboxEvent(id: string, contact: string) {
 }
 
 export function setFileKey(id: string, contact: string, key: string) {
-  db().runSync('UPDATE messages SET file_key = ? WHERE id = ? AND contact = ?', key, id, contact);
+  db().runSync('UPDATE messages SET file_key = ? WHERE id = ? AND contact = ?', encryptFileKey(key), id, contact);
 }
 
 export function setFileSize(id: string, contact: string, size: number) {
   db().runSync('UPDATE messages SET file_size = ? WHERE id = ? AND contact = ?', size, id, contact);
 }
 
-export function getMessage(id: string, contact: string): Message | null {
-  return db().getFirstSync<Message>('SELECT * FROM messages WHERE id = ? AND contact = ?', id, contact);
+// La clé d'un fichier n'est déchiffrée que là où le transfert en a besoin ; les listes l'ignorent.
+function withFileKey(message: Message): Message {
+  return message.file_key ? { ...message, file_key: decryptFileKey(message.file_key) } : message;
 }
 
+function withoutFileKey(message: Message): Message {
+  return message.file_key ? { ...message, file_key: null } : message;
+}
+
+export function getMessage(id: string, contact: string): Message | null {
+  const message = db().getFirstSync<Message>('SELECT * FROM messages WHERE id = ? AND contact = ?', id, contact);
+  return message && withFileKey(message);
+}
+
+// Fichier reçu en entier : sa clé ne sert plus, elle est effacée.
 export function finishIncomingFile(id: string, contact: string, status: MessageStatus) {
-  db().runSync("UPDATE messages SET status = ? WHERE id = ? AND contact = ? AND mine = 0 AND status = 'receiving'", status, id, contact);
+  db().runSync("UPDATE messages SET status = ?, file_key = NULL WHERE id = ? AND contact = ? AND mine = 0 AND status = 'receiving'", status, id, contact);
 }
 
 // Un fichier reçu passe d'un état à l'autre (proposé → en cours, ou → refusé), seulement depuis l'état attendu.
 export function setIncomingStatus(id: string, contact: string, from: MessageStatus, to: MessageStatus) {
-  db().runSync('UPDATE messages SET status = ? WHERE id = ? AND contact = ? AND mine = 0 AND status = ?', to, id, contact, from);
+  const clearKey = to === 'refused' ? ', file_key = NULL' : '';
+  db().runSync(`UPDATE messages SET status = ?${clearKey} WHERE id = ? AND contact = ? AND mine = 0 AND status = ?`, to, id, contact, from);
 }
 
 // L'autre a refusé mon fichier : il ne sera plus proposé.
 export function markRefused(id: string, contact: string) {
-  db().runSync("UPDATE messages SET status = 'refused' WHERE id = ? AND contact = ? AND mine = 1 AND status = 'sending'", id, contact);
+  db().runSync("UPDATE messages SET status = 'refused', file_key = NULL WHERE id = ? AND contact = ? AND mine = 1 AND status = 'sending'", id, contact);
 }
 
 // La place que prennent déjà les fichiers en cours de réception chez ce contact.
@@ -279,18 +311,18 @@ export function getContactToken(contact: string): string | null {
 }
 
 export function getMessages(contact: string): Message[] {
-  return db().getAllSync<Message>("SELECT * FROM messages WHERE contact = ? AND kind != 'avatar' ORDER BY created_at DESC LIMIT 200", contact);
+  return db().getAllSync<Message>("SELECT * FROM messages WHERE contact = ? AND kind != 'avatar' ORDER BY created_at DESC LIMIT 200", contact).map(withoutFileKey);
 }
 
 export function getUndelivered(contact: string): Message[] {
   return db().getAllSync<Message>(
     "SELECT * FROM messages WHERE contact = ? AND mine = 1 AND status NOT IN ('delivered', 'read', 'refused') ORDER BY created_at",
     contact,
-  );
+  ).map(withFileKey);
 }
 
 export function getPendingReadReceipts(contact: string): Message[] {
-  return db().getAllSync<Message>("SELECT * FROM messages WHERE contact = ? AND mine = 0 AND status = 'read-pending'", contact);
+  return db().getAllSync<Message>("SELECT * FROM messages WHERE contact = ? AND mine = 0 AND status = 'read-pending'", contact).map(withoutFileKey);
 }
 
 export function markConversationRead(contact: string) {
@@ -302,13 +334,15 @@ export function setReadReceiptSent(id: string, contact: string) {
 }
 
 export function getLastMessage(contact: string): Message | null {
-  return db().getFirstSync<Message>("SELECT * FROM messages WHERE contact = ? AND kind != 'avatar' ORDER BY created_at DESC LIMIT 1", contact);
+  const message = db().getFirstSync<Message>("SELECT * FROM messages WHERE contact = ? AND kind != 'avatar' ORDER BY created_at DESC LIMIT 1", contact);
+  return message && withoutFileKey(message);
 }
 
 // "read" ne redescend jamais : un accusé de réception en retard ne doit pas l'écraser.
+// Une fois livré, un fichier n'a plus besoin de sa clé : elle est effacée.
 export function setStatus(id: string, contact: string, status: 'delivered' | 'read') {
   db().runSync(
-    "UPDATE messages SET status = ? WHERE id = ? AND contact = ? AND mine = 1 AND status != 'read'",
+    "UPDATE messages SET status = ?, file_key = NULL WHERE id = ? AND contact = ? AND mine = 1 AND status != 'read'",
     status,
     id,
     contact,
