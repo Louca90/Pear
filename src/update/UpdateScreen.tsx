@@ -1,0 +1,163 @@
+import { useEffect } from 'react';
+import { AppState, BackHandler, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Download, ExternalLink, LogOut, RotateCw, Settings } from 'lucide-react-native';
+
+import { formatSize } from '../chat/files';
+import { Button, Screen, useNavigationBarHeight } from '../components/ui';
+import { colors, radius, spacing } from '../theme';
+import { Release } from './release';
+import { getInstallPermission, previewUpdateScreen, requestInstallPermission, startUpdate, useUpdateState } from './updates';
+
+// Plein écran et bloquant : ni le bouton retour ni le geste ne le ferment. On met à jour, ou on quitte.
+export function UpdateScreen({ release }: { release: Release }) {
+  const { phase, progress, error, preview } = useUpdateState();
+  const bottom = useNavigationBarHeight();
+  const busy = phase === 'downloading' || phase === 'verifying';
+
+  useEffect(() => {
+    const back = BackHandler.addEventListener('hardwareBackPress', () => true);
+    return () => back.remove();
+  }, []);
+
+  // Au retour des réglages d'Android, la mise à jour reprend toute seule si l'autorisation est donnée.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (next) => {
+      if (next === 'active' && phase === 'permission' && getInstallPermission()) startUpdate();
+    });
+    return () => subscription.remove();
+  }, [phase]);
+
+  const status =
+    phase === 'downloading'
+      ? `Téléchargement… ${Math.round(progress * 100)} %`
+      : phase === 'verifying'
+        ? 'Vérification du fichier…'
+        : phase === 'installing'
+          ? "Confirmez l'installation dans la fenêtre d'Android."
+          : phase === 'permission'
+            ? "Autorisez Pear à installer des mises à jour, puis revenez ici : l'installation reprendra toute seule."
+            : phase === 'failed'
+              ? `La mise à jour a échoué. ${error ?? ''}`
+              : null;
+
+  return (
+    <Screen>
+      <View style={[styles.content, { paddingBottom: bottom }]}>
+        <View style={styles.icon}>
+          <Download size={32} color={colors.background} strokeWidth={1.75} />
+        </View>
+        <Text style={styles.title}>Mise à jour disponible</Text>
+        <Text style={styles.version}>Version {release.version} · {formatSize(release.apkSize)}</Text>
+
+        <ScrollView style={styles.notes} contentContainerStyle={styles.notesContent}>
+          <Text style={styles.notesText}>{release.summary || 'Une nouvelle version de Pear est prête.'}</Text>
+        </ScrollView>
+        <Pressable onPress={() => Linking.openURL(release.pageUrl)} hitSlop={8} style={styles.link}>
+          <ExternalLink size={16} color={colors.text} strokeWidth={1.75} />
+          <Text style={styles.linkText}>Voir tout le détail</Text>
+        </Pressable>
+
+        {status && <Text style={[styles.status, phase === 'failed' && styles.statusError]}>{status}</Text>}
+        {phase === 'downloading' && (
+          <View style={styles.track}>
+            <View style={[styles.bar, { width: `${Math.round(progress * 100)}%` }]} />
+          </View>
+        )}
+
+        <View style={styles.actions}>
+          {phase === 'permission' ? (
+            <Button label="Ouvrir les réglages" icon={Settings} onPress={requestInstallPermission} />
+          ) : phase === 'failed' ? (
+            <Button label="Réessayer" icon={RotateCw} onPress={startUpdate} />
+          ) : (
+            <Button label={busy ? 'Mise à jour en cours…' : phase === 'installing' ? 'Installer' : 'Mettre à jour'} icon={Download} onPress={startUpdate} />
+          )}
+          <Button label="Quitter" icon={LogOut} variant="secondary" onPress={() => BackHandler.exitApp()} />
+          {preview && (
+            <Pressable onPress={() => previewUpdateScreen(false)} style={styles.link}>
+              <Text style={styles.linkText}>Fermer l'aperçu (debug)</Text>
+            </Pressable>
+          )}
+        </View>
+      </View>
+    </Screen>
+  );
+}
+
+const styles = StyleSheet.create({
+  content: {
+    flex: 1,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg * 2,
+  },
+  icon: {
+    width: 64,
+    height: 64,
+    borderRadius: radius.full,
+    backgroundColor: colors.text,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.lg,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  version: {
+    fontSize: 15,
+    color: colors.textMuted,
+    marginTop: 4,
+    marginBottom: spacing.lg,
+  },
+  notes: {
+    flexGrow: 0,
+    maxHeight: 280,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+  },
+  notesContent: {
+    padding: spacing.md,
+  },
+  notesText: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: colors.text,
+  },
+  link: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+  },
+  linkText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: colors.text,
+    textDecorationLine: 'underline',
+  },
+  status: {
+    fontSize: 15,
+    color: colors.textMuted,
+    marginBottom: spacing.sm,
+  },
+  statusError: {
+    color: colors.danger,
+  },
+  track: {
+    height: 4,
+    borderRadius: radius.full,
+    backgroundColor: colors.border,
+    overflow: 'hidden',
+  },
+  bar: {
+    height: 4,
+    backgroundColor: colors.text,
+  },
+  actions: {
+    marginTop: 'auto',
+    gap: spacing.sm,
+    paddingBottom: spacing.md,
+  },
+});

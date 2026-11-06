@@ -19,8 +19,12 @@ import { CustomizeScreen } from './src/screens/CustomizeScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { ScannerScreen } from './src/screens/ScannerScreen';
-import { Contact, loadContacts, loadOrCreateIdentity, saveContacts } from './src/storage';
+import { Contact, hasIdentity, loadContacts, loadOrCreateIdentity, saveContacts } from './src/storage';
 import { colors, radius, spacing } from './src/theme';
+import { markUpdateSeen, pendingUpdatedInfo, UpdatedInfo } from './src/update/updated';
+import { UpdatedPopup } from './src/update/UpdatedPopup';
+import { checkForUpdate, isBlocking, useUpdateState } from './src/update/updates';
+import { UpdateScreen } from './src/update/UpdateScreen';
 
 type Route =
   | { name: 'home' }
@@ -50,15 +54,26 @@ export default function App() {
   const backGesture = useRef(new Animated.Value(0)).current;
   const gestureStarted = useRef(false);
   const url = Linking.useURL();
+  const update = useUpdateState();
+  const blocked = isBlocking(update);
+  // Le popup « Pear est à jour ! » attend l'accueil, et ne passe jamais devant l'écran de mise à jour.
+  const [updatedInfo, setUpdatedInfo] = useState<UpdatedInfo | null>(null);
 
   useEffect(() => {
-    Promise.all([loadOrCreateIdentity(), loadContacts()])
-      .then(([savedIdentity, savedContacts]) => {
+    hasIdentity()
+      .then(async (existed) => {
+        const [savedIdentity, savedContacts] = await Promise.all([loadOrCreateIdentity(), loadContacts()]);
         setContacts(savedContacts);
         setIdentity(savedIdentity);
+        setUpdatedInfo(pendingUpdatedInfo(existed));
       })
       .catch((e) => setError(String(e)));
   }, []);
+
+  // Au lancement et à chaque retour au premier plan, avec un délai minimum entre deux vérifications.
+  useEffect(() => {
+    if (active) checkForUpdate();
+  }, [active]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => setActive(state === 'active'));
@@ -133,8 +148,9 @@ export default function App() {
 
   // Sur l'accueil, Android montre lui-même l'aperçu pour quitter. L'appareil photo n'a pas d'aperçu.
   useEffect(() => {
-    setBackMode(route.name === 'home' ? 'system' : route.name === 'camera' ? 'default' : 'app').catch((e) => console.warn('Pear retour :', e));
-  }, [route.name]);
+    const mode = blocked ? 'default' : route.name === 'home' ? 'system' : route.name === 'camera' ? 'default' : 'app';
+    setBackMode(mode).catch((e) => console.warn('Pear retour :', e));
+  }, [route.name, blocked]);
 
   const resetBackGesture = useRef(() => {
     gestureStarted.current = false;
@@ -293,6 +309,16 @@ export default function App() {
   const { width } = Dimensions.get('window');
   const direction = peek?.direction ?? 1;
 
+  if (blocked && update.release) {
+    return (
+      <>
+        <StatusBar style="dark" />
+        <UpdateScreen release={update.release} />
+        <DialogHost />
+      </>
+    );
+  }
+
   return (
     <>
       <StatusBar style="dark" />
@@ -328,6 +354,15 @@ export default function App() {
       </Animated.View>
       {identity && !error && !filming && TAB_ROUTES.includes(route.name) && (
         <BottomBar active={route.name as Tab} onChange={(tab) => setRoute({ name: tab } as Route)} />
+      )}
+      {updatedInfo && identity && route.name === 'home' && (
+        <UpdatedPopup
+          info={updatedInfo}
+          onClose={() => {
+            markUpdateSeen();
+            setUpdatedInfo(null);
+          }}
+        />
       )}
       <DialogHost />
     </>

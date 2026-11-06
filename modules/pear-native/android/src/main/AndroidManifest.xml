@@ -1,0 +1,14 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <application>
+    <!-- Donne à l'installeur d'Android l'accès à l'APK de mise à jour téléchargé dans le cache. -->
+    <provider
+      android:name="expo.modules.pearnative.PearUpdateProvider"
+      android:authorities="${applicationId}.pearupdate"
+      android:exported="false"
+      android:grantUriPermissions="true">
+      <meta-data
+        android:name="android.support.FILE_PROVIDER_PATHS"
+        android:resource="@xml/pear_update_paths" />
+    </provider>
+  </application>
+</manifest>

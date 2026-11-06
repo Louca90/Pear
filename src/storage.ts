@@ -13,6 +13,11 @@ export type Contact = {
 };
 
 // SecureStore chiffre les valeurs avec le Keystore Android : c'est la bonne place pour la clé privée.
+// Vrai si une identité existait déjà avant ce lancement.
+export async function hasIdentity() {
+  return (await SecureStore.getItemAsync(IDENTITY_KEY)) !== null;
+}
+
 export async function loadOrCreateIdentity(): Promise<Identity> {
   const saved = await SecureStore.getItemAsync(IDENTITY_KEY);
   if (saved) return JSON.parse(saved);

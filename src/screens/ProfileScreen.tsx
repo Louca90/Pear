@@ -1,12 +1,15 @@
-import { useState } from 'react';
-import { KeyboardAvoidingView, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { AppState, KeyboardAvoidingView, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { Bell, Camera, Check, ChevronRight, ImageMinus } from 'lucide-react-native';
+import { Bell, Camera, Check, ChevronRight, Download, ImageMinus, RefreshCw, ShieldCheck } from 'lucide-react-native';
+
+import { appVersionCode, appVersionName } from '../../modules/pear-native';
 
 import { chat, MAX_PROFILE_NAME_LENGTH } from '../chat/manager';
 import { showDialog } from '../components/dialog';
 import { Avatar, Button, Header, IconButton, Screen } from '../components/ui';
 import { colors, radius, spacing } from '../theme';
+import { checkForUpdate, getInstallPermission, previewUpdateScreen, requestInstallPermission, useUpdateState } from '../update/updates';
 
 const PHOTO_QUALITY = 0.7;
 
@@ -15,6 +18,27 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
   const [name, setName] = useState(saved.name ?? '');
   const [photo, setPhoto] = useState(saved.photo);
   const [saving, setSaving] = useState(false);
+  const update = useUpdateState();
+  const [canInstall, setCanInstall] = useState(getInstallPermission);
+
+  // L'autorisation se donne dans les réglages d'Android : on la relit au retour dans l'app.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (next) => {
+      if (next === 'active') setCanInstall(getInstallPermission());
+    });
+    return () => subscription.remove();
+  }, []);
+
+  const updateStatus =
+    update.status === 'checking'
+      ? 'Recherche en cours…'
+      : update.status === 'available'
+        ? `Version ${update.release?.version} disponible`
+        : update.status === 'upToDate'
+          ? 'Pear est à jour'
+          : update.status === 'offline'
+            ? 'Impossible de joindre GitHub'
+            : null;
 
   const pickPhoto = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: PHOTO_QUALITY, allowsEditing: true, aspect: [1, 1] });
@@ -70,6 +94,33 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
             <Text style={styles.settingLabel}>Notifications et autorisations</Text>
             <ChevronRight size={20} color={colors.textMuted} strokeWidth={1.75} />
           </Pressable>
+
+          <Text style={[styles.label, styles.section]}>Mises à jour</Text>
+          <View style={styles.rows}>
+            <Pressable onPress={() => checkForUpdate(true)} style={({ pressed }) => [styles.setting, pressed && styles.pressed]}>
+              <RefreshCw size={20} color={colors.text} strokeWidth={1.75} />
+              <View style={styles.settingText}>
+                <Text style={styles.settingLabel}>Rechercher une mise à jour</Text>
+                <Text style={styles.settingDetail}>
+                  Version {appVersionName() ?? '?'} ({appVersionCode() ?? '?'}){updateStatus ? ` · ${updateStatus}` : ''}
+                </Text>
+              </View>
+            </Pressable>
+            <Pressable onPress={requestInstallPermission} style={({ pressed }) => [styles.setting, pressed && styles.pressed]}>
+              <ShieldCheck size={20} color={colors.text} strokeWidth={1.75} />
+              <View style={styles.settingText}>
+                <Text style={styles.settingLabel}>Installation des mises à jour</Text>
+                <Text style={styles.settingDetail}>{canInstall ? 'Autorisée' : 'À autoriser dans les réglages'}</Text>
+              </View>
+              <ChevronRight size={20} color={colors.textMuted} strokeWidth={1.75} />
+            </Pressable>
+            {__DEV__ && update.status === 'available' && (
+              <Pressable onPress={() => previewUpdateScreen(true)} style={({ pressed }) => [styles.setting, pressed && styles.pressed]}>
+                <Download size={20} color={colors.text} strokeWidth={1.75} />
+                <Text style={styles.settingLabel}>Voir l'écran de mise à jour (debug)</Text>
+              </Pressable>
+            )}
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </Screen>
@@ -138,7 +189,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    height: 52,
+    minHeight: 52,
+    paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     borderRadius: radius.md,
     backgroundColor: colors.surface,
@@ -147,6 +199,16 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     color: colors.text,
+  },
+  settingText: {
+    flex: 1,
+  },
+  settingDetail: {
+    fontSize: 13,
+    color: colors.textMuted,
+  },
+  rows: {
+    gap: spacing.sm,
   },
   pressed: {
     opacity: 0.6,
