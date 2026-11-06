@@ -69,6 +69,10 @@ export function MessageSelection({ message, name, palettes, rect, origin, blurTa
   const lowest = origin.height - bottom - spacing.lg - menuHeight - SELECTION_GAP - shownHeight;
   const targetY = Math.max(topLimit, Math.min(startY - spacing.sm, lowest));
   const edge = mine ? styles.alignEnd : styles.alignStart;
+  // Raccourci, le message n'a plus la forme de l'original (souvent hors de l'écran) : il apparaît
+  // directement à sa place, en fondu, au lieu de traverser l'écran depuis sa position d'origine.
+  const truncated = maxTextLines !== undefined;
+  const fromY = truncated ? targetY : startY;
 
   const appear = {
     opacity: progress,
@@ -88,14 +92,15 @@ export function MessageSelection({ message, name, palettes, rect, origin, blurTa
         style={[
           styles.selected,
           {
-            top: startY,
+            top: fromY,
+            opacity: truncated ? progress : 1,
             left: spacing.md,
             right: spacing.md,
             maxHeight,
-            overflow: maxTextLines === undefined ? 'visible' : 'hidden',
+            overflow: truncated ? 'hidden' : 'visible',
             transform: [
-              { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [0, targetY - startY] }) },
-              { scale: progress.interpolate({ inputRange: [0, 1], outputRange: [1, 1.05] }) },
+              { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [0, targetY - fromY] }) },
+              { scale: progress.interpolate({ inputRange: [0, 1], outputRange: [truncated ? 0.92 : 1, 1.05] }) },
             ],
           },
         ]}
