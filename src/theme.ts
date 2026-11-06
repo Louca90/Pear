@@ -193,15 +193,23 @@ function luminance(hex: string) {
   return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
 }
 
-// Choisit le texte le plus lisible sur cette couleur, avec la formule de contraste des normes d'accessibilité (WCAG).
-// Indépendant du thème : seule la couleur de la bulle compte.
-export function bubblePalette(background: string): BubblePalette {
+// Lisibilité du texte, en un seul endroit :
+// - sur le fond de l'app : colors.text / colors.textMuted (suivent le thème) ;
+// - sur un bouton principal (fond colors.accent) : colors.onAccent ;
+// - sur une photo, une vidéo ou un fond d'écran (pastille colors.overlay) : colors.onMedia / colors.onDarkMuted ;
+// - sur n'importe quelle autre couleur (bulle personnalisée…) : readableOn(couleur).
+//
+// Choisit le texte le plus lisible sur cette couleur, avec la formule de contraste des normes
+// d'accessibilité (WCAG). Indépendant du thème : seule la couleur du fond compte.
+export function readableOn(background: string): BubblePalette {
   const level = luminance(background);
   const whiteWins = 1.05 / (level + 0.05) > (level + 0.05) / 0.05;
   return whiteWins
     ? { background, text: light.background, muted: light.onDarkMuted, track: light.onDarkTrack }
     : { background, text: light.text, muted: light.textMuted, track: light.border };
 }
+
+export const bubblePalette = readableOn;
 
 export const spacing = {
   sm: 8,

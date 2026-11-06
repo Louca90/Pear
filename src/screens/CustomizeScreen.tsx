@@ -67,8 +67,8 @@ export function CustomizeScreen({ contactKey, name, onBack, onInfo }: Props) {
   useSyncExternalStore(chat.subscribe, chat.getVersion);
 
   const settings = getConversationSettings(contactKey);
-  const mine = bubblePalette(settings.my_bubble ?? colors.text);
-  const theirs = bubblePalette(settings.their_bubble ?? colors.surface);
+  const mine = bubblePalette(settings.my_bubble ?? colors.bubbleMine);
+  const theirs = bubblePalette(settings.their_bubble ?? colors.bubbleTheirs);
 
   const setColor = (column: 'my_bubble' | 'their_bubble', color: string) => {
     setConversationSetting(contactKey, column, color);

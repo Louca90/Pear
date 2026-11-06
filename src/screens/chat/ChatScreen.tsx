@@ -68,8 +68,8 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
   const scroll = useChatScroll(list, messages, preview);
   const settings = getConversationSettings(contactKey);
   const palettes: Palettes = {
-    mine: bubblePalette(settings.my_bubble ?? colors.text),
-    theirs: bubblePalette(settings.their_bubble ?? colors.surface),
+    mine: bubblePalette(settings.my_bubble ?? colors.bubbleMine),
+    theirs: bubblePalette(settings.their_bubble ?? colors.bubbleTheirs),
     hasWallpaper: settings.wallpaper_uri !== null,
   };
 

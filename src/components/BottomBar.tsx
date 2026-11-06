@@ -65,12 +65,12 @@ function KickDetail({ tab, kick }: { tab: Tab; kick: Animated.Value }) {
 // Le contenu blanc de l'icône remplie : l'objectif de l'appareil, les trois points de la bulle.
 function FilledDetails({ tab }: { tab: Tab }) {
   const colors = useColors();
-  if (tab === 'camera') return <Circle cx={12} cy={13} r={3.5} fill={colors.background} stroke="none" />;
+  if (tab === 'camera') return <Circle cx={12} cy={13} r={3.5} fill={colors.elevatedActive} stroke="none" />;
   if (tab === 'home') {
     return (
       <>
         {[8, 12, 16].map((cx) => (
-          <Circle key={cx} cx={cx} cy={12} r={1.3} fill={colors.background} stroke="none" />
+          <Circle key={cx} cx={cx} cy={12} r={1.3} fill={colors.elevatedActive} stroke="none" />
         ))}
       </>
     );

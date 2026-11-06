@@ -47,7 +47,7 @@ function AssetTile({ asset, order, onPress }: { asset: MediaLibrary.Asset; order
       <Image source={{ uri: asset.uri }} style={styles.tileImage} resizeMode="cover" />
       {video && (
         <View style={styles.duration}>
-          <Play size={10} color={colors.background} fill={colors.background} strokeWidth={1.75} />
+          <Play size={10} color={colors.onMedia} fill={colors.onMedia} strokeWidth={1.75} />
           <Text style={styles.durationText}>{formatDuration(asset.duration)}</Text>
         </View>
       )}
@@ -213,7 +213,7 @@ export function MediaPicker({ onPick, onClose }: { onPick: (files: PickedFile[])
           <View style={[styles.sendWrapper, { bottom: bottom + spacing.md }]}>
             <IconButton onPress={send} label={`Envoyer ${selected.length} éléments`} hitSlop={0} style={styles.send}>
               <Text style={styles.sendLabel}>{`Envoyer (${selected.length})`}</Text>
-              <ArrowUp size={20} color={colors.background} strokeWidth={2} />
+              <ArrowUp size={20} color={colors.onAccent} strokeWidth={2} />
             </IconButton>
           </View>
         )}
@@ -254,7 +254,7 @@ const useStyles = createStyles((colors) => ({
     justifyContent: 'center',
   },
   sectionOn: {
-    backgroundColor: colors.text,
+    backgroundColor: colors.accent,
   },
   sectionLabel: {
     fontSize: 14,
@@ -262,7 +262,7 @@ const useStyles = createStyles((colors) => ({
     color: colors.text,
   },
   sectionLabelOn: {
-    color: colors.background,
+    color: colors.onAccent,
   },
   grid: {
     gap: 2,
@@ -298,7 +298,7 @@ const useStyles = createStyles((colors) => ({
   },
   durationText: {
     fontSize: 11,
-    color: colors.background,
+    color: colors.onMedia,
   },
   badge: {
     position: 'absolute',
@@ -313,12 +313,12 @@ const useStyles = createStyles((colors) => ({
     justifyContent: 'center',
   },
   badgeOn: {
-    backgroundColor: colors.text,
+    backgroundColor: colors.accent,
   },
   badgeText: {
     fontSize: 12,
     fontWeight: '600',
-    color: colors.background,
+    color: colors.onAccent,
   },
   albums: {
     padding: spacing.md,
@@ -373,11 +373,11 @@ const useStyles = createStyles((colors) => ({
     height: 52,
     paddingHorizontal: spacing.lg,
     borderRadius: radius.full,
-    backgroundColor: colors.text,
+    backgroundColor: colors.accent,
   },
   sendLabel: {
     fontSize: 16,
     fontWeight: '500',
-    color: colors.background,
+    color: colors.onAccent,
   },
 }));

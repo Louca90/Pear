@@ -74,7 +74,7 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
           <IconButton onPress={pickPhoto} label="Choisir une photo de profil" hitSlop={0} style={styles.photo}>
             <Avatar uri={photo} size={112} />
             <View style={styles.photoBadge}>
-              <Camera size={18} color={colors.background} strokeWidth={1.75} />
+              <Camera size={18} color={colors.onAccent} strokeWidth={1.75} />
             </View>
           </IconButton>
           {photo && (
@@ -158,7 +158,7 @@ const useStyles = createStyles((colors) => ({
     width: 36,
     height: 36,
     borderRadius: radius.full,
-    backgroundColor: colors.text,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },

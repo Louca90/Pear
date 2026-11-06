@@ -32,7 +32,7 @@ export function UpdatedPopup({ info, onClose }: { info: UpdatedInfo; onClose: ()
           style={[styles.card, { opacity: appear, transform: [{ scale: appear.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }) }] }]}
         >
           <Animated.View style={[styles.check, { transform: [{ scale: check }, { rotate: check.interpolate({ inputRange: [0, 1], outputRange: ['-45deg', '0deg'] }) }] }]}>
-            <Check size={30} color={colors.background} strokeWidth={2.5} />
+            <Check size={30} color={colors.onAccent} strokeWidth={2.5} />
           </Animated.View>
           <Text style={styles.title}>Pear est à jour !</Text>
 
@@ -78,7 +78,7 @@ const useStyles = createStyles((colors) => ({
     width: 56,
     height: 56,
     borderRadius: radius.full,
-    backgroundColor: colors.text,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.md,

@@ -111,7 +111,7 @@ export function Composer({
             hitSlop={0}
             style={[styles.send, !draft.trim() && styles.sendDisabled]}
           >
-            {editing ? <Check size={20} color={colors.background} strokeWidth={2} /> : <ArrowUp size={20} color={colors.background} strokeWidth={2} />}
+            {editing ? <Check size={20} color={colors.onAccent} strokeWidth={2} /> : <ArrowUp size={20} color={colors.onAccent} strokeWidth={2} />}
           </IconButton>
         ) : (
           <Animated.View
@@ -121,13 +121,13 @@ export function Composer({
             style={[styles.send, { transform: [{ translateX: voice.dragX }, { translateY: voice.dragY }, { scale: voice.scale }] }]}
           >
             <Animated.View style={[styles.micLayer, styles.micTrash, { opacity: trashAmount }]}>
-              <Trash2 size={20} color={colors.background} strokeWidth={2} />
+              <Trash2 size={20} color={colors.onAccent} strokeWidth={2} />
             </Animated.View>
             <Animated.View style={[styles.micLayer, { opacity: Animated.multiply(Animated.subtract(1, trashAmount), Animated.subtract(1, voice.lockProgress)) }]}>
-              <Mic size={20} color={colors.background} strokeWidth={2} />
+              <Mic size={20} color={colors.onAccent} strokeWidth={2} />
             </Animated.View>
             <Animated.View style={[styles.micLayer, { opacity: voice.lockProgress }]}>
-              <ArrowUp size={20} color={colors.background} strokeWidth={2} />
+              <ArrowUp size={20} color={colors.onAccent} strokeWidth={2} />
             </Animated.View>
           </Animated.View>
         )}
@@ -201,7 +201,7 @@ const useLocalStyles = createStyles((colors) => ({
     width: 44,
     height: 44,
     borderRadius: radius.full,
-    backgroundColor: colors.text,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },

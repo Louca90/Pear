@@ -27,7 +27,7 @@ export function Toast({ text, token }: { text: string; token: number }) {
       accessibilityLiveRegion="polite"
       style={[styles.toast, { opacity: progress, transform: [{ translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [-16, 0] }) }] }]}
     >
-      <Check size={16} color={colors.background} strokeWidth={2} />
+      <Check size={16} color={colors.onAccent} strokeWidth={2} />
       <Text style={styles.toastText}>{text}</Text>
     </Animated.View>
   );
@@ -44,11 +44,11 @@ const useStyles = createStyles((colors) => ({
     height: 36,
     paddingHorizontal: spacing.md,
     borderRadius: radius.full,
-    backgroundColor: colors.text,
+    backgroundColor: colors.accent,
   },
   toastText: {
     fontSize: 14,
     fontWeight: '500',
-    color: colors.background,
+    color: colors.onAccent,
   },
 }));

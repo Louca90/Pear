@@ -46,7 +46,7 @@ export function UpdateScreen({ release }: { release: Release }) {
     <Screen>
       <View style={[styles.content, { paddingBottom: bottom }]}>
         <View style={styles.icon}>
-          <Download size={32} color={colors.background} strokeWidth={1.75} />
+          <Download size={32} color={colors.onAccent} strokeWidth={1.75} />
         </View>
         <Text style={styles.title}>Mise à jour disponible</Text>
         <Text style={styles.version}>Version {release.version} · {formatSize(release.apkSize)}</Text>
@@ -96,7 +96,7 @@ const useStyles = createStyles((colors) => ({
     width: 64,
     height: 64,
     borderRadius: radius.full,
-    backgroundColor: colors.text,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.lg,
@@ -155,7 +155,7 @@ const useStyles = createStyles((colors) => ({
   },
   bar: {
     height: 4,
-    backgroundColor: colors.text,
+    backgroundColor: colors.accent,
   },
   actions: {
     marginTop: 'auto',

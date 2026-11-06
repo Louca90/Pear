@@ -27,7 +27,7 @@ export function NewMessagesButton({ count, onPress }: { count: number; onPress: 
       ]}
     >
       <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} style={styles.button}>
-        <ArrowDown size={18} color={colors.background} strokeWidth={2} />
+        <ArrowDown size={18} color={colors.onAccent} strokeWidth={2} />
         <Text style={styles.label}>{label}</Text>
       </Pressable>
     </Animated.View>
@@ -47,12 +47,12 @@ const useStyles = createStyles((colors) => ({
     height: 44,
     paddingHorizontal: spacing.md,
     borderRadius: radius.full,
-    backgroundColor: colors.text,
+    backgroundColor: colors.accent,
     boxShadow: `0px 4px 16px ${colors.shadow}`,
   },
   label: {
     fontSize: 15,
     fontWeight: '600',
-    color: colors.background,
+    color: colors.onAccent,
   },
 }));

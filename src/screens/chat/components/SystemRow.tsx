@@ -13,7 +13,7 @@ export function SystemRow({ message, name, hasWallpaper }: { message: Message; n
   const author = message.mine === 1 ? 'Vous avez' : `${name} a`;
   return (
     <View style={[styles.systemRow, hasWallpaper && styles.metaPill]}>
-      <Text style={[styles.systemText, hasWallpaper && { color: colors.background }]}>{`${author} ${systemAction(message)}`}</Text>
+      <Text style={[styles.systemText, hasWallpaper && { color: colors.onMedia }]}>{`${author} ${systemAction(message)}`}</Text>
     </View>
   );
 }
