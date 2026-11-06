@@ -114,7 +114,7 @@ function build() {
   run('npx expo prebuild --platform android --no-install', { env: { ...process.env, CI: '1' } });
   const env = { ...process.env, JAVA_HOME };
   const abis = process.argv.includes('--all-abis') ? '' : ' -PreactNativeArchitectures=arm64-v8a';
-  run(`gradlew.bat assembleRelease${abis}`, { cwd: join(ROOT, 'android'), env, shell: true });
+  run(`"${join(ROOT, 'android', 'gradlew.bat')}" assembleRelease${abis}`, { cwd: join(ROOT, 'android'), env });
   mkdirSync(DIST, { recursive: true });
   const target = apkPath(version);
   copyFileSync(join(ROOT, 'android/app/build/outputs/apk/release/app-release.apk'), target);
