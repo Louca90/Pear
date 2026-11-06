@@ -102,6 +102,52 @@ const MIGRATIONS: Migration[] = [
         );
       `),
   },
+  {
+    // Lot 3 : contacts sortis du SecureStore (un seul bloc JSON, fragile vers 20 contacts), demandes de
+    // pairing, clés bloquées, envois et réceptions par le relais (lot 7), messages épinglés.
+    version: 6,
+    up: (db) => {
+      db.execSync(`
+        CREATE TABLE IF NOT EXISTS contacts (
+          public_key TEXT PRIMARY KEY NOT NULL,
+          name TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          state TEXT NOT NULL DEFAULT 'active',
+          pinned INTEGER NOT NULL DEFAULT 0,
+          pin_order INTEGER
+        );
+        CREATE TABLE IF NOT EXISTS pairing_requests (
+          id TEXT PRIMARY KEY NOT NULL,
+          from_key TEXT NOT NULL,
+          name TEXT NOT NULL,
+          at INTEGER NOT NULL,
+          state TEXT NOT NULL DEFAULT 'pending'
+        );
+        CREATE TABLE IF NOT EXISTS blocked_keys (
+          key TEXT PRIMARY KEY NOT NULL,
+          at INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS uploads (
+          file_id TEXT PRIMARY KEY NOT NULL,
+          message_id TEXT NOT NULL,
+          contact TEXT NOT NULL,
+          upload_id TEXT,
+          parts_done INTEGER NOT NULL DEFAULT 0,
+          state TEXT NOT NULL,
+          size INTEGER NOT NULL,
+          created_at INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS relay_incoming (
+          file_id TEXT PRIMARY KEY NOT NULL,
+          contact TEXT NOT NULL,
+          message_id TEXT NOT NULL,
+          state TEXT NOT NULL,
+          size INTEGER NOT NULL
+        );
+      `);
+      addColumn(db, 'messages', 'pinned', 'INTEGER NOT NULL DEFAULT 0');
+    },
+  },
 ];
 
 export const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

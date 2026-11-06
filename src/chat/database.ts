@@ -220,6 +220,31 @@ export function getPendingIncomingBytes(contact: string): number {
   );
 }
 
+// Contacts, dans l'ordre où ils ont été ajoutés (src/storage.ts garde la même interface qu'avant).
+export type ContactRow = { public_key: string; name: string };
+
+export function getContactRows(): ContactRow[] {
+  return db().getAllSync<ContactRow>("SELECT public_key, name FROM contacts WHERE state = 'active' ORDER BY created_at, rowid");
+}
+
+// Remplace la liste entière en gardant la date d'ajout (et l'épinglage) des contacts déjà connus.
+export function replaceContactRows(contacts: ContactRow[]) {
+  const database = db();
+  database.withTransactionSync(() => {
+    const keys = contacts.map((contact) => contact.public_key);
+    database.runSync(`DELETE FROM contacts WHERE public_key NOT IN (${keys.map(() => '?').join(', ') || "''"})`, ...keys);
+    const now = Date.now();
+    contacts.forEach((contact, index) => {
+      database.runSync(
+        'INSERT INTO contacts (public_key, name, created_at) VALUES (?, ?, ?) ON CONFLICT(public_key) DO UPDATE SET name = excluded.name',
+        contact.public_key,
+        contact.name,
+        now + index,
+      );
+    });
+  });
+}
+
 // États du double ratchet, déjà chiffrés par l'appelant (src/storage.ts).
 export function getRatchetRow(contact: string): string | null {
   return db().getFirstSync<{ state: string }>('SELECT state FROM ratchets WHERE contact = ?', contact)?.state ?? null;

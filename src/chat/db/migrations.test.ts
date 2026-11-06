@@ -66,9 +66,9 @@ function oldDatabase(version: number) {
 function expectLatest(db: MigrationDb) {
   expect(schemaVersion(db)).toBe(LATEST_VERSION);
   expect(columns(db, 'messages')).toEqual(
-    expect.arrayContaining(['kind', 'file_uri', 'file_size', 'file_mime', 'file_key', 'reply_to', 'edited', 'my_reaction', 'their_reaction']),
+    expect.arrayContaining(['kind', 'file_uri', 'file_size', 'file_mime', 'file_key', 'reply_to', 'edited', 'my_reaction', 'their_reaction', 'pinned']),
   );
-  expect(tables(db)).toEqual(expect.arrayContaining(['messages', 'contact_tokens', 'outbox', 'settings', 'conversation_settings', 'contact_profiles', 'ratchets']));
+  expect(tables(db)).toEqual(expect.arrayContaining(['messages', 'contact_tokens', 'outbox', 'settings', 'conversation_settings', 'contact_profiles', 'ratchets', 'contacts', 'pairing_requests', 'blocked_keys', 'uploads', 'relay_incoming']));
 }
 
 describe('migrate', () => {

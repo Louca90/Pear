@@ -2,7 +2,7 @@ import * as SecureStore from 'expo-secure-store';
 
 import { createIdentity, Identity } from './crypto/pairing';
 import type { RatchetState } from './crypto/ratchet';
-import { getRatchetRow, setRatchetRow } from './chat/database';
+import { getContactRows, getRatchetRow, replaceContactRows, setRatchetRow } from './chat/database';
 import { openLocal, sealLocal } from './chat/db/localCrypto';
 import { CONTACTS_KEY, IDENTITY_KEY, RATCHET_PREFIX } from './config';
 import { log } from './log';
@@ -27,13 +27,34 @@ export async function loadOrCreateIdentity(): Promise<Identity> {
   return identity;
 }
 
+// Contacts : dans pear.db. Les anciennes versions les gardaient en un seul bloc JSON dans le SecureStore.
 export async function loadContacts(): Promise<Contact[]> {
-  const saved = await SecureStore.getItemAsync(CONTACTS_KEY);
-  return saved ? JSON.parse(saved) : [];
+  await migrateLegacyContacts();
+  return getContactRows().map((row) => ({ publicKey: row.public_key, name: row.name }));
 }
 
 export async function saveContacts(contacts: Contact[]): Promise<void> {
-  await SecureStore.setItemAsync(CONTACTS_KEY, JSON.stringify(contacts));
+  replaceContactRows(contacts.map((contact) => ({ public_key: contact.publicKey, name: contact.name })));
+}
+
+// Recopie l'ancienne liste, relit pour vérifier, et ne supprime l'ancienne copie qu'ensuite. Si l'app
+// est tuée entre les deux, la recopie recommence au lancement suivant sans doublon (clé primaire).
+async function migrateLegacyContacts() {
+  const legacy = await SecureStore.getItemAsync(CONTACTS_KEY);
+  if (!legacy) return;
+  const contacts = JSON.parse(legacy) as Contact[];
+  const known = new Set(getContactRows().map((row) => row.public_key));
+  replaceContactRows([
+    ...getContactRows(),
+    ...contacts.filter((contact) => !known.has(contact.publicKey)).map((contact) => ({ public_key: contact.publicKey, name: contact.name })),
+  ]);
+  const saved = new Set(getContactRows().map((row) => row.public_key));
+  if (contacts.every((contact) => saved.has(contact.publicKey))) {
+    await SecureStore.deleteItemAsync(CONTACTS_KEY);
+    log.info('contacts recopiés dans pear.db', contacts.length);
+  } else {
+    log.warn('copie des contacts non vérifiée : ancienne copie gardée');
+  }
 }
 
 // États du double ratchet : gardés en mémoire, et écrits dans pear.db (chiffrés avec la clé locale)
