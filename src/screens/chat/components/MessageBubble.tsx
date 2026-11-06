@@ -10,7 +10,7 @@ import { MessageMeta } from './MessageMeta';
 import { ReplyQuote } from './ReplyQuote';
 import { SystemRow } from './SystemRow';
 import { VoiceContent } from './VoiceContent';
-import { LONG_PRESS_MS, SWIPE_REPLY, SWIPE_START } from '../constants';
+import { LONG_PRESS_MS, SWIPE_REPLY, SWIPE_START, TEXT_LINE_HEIGHT } from '../constants';
 import { isBareMedia } from '../format';
 import { useDoubleTap } from '../hooks/useDoubleTap';
 import { useSwipeReply } from '../hooks/useSwipeReply';
@@ -34,9 +34,11 @@ type BubbleProps = {
   onDoubleTap?: (message: Message) => void;
   onReply?: (message: Message) => void;
   onJump?: (id: string) => void;
+  // Sélection d'un message très long : le texte est coupé avec « … » pour tenir à l'écran.
+  maxTextLines?: number;
 };
 
-export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, onOpenFile, onSelect, onDoubleTap, onReply, onJump }: BubbleProps) {
+export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, onOpenFile, onSelect, onDoubleTap, onReply, onJump, maxTextLines }: BubbleProps) {
   const container = useRef<ViewRef>(null);
   const mine = message.mine === 1;
   const bare = isBareMedia(message);
@@ -100,7 +102,7 @@ export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, on
         >
           <ReplyQuote message={message} name={name} palette={palette} onJump={onJump} />
           {message.kind === 'text' ? (
-            <Text style={[styles.text, { color: palette.text }]}>{message.text}</Text>
+            <Text style={[styles.text, { color: palette.text }]} numberOfLines={maxTextLines}>{message.text}</Text>
           ) : message.kind === 'audio' && message.status !== 'receiving' ? (
             <VoiceContent message={message} palette={palette} />
           ) : (
@@ -165,7 +167,7 @@ const localStyles = StyleSheet.create({
   },
   text: {
     fontSize: 16,
-    lineHeight: 22,
+    lineHeight: TEXT_LINE_HEIGHT,
   },
   reactions: {
     flexDirection: 'row',

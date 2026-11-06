@@ -15,6 +15,9 @@ export const REACTIONS_HEIGHT = 56;
 export const ACTION_HEIGHT = 48;
 export const SELECTION_GAP = 12;
 export const SELECTION_TOP = 72;
+// Hauteur d'une ligne de texte dans une bulle, et de ce qui l'entoure (marges, citation, heure, réactions).
+export const TEXT_LINE_HEIGHT = 22;
+export const BUBBLE_CHROME_HEIGHT = 110;
 export const SELECTION_CLOSE_MS = 170;
 // Glisser pour répondre : le geste démarre après SWIPE_START, et répond à partir de SWIPE_REPLY.
 export const SWIPE_START = 12;

@@ -10,7 +10,7 @@ import { colors, radius, spacing } from '../../../theme';
 
 import { EmojiPicker } from './EmojiPicker';
 import { Bubble } from './MessageBubble';
-import { ACTION_HEIGHT, REACTIONS_HEIGHT, SELECTION_CLOSE_MS, SELECTION_GAP, SELECTION_TOP } from '../constants';
+import { ACTION_HEIGHT, BUBBLE_CHROME_HEIGHT, REACTIONS_HEIGHT, SELECTION_CLOSE_MS, SELECTION_GAP, SELECTION_TOP, TEXT_LINE_HEIGHT } from '../constants';
 import { Action, Palettes, Rect, ViewRef } from '../types';
 
 type SelectionProps = {
@@ -61,8 +61,13 @@ export function MessageSelection({ message, name, palettes, rect, origin, blurTa
   // Le message se place pour laisser la place aux réactions et aux actions, sans sortir de l'écran.
   const menuHeight = actions.length * ACTION_HEIGHT + spacing.sm * 2;
   const startY = rect.y - origin.y;
-  const lowest = origin.height - bottom - spacing.lg - menuHeight - SELECTION_GAP - rect.height;
-  const targetY = Math.max(SELECTION_TOP + REACTIONS_HEIGHT, Math.min(startY - spacing.sm, lowest));
+  // Un message trop long est raccourci ici seulement, pour que réactions et actions restent à l'écran.
+  const topLimit = SELECTION_TOP + REACTIONS_HEIGHT;
+  const maxHeight = Math.max(TEXT_LINE_HEIGHT * 2, origin.height - bottom - spacing.lg - menuHeight - SELECTION_GAP - topLimit);
+  const shownHeight = Math.min(rect.height, maxHeight);
+  const maxTextLines = rect.height > maxHeight ? Math.max(1, Math.floor((maxHeight - BUBBLE_CHROME_HEIGHT) / TEXT_LINE_HEIGHT)) : undefined;
+  const lowest = origin.height - bottom - spacing.lg - menuHeight - SELECTION_GAP - shownHeight;
+  const targetY = Math.max(topLimit, Math.min(startY - spacing.sm, lowest));
   const edge = mine ? styles.alignEnd : styles.alignStart;
 
   const appear = {
@@ -86,6 +91,8 @@ export function MessageSelection({ message, name, palettes, rect, origin, blurTa
             top: startY,
             left: spacing.md,
             right: spacing.md,
+            maxHeight,
+            overflow: maxTextLines === undefined ? 'visible' : 'hidden',
             transform: [
               { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [0, targetY - startY] }) },
               { scale: progress.interpolate({ inputRange: [0, 1], outputRange: [1, 1.05] }) },
@@ -93,7 +100,7 @@ export function MessageSelection({ message, name, palettes, rect, origin, blurTa
           },
         ]}
       >
-        <Bubble message={message} name={name} palettes={palettes} />
+        <Bubble message={message} name={name} palettes={palettes} maxTextLines={maxTextLines} />
       </Animated.View>
 
       <Animated.View style={[styles.reactionBar, edge, { top: targetY - REACTIONS_HEIGHT - spacing.sm }, appear]}>
@@ -107,7 +114,7 @@ export function MessageSelection({ message, name, palettes, rect, origin, blurTa
         </IconButton>
       </Animated.View>
 
-      <Animated.View style={[styles.actionsMenu, edge, { top: targetY + rect.height + SELECTION_GAP }, appear]}>
+      <Animated.View style={[styles.actionsMenu, edge, { top: targetY + shownHeight + SELECTION_GAP }, appear]}>
         {actions.map(({ label, icon: Icon, onPress, danger }) => (
           <Pressable key={label} onPress={() => dismiss(onPress)} style={({ pressed }) => [styles.action, pressed && styles.actionPressed]}>
             <Icon size={20} color={danger ? colors.danger : colors.text} strokeWidth={1.75} />
