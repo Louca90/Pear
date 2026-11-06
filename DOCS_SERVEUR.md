@@ -9,7 +9,7 @@ Les serveurs ne voient jamais le contenu des messages : tout ce qui y passe est 
 | Firebase Authentication | Compte anonyme par installation (aucune donnée personnelle), exigé par les règles | Spark (gratuit) |
 | Firebase Realtime Database | `signals/{salon}` : signalisation WebRTC chiffrée, supprimée après lecture. `rateLimits/` : compteurs du serveur de réveil | Spark (gratuit) |
 | Firebase Cloud Messaging | Push « réveil » vide vers le téléphone du destinataire | gratuit |
-| Vercel (`server/`, projet `pear-drab`) | `/api/wake` : vérifie le compte Firebase de l'appelant, applique les limites, envoie le push | Hobby (gratuit) |
+| Vercel (`server/`, projet `pear`, adresse `pear-drab.vercel.app`) | `/api/wake` : vérifie le compte Firebase de l'appelant, applique les limites, envoie le push | Hobby (gratuit) |
 | GitHub Releases | APK et notes de version, lus par la mise à jour automatique (voir `RELEASE.md`) | gratuit |
 
 ## Base de données (Realtime Database)
@@ -40,7 +40,7 @@ Elles sont versionnées dans `database.rules.json` : tout est fermé par défaut
 - `FIREBASE_SERVICE_ACCOUNT` : clé JSON du compte de service Firebase (secrète).
 - `FIREBASE_DATABASE_URL` (facultative) : adresse de la Realtime Database, par défaut `https://pear-2c275-default-rtdb.europe-west1.firebasedatabase.app`.
 
-**Déployer** : depuis `server/`, `vercel --prod` (ou via le tableau de bord Vercel, projet `pear-drab`).
+**Déployer** : automatique. Le projet Vercel `pear` est relié au dépôt GitHub (dossier racine `server`) : chaque push sur `main` redéploie la fonction en production. Vérifier ensuite : un `POST` sans jeton sur `https://pear-drab.vercel.app/api/wake` répond `401`.
 
 ## Quotas gratuits et ce qui se passe au-delà
 
