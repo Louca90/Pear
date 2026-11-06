@@ -1,5 +1,18 @@
 # Journal des versions
 
+## 1.1.1 (versionCode 3)
+
+### Résumé
+
+- Version de test de la mise à jour automatique : si tu lis ceci, elle a marché.
+
+### Détails
+
+#### Technique
+
+- Script de release : chemin complet de gradlew.bat sous Windows.
+- Première mise à jour installée par l'app elle-même, depuis la release GitHub.
+
 ## 1.1.0 (versionCode 2)
 
 ### Résumé

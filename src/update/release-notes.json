@@ -1,5 +1,5 @@
 {
-  "version": "1.1.0",
-  "versionCode": 2,
-  "summary": "- Pear se met maintenant à jour tout seul : plus besoin de réinstaller l'app à la main.\n- Le code de l'app a été réorganisé pour préparer les prochaines nouveautés."
+  "version": "1.1.1",
+  "versionCode": 3,
+  "summary": "- Version de test de la mise à jour automatique : si tu lis ceci, elle a marché."
 }
