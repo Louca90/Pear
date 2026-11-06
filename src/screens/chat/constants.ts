@@ -17,8 +17,9 @@ export const SELECTION_GAP = 12;
 export const SELECTION_TOP = 72;
 // Hauteur d'une ligne de texte dans une bulle, et de ce qui l'entoure (marges, citation, heure, réactions).
 export const TEXT_LINE_HEIGHT = 22;
-// Le ressort de la sélection : le message monte et, s'il est trop long, se replie au même rythme.
-export const SELECTION_SPRING = { damping: 16, stiffness: 220, mass: 0.8 };
+// Sélection : une courbe douce, sans rebond, pour la montée comme pour le retour.
+export const SELECTION_OPEN_MS = 280;
+export const SELECTION_EASING = Easing.bezier(0.2, 0.8, 0.2, 1);
 export const SELECTION_CLOSE_MS = 170;
 // Glisser pour répondre : le geste démarre après SWIPE_START, et répond à partir de SWIPE_REPLY.
 export const SWIPE_START = 12;

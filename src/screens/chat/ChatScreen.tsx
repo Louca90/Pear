@@ -48,11 +48,12 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [toast, setToast] = useState<{ text: string; token: number } | null>(null);
   const [viewing, setViewing] = useState<Viewing | null>(null);
-  const [selection, setSelection] = useState<{ message: Message; rect: Rect; origin: { y: number; height: number } } | null>(null);
+  const [selection, setSelection] = useState<{ message: Message; rect: Rect; origin: { y: number; height: number }; clip: { top: number; bottom: number } } | null>(null);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [editing, setEditing] = useState<Message | null>(null);
   const blurTarget = useRef<ViewRef>(null);
   const root = useRef<ViewRef>(null);
+  const listArea = useRef<ViewRef>(null);
   const input = useRef<ComponentRef<typeof TextInput>>(null);
   const list = useRef<FlatList<Message>>(null);
   const [pulsing, setPulsing] = useState<{ id: string; token: number } | null>(null);
@@ -80,7 +81,11 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
   const selectMessage = (message: Message, rect: Rect) => {
     Keyboard.dismiss();
     Haptics.performAndroidHapticsAsync(Haptics.AndroidHaptics.Long_Press).catch((e) => console.warn('Pear vibration :', e));
-    root.current?.measureInWindow((_x, y, _width, height) => setSelection({ message, rect, origin: { y, height } }));
+    root.current?.measureInWindow((_x, y, _width, height) =>
+      listArea.current?.measureInWindow((_listX, listY, _listWidth, listHeight) =>
+        setSelection({ message, rect, origin: { y, height }, clip: { top: listY, bottom: listY + listHeight } }),
+      ),
+    );
   };
 
   const send = () => {
@@ -256,7 +261,7 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
         <ChatHeader contactKey={contactKey} name={name} onBack={onBack} onInfo={onInfo} onCustomize={onCustomize} />
         {/* Le décalage compense la barre d'état, placée au-dessus de la zone floutée. */}
         <KeyboardAvoidingView behavior="padding" keyboardVerticalOffset={topInset} style={styles.flex}>
-          <View style={styles.flex}>
+          <View ref={listArea} collapsable={false} style={styles.flex}>
           {palettes.hasWallpaper && <ComposerFade />}
           {messages.length === 0 ? (
             <View style={styles.empty}>
@@ -333,6 +338,7 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
           palettes={palettes}
           rect={selection.rect}
           origin={selection.origin}
+          clip={selection.clip}
           blurTarget={blurTarget}
           actions={actionsFor(selection.message)}
           onReact={(emoji) => chat.react(contactKey, selection.message.id, emoji)}

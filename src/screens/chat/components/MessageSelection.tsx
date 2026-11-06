@@ -10,7 +10,7 @@ import { colors, radius, spacing } from '../../../theme';
 
 import { EmojiPicker } from './EmojiPicker';
 import { Bubble } from './MessageBubble';
-import { ACTION_HEIGHT, REACTIONS_HEIGHT, SELECTION_CLOSE_MS, SELECTION_GAP, SELECTION_SPRING, SELECTION_TOP, TEXT_LINE_HEIGHT } from '../constants';
+import { ACTION_HEIGHT, REACTIONS_HEIGHT, SELECTION_CLOSE_MS, SELECTION_EASING, SELECTION_GAP, SELECTION_OPEN_MS, SELECTION_TOP, TEXT_LINE_HEIGHT } from '../constants';
 import { Action, Palettes, Rect, ViewRef } from '../types';
 
 type SelectionProps = {
@@ -19,6 +19,9 @@ type SelectionProps = {
   palettes: Palettes;
   rect: Rect;
   origin: { y: number; height: number };
+  // La zone de la conversation (entre la barre du haut et la saisie), en coordonnées de la fenêtre :
+  // le message n'en sort jamais, ni à la montée ni au retour.
+  clip: { top: number; bottom: number };
   blurTarget: RefObject<ViewRef | null>;
   actions: Action[];
   onReact: (emoji: string) => void;
@@ -27,11 +30,10 @@ type SelectionProps = {
 
 // Comme dans Google Messages : tout s'assombrit et se floute, le message monte et grossit,
 // avec les réactions au-dessus et les actions en dessous.
-export function MessageSelection({ message, name, palettes, rect, origin, blurTarget, actions, onReact, onClose }: SelectionProps) {
+export function MessageSelection({ message, name, palettes, rect, origin, clip, blurTarget, actions, onReact, onClose }: SelectionProps) {
   const progress = useRef(new Animated.Value(0)).current;
   const [pickerOpen, setPickerOpen] = useState(false);
   const closing = useRef(false);
-  const [open, setOpen] = useState(true);
   const mine = message.mine === 1;
   const bottom = useNavigationBarHeight();
 
@@ -39,15 +41,16 @@ export function MessageSelection({ message, name, palettes, rect, origin, blurTa
   const dismiss = useRef((after?: () => void) => {
     if (closing.current) return;
     closing.current = true;
-    setOpen(false);
-    Animated.timing(progress, { toValue: 0, duration: SELECTION_CLOSE_MS, useNativeDriver: true }).start(() => {
+    // Une seule valeur, animée côté JavaScript, pilote tout : position, taille, repli du texte, fond et
+    // boutons restent synchrones jusqu'à la dernière image.
+    Animated.timing(progress, { toValue: 0, duration: SELECTION_CLOSE_MS, easing: SELECTION_EASING, useNativeDriver: false }).start(() => {
       onClose();
       after?.();
     });
   }).current;
 
   useEffect(() => {
-    Animated.spring(progress, { toValue: 1, useNativeDriver: true, ...SELECTION_SPRING }).start();
+    Animated.timing(progress, { toValue: 1, duration: SELECTION_OPEN_MS, easing: SELECTION_EASING, useNativeDriver: false }).start();
     const back = BackHandler.addEventListener('hardwareBackPress', () => {
       dismiss();
       return true;
@@ -67,10 +70,11 @@ export function MessageSelection({ message, name, palettes, rect, origin, blurTa
   const topLimit = SELECTION_TOP + REACTIONS_HEIGHT;
   const maxHeight = Math.max(TEXT_LINE_HEIGHT * 2, origin.height - bottom - spacing.lg - menuHeight - SELECTION_GAP - topLimit);
   const shownHeight = Math.min(rect.height, maxHeight);
-  const fit = rect.height > maxHeight ? { maxHeight, fullHeight: rect.height, open } : undefined;
+  const fit = rect.height > maxHeight ? { maxHeight, fullHeight: rect.height, progress } : undefined;
   const lowest = origin.height - bottom - spacing.lg - menuHeight - SELECTION_GAP - shownHeight;
   const targetY = Math.max(topLimit, Math.min(startY - spacing.sm, lowest));
   const edge = mine ? styles.alignEnd : styles.alignStart;
+  const clipTop = clip.top - origin.y;
 
   const appear = {
     opacity: progress,
@@ -85,23 +89,24 @@ export function MessageSelection({ message, name, palettes, rect, origin, blurTa
       </Animated.View>
       <Pressable style={StyleSheet.absoluteFill} onPress={() => dismiss()} accessibilityLabel="Fermer" />
 
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.selected,
-          {
-            top: startY,
-            left: spacing.md,
-            right: spacing.md,
-            transform: [
-              { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [0, targetY - startY] }) },
-              { scale: progress.interpolate({ inputRange: [0, 1], outputRange: [1, 1.05] }) },
-            ],
-          },
-        ]}
-      >
-        <Bubble message={message} name={name} palettes={palettes} fit={fit} />
-      </Animated.View>
+      <View pointerEvents="none" style={[styles.clip, { top: clipTop, height: clip.bottom - clip.top }]}>
+        <Animated.View
+          style={[
+            styles.selected,
+            {
+              top: startY - clipTop,
+              left: spacing.md,
+              right: spacing.md,
+              transform: [
+                { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [0, targetY - startY] }) },
+                { scale: progress.interpolate({ inputRange: [0, 1], outputRange: [1, 1.05] }) },
+              ],
+            },
+          ]}
+        >
+          <Bubble message={message} name={name} palettes={palettes} fit={fit} />
+        </Animated.View>
+      </View>
 
       <Animated.View style={[styles.reactionBar, edge, { top: targetY - REACTIONS_HEIGHT - spacing.sm }, appear]}>
         {QUICK_REACTIONS.map((emoji) => (
@@ -138,6 +143,12 @@ const styles = StyleSheet.create({
   selectionDim: {
     ...StyleSheet.absoluteFill,
     backgroundColor: colors.selectionDim,
+  },
+  clip: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    overflow: 'hidden',
   },
   selected: {
     position: 'absolute',

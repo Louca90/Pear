@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Check, ExternalLink } from 'lucide-react-native';
 
 import { Button } from '../components/ui';
 import { colors, radius, spacing } from '../theme';
 import { fetchSummary, UpdatedInfo } from './updated';
+
+// Courbe douce, sans rebond.
+const SMOOTH = Easing.bezier(0.2, 0.8, 0.2, 1);
 
 // Une fois, au premier lancement après une mise à jour. Le retour d'Android fait comme OK.
 export function UpdatedPopup({ info, onClose }: { info: UpdatedInfo; onClose: () => void }) {
@@ -15,8 +18,8 @@ export function UpdatedPopup({ info, onClose }: { info: UpdatedInfo; onClose: ()
   useEffect(() => {
     if (info.summary === null) fetchSummary().then(setSummary);
     Animated.sequence([
-      Animated.spring(appear, { toValue: 1, useNativeDriver: true, damping: 16, stiffness: 220 }),
-      Animated.spring(check, { toValue: 1, useNativeDriver: true, damping: 9, stiffness: 260 }),
+      Animated.timing(appear, { toValue: 1, duration: 260, easing: SMOOTH, useNativeDriver: true }),
+      Animated.timing(check, { toValue: 1, duration: 320, easing: SMOOTH, useNativeDriver: true }),
     ]).start();
   }, [info.summary, appear, check]);
 

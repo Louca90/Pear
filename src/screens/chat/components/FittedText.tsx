@@ -1,12 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { Animated, StyleProp, StyleSheet, Text, TextStyle } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect as SvgRect, Stop } from 'react-native-svg';
 
-import { SELECTION_CLOSE_MS, SELECTION_SPRING, TEXT_LINE_HEIGHT } from '../constants';
+import { TEXT_LINE_HEIGHT } from '../constants';
 
-// Place disponible pour toute la bulle, et sa hauteur réelle dans la conversation.
-// open passe à false à la fermeture : le texte se déplie en redescendant à sa place.
-export type TextFit = { maxHeight: number; fullHeight: number; open: boolean };
+// Place disponible pour toute la bulle, sa hauteur réelle dans la conversation, et l'avancement de la
+// sélection (0 : à sa place, 1 : sélectionné) qui pilote aussi le repli du texte.
+export type TextFit = { maxHeight: number; fullHeight: number; progress: Animated.Value };
 
 type Props = {
   text: string;
@@ -16,22 +16,10 @@ type Props = {
   fit?: TextFit;
 };
 
-// Sélection d'un message trop long : le texte part de sa vraie hauteur et se replie, en même temps que
-// la bulle monte, jusqu'à tenir à l'écran. La coupure s'efface en fondu dans la couleur de la bulle.
+// Sélection d'un message trop long : le texte se replie pendant que la bulle monte, et se déplie quand
+// elle redescend, au même rythme puisque c'est la même valeur qui anime les deux.
 export function FittedText({ text, style, background, fit }: Props) {
-  const height = useRef(new Animated.Value(0)).current;
   const [range, setRange] = useState<{ from: number; to: number } | null>(null);
-
-  useEffect(() => {
-    if (!range) return;
-    height.setValue(range.from);
-    Animated.spring(height, { toValue: range.to, useNativeDriver: false, ...SELECTION_SPRING }).start();
-  }, [range, height]);
-
-  const open = fit?.open ?? true;
-  useEffect(() => {
-    if (range && !open) Animated.timing(height, { toValue: range.from, duration: SELECTION_CLOSE_MS, useNativeDriver: false }).start();
-  }, [open, range, height]);
 
   const measure = (textHeight: number) => {
     if (!fit || range) return;
@@ -44,13 +32,10 @@ export function FittedText({ text, style, background, fit }: Props) {
   if (!fit) return <Text style={style}>{text}</Text>;
 
   return (
-    <Animated.View style={range && { height, overflow: 'hidden' }}>
+    <Animated.View style={range && { height: fit.progress.interpolate({ inputRange: [0, 1], outputRange: [range.from, range.to] }), overflow: 'hidden' }}>
       <Text style={style} onLayout={(event) => measure(event.nativeEvent.layout.height)}>{text}</Text>
       {range && (
-        <Animated.View
-          pointerEvents="none"
-          style={[styles.fade, { opacity: height.interpolate({ inputRange: [range.to, range.from], outputRange: [1, 0], extrapolate: 'clamp' }) }]}
-        >
+        <Animated.View pointerEvents="none" style={[styles.fade, { opacity: fit.progress }]}>
           <Svg width="100%" height="100%">
             <Defs>
               <LinearGradient id="textFade" x1="0" y1="0" x2="0" y2="1">

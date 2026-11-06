@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Pressable, StyleSheet, Text } from 'react-native';
+import { Animated, Easing, Pressable, StyleSheet, Text } from 'react-native';
 import { ArrowDown } from 'lucide-react-native';
 
 import { colors, radius, spacing } from '../../../theme';
@@ -11,7 +11,7 @@ export function NewMessagesButton({ count, onPress }: { count: number; onPress: 
 
   useEffect(() => {
     if (count > 0) setShown(count);
-    Animated.spring(appear, { toValue: count > 0 ? 1 : 0, useNativeDriver: true, damping: 16, stiffness: 240 }).start();
+    Animated.timing(appear, { toValue: count > 0 ? 1 : 0, duration: 220, easing: Easing.bezier(0.2, 0.8, 0.2, 1), useNativeDriver: true }).start();
   }, [count, appear]);
 
   const label = shown === 1 ? '1 nouveau message' : `${shown} nouveaux messages`;
