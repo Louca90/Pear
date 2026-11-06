@@ -6,7 +6,7 @@ import notifee, { EventType } from '@notifee/react-native';
 import { getMessaging, onMessage } from '@react-native-firebase/messaging';
 
 import { addBackListener, completeBack, setBackMode } from './modules/pear-native';
-import { deleteMessages, getContactProfile } from './src/chat/database';
+import { deleteMessages, getContactProfile, openDatabase } from './src/chat/database';
 import { clearNotificationTarget, setNotificationTarget, useNotificationTarget } from './src/chat/notificationTarget';
 import { chat } from './src/chat/manager';
 import { BottomBar, Tab } from './src/components/BottomBar';
@@ -61,7 +61,10 @@ export default function App() {
   const [updatedInfo, setUpdatedInfo] = useState<UpdatedInfo | null>(null);
 
   useEffect(() => {
-    hasIdentity()
+    // La base est ouverte et migrée avant tout : un échec affiche une erreur au lieu de planter en boucle.
+    Promise.resolve()
+      .then(openDatabase)
+      .then(hasIdentity)
       .then(async (existed) => {
         const [savedIdentity, savedContacts] = await Promise.all([loadOrCreateIdentity(), loadContacts()]);
         setContacts(savedContacts);
