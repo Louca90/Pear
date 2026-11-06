@@ -49,3 +49,6 @@ google-services.json
 # Vercel
 .vercel/
 modules/*/android/build/
+
+# Cache Gradle des modules locaux
+modules/*/android/.gradle/
