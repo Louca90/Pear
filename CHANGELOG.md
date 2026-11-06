@@ -1,5 +1,37 @@
 # Journal des versions
 
+## 1.2.0 (versionCode 4)
+
+### Résumé
+
+- Toucher une notification ouvre directement la bonne conversation, même quand Pear est en arrière-plan.
+- La conversation descend toute seule quand tu envoies, et un bouton « nouveaux messages » apparaît si tu es remonté.
+- Les messages ne sont marqués « lus » qu'une fois que tu es redescendu les voir.
+- Photos et vidéos s'ouvrent instantanément ; un appui long permet d'y réagir.
+- Plusieurs bugs corrigés : barre du haut après le déverrouillage, messages très longs, envois de fichiers bloqués.
+
+### Détails
+
+#### Nouveautés
+
+- Défilement automatique à l'envoi, bouton « N nouveaux messages » quand on est remonté.
+- Accusés de lecture envoyés seulement une fois en bas de la conversation.
+- Sélection d'un message très long : il se replie pour tenir à l'écran, réactions et actions toujours visibles.
+- Ouverture immédiate des photos et vidéos ; le like d'un média passe par l'appui long.
+
+#### Corrections
+
+- Barre du haut mal placée quand l'app est ouverte depuis l'écran verrouillé.
+- Notification touchée app en arrière-plan : la conversation ne s'ouvrait pas.
+- Glisser pour répondre après une ouverture depuis une notification.
+- Envoi de fichier bloqué en boucle (taille annoncée plus grande que le fichier) : les envois en attente sont réparés.
+- Effets d'appui carrés qui débordaient des lignes et des menus.
+- Animations sans rebond, sélection qui ne passe plus sur la barre du haut ni sur la saisie.
+
+#### Technique
+
+- Marges système lues par le module natif et remesurées à chaque changement.
+
 ## 1.1.1 (versionCode 3)
 
 ### Résumé
