@@ -1,4 +1,5 @@
 import type { Message } from '../../chat/database';
+import { t } from '../../i18n';
 
 export function formatTime(timestamp: number) {
   const date = new Date(timestamp);
@@ -17,10 +18,10 @@ export function formatClock(seconds: number) {
 }
 
 export function systemAction(message: Message) {
-  if (message.kind === 'wallpaper') return 'changé le fond de discussion';
-  if (!message.text.startsWith('saved:')) return 'retiré le fond de discussion';
+  if (message.kind === 'wallpaper') return t('chat.fondChange');
+  if (!message.text.startsWith('saved:')) return t('chat.fondRetire');
   const [, kind, owner] = message.text.split(':');
-  const noun = kind === 'video' ? 'vidéo' : 'photo';
-  if (message.mine === 1) return `enregistré une ${noun} sur votre téléphone`;
-  return `enregistré ${owner === 'yours' ? 'votre' : 'sa'} ${noun} sur son téléphone`;
+  const noun = kind === 'video' ? t('chat.video') : t('chat.photo');
+  if (message.mine === 1) return t('chat.enregistreMien', { objet: noun });
+  return t('chat.enregistreSien', { possessif: owner === 'yours' ? t('chat.votre') : t('chat.sa'), objet: noun });
 }

@@ -7,6 +7,7 @@ import { showDialog } from '../../../components/dialog';
 
 import { VOICE_CANCEL_DISTANCE, VOICE_LOCK_DISTANCE, VOICE_MIN_MS } from '../constants';
 import { log } from '../../../log';
+import { t } from '../../../i18n';
 
 // Maintenir le micro enregistre, lâcher envoie. Glisser à gauche annule, glisser vers le haut verrouille :
 // le doigt est alors libre, et on choisit ensuite d'envoyer ou de supprimer.
@@ -44,9 +45,9 @@ export function useVoiceRecorder(onRecorded: (uri: string, seconds: number) => v
     try {
       const { granted } = await requestRecordingPermissionsAsync();
       if (!granted) {
-        showDialog('Micro non autorisé', 'Autorisez le micro dans les réglages pour envoyer des vocaux.', [
-          { label: 'Ouvrir les réglages', onPress: () => Linking.openSettings() },
-          { label: 'Annuler', style: 'cancel' },
+        showDialog(t('chat.microRefuse'), t('chat.microRefuseAide'), [
+          { label: t('commun.ouvrirReglages'), onPress: () => Linking.openSettings() },
+          { label: t('commun.annuler'), style: 'cancel' },
         ]);
         return;
       }
@@ -60,7 +61,7 @@ export function useVoiceRecorder(onRecorded: (uri: string, seconds: number) => v
       changePhase('holding');
       Haptics.performAndroidHapticsAsync(Haptics.AndroidHaptics.Long_Press).catch((e) => log.warn('vibration', e));
     } catch (e) {
-      showDialog('Enregistrement impossible', String(e));
+      showDialog(t('commun.enregistrementImpossible'), String(e));
     }
   };
 
@@ -78,7 +79,7 @@ export function useVoiceRecorder(onRecorded: (uri: string, seconds: number) => v
       if (duration < VOICE_MIN_MS) onTooShort();
       else if (recorder.uri) onRecorded(recorder.uri, Math.round(duration / 1000));
     } catch (e) {
-      showDialog('Enregistrement impossible', String(e));
+      showDialog(t('commun.enregistrementImpossible'), String(e));
     }
   };
 

@@ -5,12 +5,13 @@ import { createStyles, useColors } from '../../../theme';
 
 import { systemAction } from '../format';
 import { useChatStyles } from '../styles';
+import { t } from '../../../i18n';
 
 // Les événements de la conversation : centrés, sans bulle, comme un message du système.
 export function SystemRow({ message, name, hasWallpaper }: { message: Message; name: string; hasWallpaper: boolean }) {
   const styles = useStyles();
   const colors = useColors();
-  const author = message.mine === 1 ? 'Vous avez' : `${name} a`;
+  const author = message.mine === 1 ? t('chat.vousAvez') : t('chat.contactA', { nom: name });
   return (
     <View style={[styles.systemRow, hasWallpaper && styles.metaPill]}>
       <Text style={[styles.systemText, hasWallpaper && { color: colors.onMedia }]}>{`${author} ${systemAction(message)}`}</Text>

@@ -12,6 +12,7 @@ import { SeekBar } from './SeekBar';
 import { formatClock } from '../format';
 import { useChatStyles } from '../styles';
 import { log } from '../../../log';
+import { t } from '../../../i18n';
 
 // Un seul vocal à la fois : en lancer un met le précédent en pause.
 let playingVoice: AudioPlayer | null = null;
@@ -51,7 +52,7 @@ export function VoiceContent({ message, palette }: { message: Message; palette: 
 
   return (
     <View style={styles.voice}>
-      <IconButton onPress={toggle} label={status.playing ? 'Mettre en pause' : 'Écouter le vocal'} hitSlop={2} style={[styles.voiceButton, { backgroundColor: palette.track }]}>
+      <IconButton onPress={toggle} label={status.playing ? t('chat.pause') : t('chat.ecouterVocal')} hitSlop={2} style={[styles.voiceButton, { backgroundColor: palette.track }]}>
         {status.playing ? (
           <Pause size={18} color={palette.text} fill={palette.text} strokeWidth={1.75} />
         ) : (
@@ -59,7 +60,7 @@ export function VoiceContent({ message, palette }: { message: Message; palette: 
         )}
       </IconButton>
       <View style={styles.voiceBody}>
-        <SeekBar position={progress ?? position} color={palette.text} trackColor={palette.track} label="Se déplacer dans le vocal" onSeek={seek} />
+        <SeekBar position={progress ?? position} color={palette.text} trackColor={palette.track} label={t('chat.deplacerVocal')} onSeek={seek} />
         <Text style={[styles.time, { color: palette.muted }]}>{formatClock(status.playing || status.currentTime > 0 ? status.currentTime : status.duration)}</Text>
       </View>
     </View>

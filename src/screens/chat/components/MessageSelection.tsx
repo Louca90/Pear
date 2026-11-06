@@ -12,6 +12,7 @@ import { EmojiPicker } from './EmojiPicker';
 import { Bubble } from './MessageBubble';
 import { ACTION_HEIGHT, REACTIONS_HEIGHT, SELECTION_CLOSE_MS, SELECTION_EASING, SELECTION_GAP, SELECTION_OPEN_MS, SELECTION_TOP, TEXT_LINE_HEIGHT } from '../constants';
 import { Action, Palettes, Rect, ViewRef } from '../types';
+import { t } from '../../../i18n';
 
 type SelectionProps = {
   message: Message;
@@ -89,7 +90,7 @@ export function MessageSelection({ message, name, palettes, rect, origin, clip, 
         <BlurView blurTarget={blurTarget} blurMethod="dimezisBlurViewSdk31Plus" intensity={40} tint="default" style={StyleSheet.absoluteFill} />
         <View style={styles.selectionDim} />
       </Animated.View>
-      <Pressable style={StyleSheet.absoluteFill} onPress={() => dismiss()} accessibilityLabel="Fermer" />
+      <Pressable style={StyleSheet.absoluteFill} onPress={() => dismiss()} accessibilityLabel={t('commun.fermer')} />
 
       <View pointerEvents="none" style={[styles.clip, { top: clipTop, height: clip.bottom - clip.top }]}>
         <Animated.View
@@ -116,7 +117,7 @@ export function MessageSelection({ message, name, palettes, rect, origin, clip, 
             <Text style={[styles.reactionChoice, message.my_reaction === emoji && styles.reactionActive]}>{emoji}</Text>
           </IconButton>
         ))}
-        <IconButton onPress={() => setPickerOpen(true)} label="Tous les emojis" hitSlop={4} style={styles.reactionOption}>
+        <IconButton onPress={() => setPickerOpen(true)} label={t('chat.tousEmojis')} hitSlop={4} style={styles.reactionOption}>
           <SmilePlus size={24} color={colors.text} strokeWidth={1.75} />
         </IconButton>
       </Animated.View>

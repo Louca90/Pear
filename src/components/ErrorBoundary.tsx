@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { Component, ReactNode } from 'react';
 import { Text, View } from 'react-native';
 import * as Sharing from 'expo-sharing';
@@ -10,7 +11,7 @@ import { Button } from './ui';
 // Partage le journal (fichier texte) : il ne contient ni message ni clé.
 export async function shareLog() {
   try {
-    await Sharing.shareAsync(exportLog(), { mimeType: 'text/plain', dialogTitle: 'Journal de Pear' });
+    await Sharing.shareAsync(exportLog(), { mimeType: 'text/plain', dialogTitle: t('erreur.journal') });
   } catch (e) {
     log.warn('export du journal', e);
   }
@@ -21,16 +22,16 @@ export function ErrorScreen({ detail, onRetry }: { detail?: string; onRetry: () 
   const styles = useStyles();
   return (
     <View style={styles.screen}>
-      <Text style={styles.title}>Pear a rencontré un problème</Text>
-      <Text style={styles.text}>Tes messages ne sont pas perdus. Relance l'écran ; si ça recommence, envoie le journal pour qu'on trouve la cause.</Text>
+      <Text style={styles.title}>{t('erreur.titre')}</Text>
+      <Text style={styles.text}>{t('erreur.aide')}</Text>
       {detail && (
         <View style={styles.detail}>
           <Text style={styles.detailText} numberOfLines={6}>{detail}</Text>
         </View>
       )}
       <View style={styles.actions}>
-        <Button label="Relancer" icon={RotateCw} onPress={onRetry} />
-        <Button label="Exporter le journal" icon={FileText} variant="secondary" onPress={shareLog} />
+        <Button label={t('erreur.relancer')} icon={RotateCw} onPress={onRetry} />
+        <Button label={t('erreur.exporterJournal')} icon={FileText} variant="secondary" onPress={shareLog} />
       </View>
     </View>
   );

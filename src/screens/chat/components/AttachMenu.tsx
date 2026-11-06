@@ -6,6 +6,7 @@ import { IconButton } from '../../../components/ui';
 import { createStyles, radius, spacing, useColors } from '../../../theme';
 
 import { ATTACH_CLOSE_MS } from '../constants';
+import { t } from '../../../i18n';
 
 type AttachMenuProps = {
   open: boolean;
@@ -34,8 +35,8 @@ export function AttachMenu({ open, progress, onPhotos, onFile }: AttachMenuProps
   if (!mounted) return null;
 
   const options = [
-    { icon: Images, label: 'Photos', onPress: onPhotos },
-    { icon: FileText, label: 'Fichier', onPress: onFile },
+    { icon: Images, label: t('chat.photos'), onPress: onPhotos },
+    { icon: FileText, label: t('chat.fichier'), onPress: onFile },
   ];
 
   return (

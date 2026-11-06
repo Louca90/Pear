@@ -7,6 +7,7 @@ import { Avatar, Header, IconButton } from '../../../components/ui';
 import { createStyles, radius, spacing, useColors } from '../../../theme';
 
 import { ROUTE } from '../constants';
+import { t } from '../../../i18n';
 
 type Props = {
   contactKey: string;
@@ -23,10 +24,10 @@ export function ChatHeader({ contactKey, name, onBack, onInfo, onCustomize }: Pr
   const photo = getContactProfile(contactKey).photo_uri;
   const { status, route } = chat.getLink(contactKey);
   const subtitle = !chat.isOnline()
-    ? 'Vous êtes hors ligne'
+    ? t('chat.vousHorsLigne')
     : status === 'connected'
-      ? route ? ROUTE[route] : 'Connecté'
-      : 'Votre contact est hors ligne';
+      ? route ? ROUTE[route] : t('chat.connecte')
+      : t('chat.contactHorsLigne');
 
   return (
     <View style={styles.headerBar}>
@@ -39,12 +40,12 @@ export function ChatHeader({ contactKey, name, onBack, onInfo, onCustomize }: Pr
         action={
           <View style={styles.headerActions}>
             {streak > 0 && (
-              <View style={styles.streak} accessibilityLabel={`Série de ${streak} jours`}>
+              <View style={styles.streak} accessibilityLabel={t('accueil.serie', { n: streak })}>
                 <Flame size={18} color={colors.text} strokeWidth={1.75} />
                 <Text style={styles.streakCount}>{streak}</Text>
               </View>
             )}
-            <IconButton onPress={onCustomize} label="Personnaliser la conversation" style={styles.moreButton}>
+            <IconButton onPress={onCustomize} label={t('chat.personnaliser')} style={styles.moreButton}>
               <View style={styles.moreDot} />
               <View style={styles.moreDot} />
             </IconButton>

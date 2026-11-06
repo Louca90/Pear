@@ -31,6 +31,7 @@ import { UpdatedPopup } from './src/update/UpdatedPopup';
 import { checkForUpdate, isBlocking, useUpdateState } from './src/update/updates';
 import { UpdateScreen } from './src/update/UpdateScreen';
 import { log } from './src/log';
+import { t } from './src/i18n';
 
 type Route =
   | { name: 'home' }
@@ -152,7 +153,7 @@ function App() {
 
   const openKey = (publicKey: string) => {
     if (publicKey === identity?.publicKey) {
-      showDialog('Code non valide', "C'est votre propre code : scannez celui de votre contact.");
+      showDialog(t('app.codeNonValide'), t('app.codePropre'));
       return;
     }
     setRoute({ name: 'contact', publicKey });
@@ -163,7 +164,7 @@ function App() {
     if (!url || !identity || !url.startsWith('pear://pair')) return;
     const key = parsePairingLink(url);
     if (key) openKey(key);
-    else showDialog('Lien non reconnu', "Ce lien Pear n'est pas valide.");
+    else showDialog(t('app.lienNonReconnu'), t('app.lienNonValide'));
   }, [url, identity]);
 
   const isSaved = (publicKey: string) => contacts.some((contact) => contact.publicKey === publicKey);
@@ -246,14 +247,14 @@ function App() {
 
   useEffect(() => {
     if (code?.length === 0) {
-      showDialog('Clé non valide', 'Ce code ne permet pas de créer une connexion sûre.');
+      showDialog(t('app.cleNonValide'), t('app.cleNonSure'));
       setRoute({ name: 'home' });
     }
   }, [code]);
 
   const updateContacts = (next: Contact[]) => {
     setContacts(next);
-    saveContacts(next).catch((e) => showDialog('Enregistrement impossible', String(e)));
+    saveContacts(next).catch((e) => showDialog(t('app.enregistrementImpossible'), String(e)));
   };
 
   const render = (current: Route, preview = false) => {
@@ -299,7 +300,7 @@ function App() {
       return (
         <CustomizeScreen
           contactKey={publicKey}
-          name={contacts.find((contact) => contact.publicKey === publicKey)?.name ?? 'Contact'}
+          name={contacts.find((contact) => contact.publicKey === publicKey)?.name ?? t('app.contact')}
           onBack={() => setRoute({ name: 'chat', publicKey })}
           onInfo={() => setRoute({ name: 'contact', publicKey })}
         />
@@ -311,7 +312,7 @@ function App() {
         <ChatScreen
           key={publicKey}
           contactKey={publicKey}
-          name={contacts.find((contact) => contact.publicKey === publicKey)?.name ?? 'Contact'}
+          name={contacts.find((contact) => contact.publicKey === publicKey)?.name ?? t('app.contact')}
           onBack={() => setRoute({ name: 'home' })}
           onInfo={() => setRoute({ name: 'contact', publicKey })}
           onCustomize={() => setRoute({ name: 'customize', publicKey })}

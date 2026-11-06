@@ -7,6 +7,7 @@ import { createStyles, radius, spacing, useColors } from '../../../theme';
 
 import { VOICE_CANCEL_DISTANCE, VOICE_DOT_MS } from '../constants';
 import { formatClock } from '../format';
+import { t } from '../../../i18n';
 
 // Le texte passe en fondu de l'un à l'autre, au fil du glissé.
 export function RecordingRow({ seconds, locked, dragX, onDiscard }: { seconds: number; locked: boolean; dragX: Animated.Value; onDiscard: () => void }) {
@@ -34,14 +35,14 @@ export function RecordingRow({ seconds, locked, dragX, onDiscard }: { seconds: n
   return (
     <View style={styles.recordingRow}>
       {locked && (
-        <IconButton onPress={onDiscard} label="Supprimer le vocal" hitSlop={8}>
+        <IconButton onPress={onDiscard} label={t('chat.supprimerVocal')} hitSlop={8}>
           <Trash2 size={20} color={colors.danger} strokeWidth={1.75} />
         </IconButton>
       )}
       <Animated.View style={[styles.recordingDot, { opacity: pulse }]} />
       <Text style={styles.recordingTime}>{formatClock(seconds)}</Text>
       {locked ? (
-        <Animated.View style={[styles.recordingLock, { opacity: lockAppear, transform: [{ scale: lockAppear }] }]} accessibilityLabel="Vocal verrouillé">
+        <Animated.View style={[styles.recordingLock, { opacity: lockAppear, transform: [{ scale: lockAppear }] }]} accessibilityLabel={t('chat.vocalVerrouille')}>
           <Lock size={18} color={colors.text} strokeWidth={1.75} />
         </Animated.View>
       ) : (
@@ -56,7 +57,7 @@ export function RecordingRow({ seconds, locked, dragX, onDiscard }: { seconds: n
               },
             ]}
           >
-            ‹ Glissez pour annuler
+            {t('chat.glisserAnnuler')}
           </Animated.Text>
           <Animated.Text
             numberOfLines={1}
@@ -69,7 +70,7 @@ export function RecordingRow({ seconds, locked, dragX, onDiscard }: { seconds: n
               },
             ]}
           >
-            Lâchez pour annuler
+            {t('chat.lacherAnnuler')}
           </Animated.Text>
         </View>
       )}

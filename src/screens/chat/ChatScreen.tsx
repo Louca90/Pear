@@ -31,6 +31,7 @@ import { useKeyboardOpen } from './hooks/useKeyboardOpen';
 import { useChatStyles } from './styles';
 import { Action, Palettes, Rect, ViewRef } from './types';
 import { log } from '../../log';
+import { t } from '../../i18n';
 
 type Props = {
   contactKey: string;
@@ -106,16 +107,16 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
   };
 
   const confirmDelete = (message: Message) => {
-    const forMe = { label: 'Pour moi', style: 'danger' as const, onPress: () => chat.deleteForMe(contactKey, message.id) };
-    const cancel = { label: 'Annuler', style: 'cancel' as const };
+    const forMe = { label: t('chat.pourMoi'), style: 'danger' as const, onPress: () => chat.deleteForMe(contactKey, message.id) };
+    const cancel = { label: t('commun.annuler'), style: 'cancel' as const };
     if (message.mine === 1) {
-      showDialog('Supprimer ce message ?', undefined, [
-        { label: 'Pour tout le monde', style: 'danger', onPress: () => chat.deleteForEveryone(contactKey, message.id) },
+      showDialog(t('chat.supprimerQuestion'), undefined, [
+        { label: t('chat.pourToutLeMonde'), style: 'danger', onPress: () => chat.deleteForEveryone(contactKey, message.id) },
         forMe,
         cancel,
       ]);
     } else {
-      showDialog('Supprimer ce message pour vous ?', undefined, [{ ...forMe, label: 'Supprimer' }, cancel]);
+      showDialog(t('chat.supprimerPourVous'), undefined, [{ ...forMe, label: t('commun.supprimer') }, cancel]);
     }
   };
 
@@ -123,7 +124,7 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
   const jumpTo = (id: string) => {
     const index = messages.findIndex((message) => message.id === id);
     if (index < 0) {
-      showDialog('Message trop ancien', 'Seuls les 200 derniers messages sont affichés.');
+      showDialog(t('chat.tropAncien'), t('chat.tropAncienAide'));
       return;
     }
     list.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true });
@@ -146,22 +147,22 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
     try {
       await saveToGallery(message.file_uri ?? '', message.text);
       Haptics.selectionAsync().catch((e) => log.warn('vibration', e));
-      setToast({ text: 'Enregistré sur votre téléphone', token: Date.now() });
+      setToast({ text: t('chat.enregistreTelephone'), token: Date.now() });
       if (message.kind === 'image' || message.kind === 'video') chat.markSaved(contactKey, message.id, message.kind);
     } catch (e) {
-      showDialog('Enregistrement impossible', String(e));
+      showDialog(t('commun.enregistrementImpossible'), String(e));
     }
   };
 
   const actionsFor = (message: Message): Action[] => [
-    { label: 'Répondre', icon: Reply, onPress: () => startReply(message) },
+    { label: t('chat.repondre'), icon: Reply, onPress: () => startReply(message) },
     ...(message.kind === 'text'
-      ? [{ label: 'Copier', icon: Copy, onPress: () => Clipboard.setStringAsync(message.text) }]
+      ? [{ label: t('chat.copier'), icon: Copy, onPress: () => Clipboard.setStringAsync(message.text) }]
       : []),
     ...(message.kind === 'text' && message.mine === 1
       ? [
           {
-            label: 'Modifier',
+            label: t('chat.modifier'),
             icon: Pencil,
             onPress: () => {
               setReplyingTo(null);
@@ -173,9 +174,9 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
         ]
       : []),
     ...((message.kind === 'image' || message.kind === 'video') && message.file_uri
-      ? [{ label: 'Enregistrer', icon: Download, onPress: () => saveMedia(message) }]
+      ? [{ label: t('commun.enregistrer'), icon: Download, onPress: () => saveMedia(message) }]
       : []),
-    { label: 'Supprimer', icon: Trash2, danger: true, onPress: () => confirmDelete(message) },
+    { label: t('commun.supprimer'), icon: Trash2, danger: true, onPress: () => confirmDelete(message) },
   ];
 
   const cancelComposerMode = () => {
@@ -186,14 +187,14 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
 
   const sendPicked = async (file: PickedFile) => {
     if (file.size > MAX_FILE_BYTES) {
-      showDialog('Fichier trop lourd', `La limite est de ${formatSize(MAX_FILE_BYTES)}.`);
+      showDialog(t('chat.fichierTropLourd'), t('chat.limite', { taille: formatSize(MAX_FILE_BYTES) }));
       return;
     }
     try {
       await chat.sendFile(contactKey, file);
       scroll.followSent();
     } catch (e) {
-      showDialog('Envoi impossible', String(e));
+      showDialog(t('chat.envoiImpossible'), String(e));
     }
   };
 
@@ -242,7 +243,7 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
         const media = await (prepareMedia(message) ?? Promise.reject(new Error('Média introuvable.')));
         setViewing({ message, rect, ...media });
       } catch (e) {
-        showDialog('Ouverture impossible', String(e));
+        showDialog(t('chat.ouvertureImpossible'), String(e));
       }
       return;
     }
@@ -253,7 +254,7 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
       if (await copy.canPreview({ mimeType })) await copy.preview({ title: message.text, mimeType });
       else await Sharing.shareAsync(copy.uri, { mimeType, dialogTitle: message.text });
     } catch (e) {
-      showDialog('Ouverture impossible', String(e));
+      showDialog(t('chat.ouvertureImpossible'), String(e));
     }
   };
 
@@ -270,7 +271,7 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
           {messages.length === 0 ? (
             <View style={styles.empty}>
               <MessageCircle size={28} color={colors.textMuted} strokeWidth={1.75} />
-              <Text style={styles.emptyText}>Vos messages restent sur vos deux téléphones.</Text>
+              <Text style={styles.emptyText}>{t('chat.vide')}</Text>
             </View>
           ) : (
             <FlatList
@@ -333,7 +334,7 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
             attachProgress={attachProgress}
             onToggleAttach={() => setAttachOpen(!attachOpen)}
             onVoiceRecorded={(uri, seconds) => sendPicked({ uri, name: `vocal-${seconds}s.m4a`, size: 0, mime: 'audio/mp4', kind: 'audio' })}
-            onVoiceTooShort={() => setToast({ text: 'Maintenez le micro pour enregistrer', token: Date.now() })}
+            onVoiceTooShort={() => setToast({ text: t('chat.maintenirMicro'), token: Date.now() })}
           />
         </KeyboardAvoidingView>
       </BlurTargetView>

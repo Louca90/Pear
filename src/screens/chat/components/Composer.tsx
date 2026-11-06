@@ -11,6 +11,7 @@ import { VOICE_CANCEL_DISTANCE, VOICE_LOCK_DISTANCE } from '../constants';
 import { useVoiceRecorder } from '../hooks/useVoiceRecorder';
 import { useChatStyles } from '../styles';
 import { RecordingRow } from './RecordingRow';
+import { t } from '../../../i18n';
 
 type Props = {
   name: string;
@@ -60,11 +61,11 @@ export function Composer({
           {editing ? <Pencil size={20} color={colors.text} strokeWidth={1.75} /> : <Reply size={20} color={colors.text} strokeWidth={1.75} />}
           <View style={styles.flex}>
             <Text style={styles.composerModeTitle} numberOfLines={1}>
-              {editing ? 'Modifier le message' : `Répondre à ${replyingTo?.mine === 1 ? 'vous-même' : name}`}
+              {editing ? t('chat.modifierMessage') : t('chat.repondreA', { nom: replyingTo?.mine === 1 ? t('chat.vousMeme') : name })}
             </Text>
             <Text style={styles.composerModeText} numberOfLines={1}>{describeMessage((editing ?? replyingTo)!)}</Text>
           </View>
-          <IconButton onPress={onCancelMode} label="Annuler">
+          <IconButton onPress={onCancelMode} label={t('commun.annuler')}>
             <X size={20} color={colors.text} strokeWidth={1.75} />
           </IconButton>
         </View>
@@ -74,7 +75,7 @@ export function Composer({
           <RecordingRow seconds={voice.seconds} locked={voice.phase === 'locked'} dragX={voice.dragX} onDiscard={voice.discard} />
         ) : (
           <>
-            <IconButton onPress={onToggleAttach} label="Joindre un fichier" hitSlop={0} style={styles.attach}>
+            <IconButton onPress={onToggleAttach} label={t('chat.joindre')} hitSlop={0} style={styles.attach}>
               <Animated.View style={{ transform: [{ rotate: attachProgress.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-45deg'] }) }] }}>
                 <Paperclip size={20} color={colors.text} strokeWidth={1.75} />
               </Animated.View>
@@ -84,7 +85,7 @@ export function Composer({
               style={styles.input}
               value={draft}
               onChangeText={onChangeDraft}
-              placeholder="Message"
+              placeholder={t('chat.champMessage')}
               placeholderTextColor={colors.textMuted}
               maxLength={MAX_TEXT_LENGTH}
               multiline
@@ -107,7 +108,7 @@ export function Composer({
           <IconButton
             onPress={onSend}
             disabled={!draft.trim()}
-            label={editing ? 'Enregistrer' : 'Envoyer'}
+            label={editing ? t('commun.enregistrer') : t('chat.envoyer')}
             hitSlop={0}
             style={[styles.send, !draft.trim() && styles.sendDisabled]}
           >
@@ -117,7 +118,7 @@ export function Composer({
           <Animated.View
             {...voice.panHandlers}
             accessibilityRole="button"
-            accessibilityLabel={voice.phase === 'locked' ? 'Envoyer le vocal' : 'Maintenir pour enregistrer un vocal'}
+            accessibilityLabel={voice.phase === 'locked' ? t('chat.envoyerVocal') : t('chat.maintenirVocal')}
             style={[styles.send, { transform: [{ translateX: voice.dragX }, { translateY: voice.dragY }, { scale: voice.scale }] }]}
           >
             <Animated.View style={[styles.micLayer, styles.micTrash, { opacity: trashAmount }]}>

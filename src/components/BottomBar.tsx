@@ -7,13 +7,14 @@ import { Circle } from 'react-native-svg';
 import { createStyles, radius, spacing, useColors } from '../theme';
 import { useNavigationBarHeight } from './ui';
 import { log } from '../log';
+import { t } from '../i18n';
 
 export type Tab = 'add' | 'home' | 'camera';
 
 const TABS: { tab: Tab; icon: LucideIcon; label: string }[] = [
-  { tab: 'add', icon: QrCode, label: 'Mon code' },
-  { tab: 'home', icon: MessageCircle, label: 'Messages' },
-  { tab: 'camera', icon: Camera, label: 'Appareil photo' },
+  { tab: 'add', icon: QrCode, label: t('onglets.monCode') },
+  { tab: 'home', icon: MessageCircle, label: t('onglets.messages') },
+  { tab: 'camera', icon: Camera, label: t('onglets.appareilPhoto') },
 ];
 
 const SLOT_WIDTH = 76;

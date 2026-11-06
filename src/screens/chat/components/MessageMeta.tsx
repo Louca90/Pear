@@ -7,12 +7,13 @@ import { Message, MessageStatus } from '../../../chat/database';
 import { formatTime } from '../format';
 import { useChatStyles } from '../styles';
 import { MetaTone } from '../types';
+import { t } from '../../../i18n';
 
 // 1 coche : pas encore reçu. 2 coches grises : reçu par l'autre. 2 coches contrastées : conversation ouverte par l'autre.
 function statusIcon(status: MessageStatus, tone: MetaTone) {
-  if (status === 'read') return { Icon: CheckCheck, color: tone.text, label: 'Lu' };
-  if (status === 'delivered') return { Icon: CheckCheck, color: tone.muted, label: 'Reçu' };
-  return { Icon: Check, color: tone.muted, label: 'Pas encore reçu' };
+  if (status === 'read') return { Icon: CheckCheck, color: tone.text, label: t('chat.lu') };
+  if (status === 'delivered') return { Icon: CheckCheck, color: tone.muted, label: t('chat.recu') };
+  return { Icon: Check, color: tone.muted, label: t('chat.pasRecu') };
 }
 
 export function MessageMeta({ message, tone, pill }: { message: Message; tone: MetaTone; pill?: boolean }) {
@@ -33,7 +34,7 @@ export function MessageMeta({ message, tone, pill }: { message: Message; tone: M
 
   return (
     <View style={[styles.meta, pill && styles.metaPill]}>
-      {message.edited === 1 && <Text style={[styles.time, { color: tone.muted }]}>modifié</Text>}
+      {message.edited === 1 && <Text style={[styles.time, { color: tone.muted }]}>{t('chat.modifie')}</Text>}
       <Text style={[styles.time, { color: tone.muted }]}>{formatTime(message.created_at)}</Text>
       {message.mine === 1 && (
         <Animated.View style={{ transform: [{ scale: pop }] }}>

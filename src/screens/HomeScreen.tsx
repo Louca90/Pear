@@ -8,6 +8,7 @@ import { useBottomBarSpace } from '../components/BottomBar';
 import { Avatar, Button, Header, IconButton, RowPressable, Screen } from '../components/ui';
 import { Contact } from '../storage';
 import { createStyles, radius, spacing, useColors } from '../theme';
+import { t } from '../i18n';
 
 type Props = {
   contacts: Contact[];
@@ -23,7 +24,7 @@ export function HomeScreen({ contacts, onAdd, onOpen, onProfile }: Props) {
   const barSpace = useBottomBarSpace();
 
   const profileButton = (
-    <IconButton onPress={onProfile} label="Mon profil">
+    <IconButton onPress={onProfile} label={t('accueil.monProfil')}>
       <Avatar uri={chat.getMyProfile().photo} size={32} />
     </IconButton>
   );
@@ -36,9 +37,9 @@ export function HomeScreen({ contacts, onAdd, onOpen, onProfile }: Props) {
           <View style={styles.emptyIcon}>
             <Users size={28} color={colors.text} strokeWidth={1.75} />
           </View>
-          <Text style={styles.emptyTitle}>Aucun contact</Text>
-          <Text style={styles.emptyText}>Ajoutez une personne en scannant son QR code.</Text>
-          <Button label="Ajouter un contact" icon={Plus} onPress={onAdd} />
+          <Text style={styles.emptyTitle}>{t('accueil.aucunContact')}</Text>
+          <Text style={styles.emptyText}>{t('accueil.aucunContactAide')}</Text>
+          <Button label={t('accueil.ajouterContact')} icon={Plus} onPress={onAdd} />
         </View>
       </Screen>
     );
@@ -63,16 +64,16 @@ export function HomeScreen({ contacts, onAdd, onOpen, onProfile }: Props) {
             <RowPressable onPress={() => onOpen(item)} style={styles.row}>
               <View>
                 <Avatar uri={getContactProfile(item.publicKey).photo_uri} />
-                {online && <View style={styles.online} accessibilityLabel="En ligne" />}
+                {online && <View style={styles.online} accessibilityLabel={t('accueil.enLigne')} />}
               </View>
               <View style={styles.rowText}>
                 <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
                 <Text style={[styles.preview, unread && styles.previewUnread]} numberOfLines={1}>
-                  {!last ? 'Aucun message' : last.mine === 1 ? `Vous : ${describeMessage(last)}` : describeMessage(last)}
+                  {!last ? t('accueil.aucunMessage') : last.mine === 1 ? t('accueil.dernierDeVous', { message: describeMessage(last) }) : describeMessage(last)}
                 </Text>
               </View>
               {streak > 0 && (
-                <View style={styles.streak} accessibilityLabel={`Série de ${streak} jours`}>
+                <View style={styles.streak} accessibilityLabel={t('accueil.serie', { n: streak })}>
                   <Flame size={16} color={colors.text} strokeWidth={1.75} />
                   <Text style={styles.streakCount}>{streak}</Text>
                 </View>

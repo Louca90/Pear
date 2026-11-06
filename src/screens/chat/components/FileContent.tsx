@@ -12,6 +12,7 @@ import { isBareMedia } from '../format';
 import { useChatStyles } from '../styles';
 import { Rect, ViewRef } from '../types';
 import { log } from '../../../log';
+import { t } from '../../../i18n';
 
 function VideoPreview({ message }: { message: Message }) {
   const styles = useStyles();
@@ -94,7 +95,7 @@ export function FileContent({ message, palette, mediaHidden, onOpen, onLongPress
             <Text style={[styles.fileName, { color: foreground }]} numberOfLines={1}>{message.text}</Text>
             <Text style={[styles.time, { color: secondary }]}>
               {formatSize(message.file_size ?? 0)}
-              {message.status === 'refused' ? (message.mine === 1 ? ' · Refusé par ton contact' : ' · Refusé') : ''}
+              {message.status === 'refused' ? (message.mine === 1 ? t('chat.refuseParContact') : t('chat.refuse')) : ''}
             </Text>
           </View>
         </View>
@@ -102,10 +103,10 @@ export function FileContent({ message, palette, mediaHidden, onOpen, onLongPress
       {message.status === 'offered' && message.mine === 0 && (
         <View style={styles.offerActions}>
           <Pressable onPress={onAccept} accessibilityRole="button" style={[styles.offerButton, { backgroundColor: palette.text }]}>
-            <Text style={[styles.offerLabel, { color: palette.background }]}>Recevoir</Text>
+            <Text style={[styles.offerLabel, { color: palette.background }]}>{t('chat.recevoir')}</Text>
           </Pressable>
           <Pressable onPress={onRefuse} accessibilityRole="button" style={[styles.offerButton, { backgroundColor: palette.track }]}>
-            <Text style={[styles.offerLabel, { color: palette.text }]}>Refuser</Text>
+            <Text style={[styles.offerLabel, { color: palette.text }]}>{t('chat.refuser')}</Text>
           </Pressable>
         </View>
       )}

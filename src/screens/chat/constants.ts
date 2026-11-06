@@ -1,6 +1,7 @@
 import { Easing } from 'react-native';
 
 import { RouteType } from '../../network/peer';
+import { t } from '../../i18n';
 
 export const DOUBLE_TAP_MS = 230;
 export const LIKE = '❤️';
@@ -49,7 +50,7 @@ export const VOICE_DOT_MS = 600;
 export const COMPOSER_FADE_STOPS = [[0, 0], [0.25, 0.08], [0.5, 0.3], [0.75, 0.68], [1, 1]];
 
 export const ROUTE: Record<RouteType, string> = {
-  host: 'Connecté, sur le même réseau',
-  srflx: 'Connecté, direct par internet',
-  relay: 'Connecté, par un serveur relais',
+  host: t('chat.routeLocale'),
+  srflx: t('chat.routeDirecte'),
+  relay: t('chat.routeRelais'),
 };

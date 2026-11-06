@@ -4,6 +4,7 @@ import { ArrowLeft, LucideIcon, User } from 'lucide-react-native';
 
 import { getInsets, subscribeInsets } from '../../modules/pear-native';
 import { createStyles, radius, spacing, useColors } from '../theme';
+import { t } from '../i18n';
 
 // Les barres d'Android (en dp), toujours à jour : remesurées au déverrouillage, au retour dans l'app
 // et quand on passe des gestes aux boutons.
@@ -76,7 +77,7 @@ export function Header({ title, subtitle, onBack, action, avatar, onTitlePress }
   return (
     <View style={styles.header}>
       {onBack && (
-        <IconButton onPress={onBack} label="Retour" style={styles.back}>
+        <IconButton onPress={onBack} label={t('commun.retour')} style={styles.back}>
           <ArrowLeft size={24} color={colors.text} strokeWidth={1.75} />
         </IconButton>
       )}

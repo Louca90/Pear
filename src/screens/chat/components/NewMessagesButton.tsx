@@ -3,6 +3,7 @@ import { Animated, Easing, Pressable, Text } from 'react-native';
 import { ArrowDown } from 'lucide-react-native';
 
 import { createStyles, radius, spacing, useColors } from '../../../theme';
+import { t } from '../../../i18n';
 
 // Juste au-dessus de la barre de saisie, centré : apparaît quand des messages arrivent pendant qu'on est remonté.
 export function NewMessagesButton({ count, onPress }: { count: number; onPress: () => void }) {
@@ -16,7 +17,7 @@ export function NewMessagesButton({ count, onPress }: { count: number; onPress: 
     Animated.timing(appear, { toValue: count > 0 ? 1 : 0, duration: 220, easing: Easing.bezier(0.2, 0.8, 0.2, 1), useNativeDriver: true }).start();
   }, [count, appear]);
 
-  const label = shown === 1 ? '1 nouveau message' : `${shown} nouveaux messages`;
+  const label = shown === 1 ? t('chat.nouveauMessage') : t('chat.nouveauxMessages', { n: shown });
 
   return (
     <Animated.View
