@@ -13,7 +13,8 @@ import { addSystemMessage, flush, sendEvent } from './outbox';
 import { getMyProfile, saveProfile, shareProfile } from './profile';
 import { acceptFile, closeIncomingFiles, dropIncomingFile, refuseFile, sendFile } from './transfers';
 import { PickedFile, WAKE_CHECK_MS } from './types';
-import { wakeIfNeeded } from './wake';
+import { contactForTag, receivePush } from './incoming';
+import { settlePushAcks, wakeIfNeeded } from './wake';
 
 export { MAX_PROFILE_NAME_LENGTH, MAX_TEXT_LENGTH } from './types';
 export type { PickedFile } from './types';
@@ -41,6 +42,23 @@ class ChatManager extends ChatCore {
     this.markOpenConversationRead();
     this.names.forEach((_, contact) => shareProfile(this, contact));
     this.notify();
+  }
+
+  // Réveil en arrière-plan : identité et contacts, sans ouvrir aucune connexion.
+  prepare(identity: Identity, contacts: Contact[]) {
+    this.identity = identity;
+    this.names = new Map(contacts.map((contact) => [contact.publicKey, contact.name]));
+  }
+
+  // Un push reçu (« msg » : message chiffré ; « wake » : réveil). Attend l'envoi des accusés.
+  async handlePush(data: { [key: string]: unknown } | undefined) {
+    receivePush(this, data);
+    await settlePushAcks(this);
+  }
+
+  // Le contact visé par un réveil, ou null pour un réveil d'une ancienne version (tous les contacts).
+  contactForWake(data: { [key: string]: unknown } | undefined) {
+    return data?.type === 'wake' ? contactForTag(this, data.payload) : null;
   }
 
   stopAll() {

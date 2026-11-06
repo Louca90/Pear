@@ -12,7 +12,10 @@ const MAX_CALLS_PER_TARGET = 20;
 const FCM_TOKEN = /^[A-Za-z0-9:_-]{100,4096}$/;
 // FCM limite un push à 4 Ko : l'enveloppe chiffrée garde de la marge pour le reste.
 const MAX_PAYLOAD_LENGTH = 3500;
-const PAYLOAD = /^[A-Za-z0-9+/=_-]+$/;
+// base64url, points et tildes (voir src/chat/pushPayload.ts dans l'app).
+const PAYLOAD = /^[A-Za-z0-9+/=_.~-]+$/;
+// Un réveil simple peut porter l'étiquette du contact, pour ne réveiller que sa conversation.
+const MAX_WAKE_TAG_LENGTH = 64;
 // Un simple réveil n'a plus d'intérêt après quelques minutes ; un message ou un fichier, si (FCM garde
 // jusqu'à 4 semaines un push pour un téléphone éteint).
 const TTL_MS = { wake: 5 * 60000, msg: 7 * 24 * 3600000, file: 7 * 24 * 3600000 };
@@ -31,7 +34,8 @@ function parse(req) {
   if (typeof token !== 'string' || !FCM_TOKEN.test(token)) return null;
   if (!Number.isInteger(v) || v < 1 || v > PROTOCOL_VERSION) return null;
   if (!(type in TTL_MS)) return null;
-  if (type === 'wake' ? payload !== undefined : payload !== undefined && (typeof payload !== 'string' || payload.length > MAX_PAYLOAD_LENGTH || !PAYLOAD.test(payload))) return null;
+  const maxLength = type === 'wake' ? MAX_WAKE_TAG_LENGTH : MAX_PAYLOAD_LENGTH;
+  if (payload !== undefined && (typeof payload !== 'string' || payload.length > maxLength || !PAYLOAD.test(payload))) return null;
   return { token, v, type, payload };
 }
 

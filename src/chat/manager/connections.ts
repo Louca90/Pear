@@ -1,10 +1,11 @@
-import { getMessaging, getToken, onTokenRefresh } from '@react-native-firebase/messaging';
+import { getMessaging, getToken, onMessage, onTokenRefresh } from '@react-native-firebase/messaging';
 import { addNetworkStateListener, getNetworkStateAsync, NetworkState } from 'expo-network';
 
 import { deriveSharedSecret, Identity } from '../../crypto/pairing';
 import { PeerLink } from '../../network/peer';
 
 import { ChatCore } from './core';
+import { receivePush } from './incoming';
 import { receive } from './messageIO';
 import { flush } from './outbox';
 import { receiveChunk } from './transfers';
@@ -70,6 +71,11 @@ export function watch(core: ChatCore) {
       shareToken(core);
     })
     .catch((e) => log.warn('token FCM', e));
+  // App ouverte : les pushs arrivent ici. Un message qui n'a pas pu passer en direct s'affiche quand même.
+  onMessage(messaging, (message) => {
+    if (message.data?.type === 'msg') receivePush(core, message.data);
+    else retryAll(core);
+  });
   onTokenRefresh(messaging, (token) => {
     core.myToken = token;
     shareToken(core);

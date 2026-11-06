@@ -345,6 +345,10 @@ export function setContactToken(contact: string, token: string) {
   db().runSync('INSERT OR REPLACE INTO contact_tokens (contact, token) VALUES (?, ?)', contact, token);
 }
 
+export function deleteContactToken(contact: string) {
+  db().runSync('DELETE FROM contact_tokens WHERE contact = ?', contact);
+}
+
 export function getContactToken(contact: string): string | null {
   return db().getFirstSync<{ token: string }>('SELECT token FROM contact_tokens WHERE contact = ?', contact)?.token ?? null;
 }

@@ -22,12 +22,14 @@ import { ChatCore } from './core';
 import { notifyMessage } from './notify';
 import { addSystemMessage, flush } from './outbox';
 import { loadOrCreateRatchet } from './secure';
+import { queuePushAck } from './wake';
 import { dropIncomingFile, receiveFileOffer, setProgress, streamFile } from './transfers';
 import { asPayload, isCount, isSupportedVersion, UPDATE_REQUIRED, MAX_PROFILE_NAME_LENGTH, MAX_REACTION_LENGTH, MAX_SAVED_ID_LENGTH, MAX_TEXT_LENGTH, Payload } from './types';
 import { log } from '../../log';
 
 // L'état n'est enregistré que si le message est authentique : un message forgé ne change rien.
-function receiveRatchet(core: ChatCore, contact: string, envelope: unknown) {
+// Appelée pour ce qui arrive en direct comme pour ce qui arrive dans un push.
+export function receiveRatchet(core: ChatCore, contact: string, envelope: unknown) {
   const { state, text } = ratchetDecrypt(loadOrCreateRatchet(core, contact), envelope);
   saveRatchet(contact, state);
   const message = asPayload(JSON.parse(text));
@@ -41,6 +43,22 @@ function receiveRatchet(core: ChatCore, contact: string, envelope: unknown) {
   if (message?.type === 'file-offer') receiveFileOffer(core, contact, message);
   else if (message?.type === 'message') receiveText(core, contact, message);
   else if (message?.type === 'event') receiveEvent(core, contact, message);
+  else if (message?.type === 'acks') receiveAcks(core, contact, message);
+}
+
+// Confirme la réception : en direct si la connexion est ouverte, sinon par push.
+function acknowledge(core: ChatCore, contact: string, ack: { id?: string; eventId?: string }) {
+  const peer = core.links.get(contact)?.peer;
+  if (peer?.isOpen()) peer.send(ack.id ? { type: 'ack', id: ack.id } : { type: 'event-ack', id: ack.eventId });
+  else queuePushAck(core, contact, ack);
+}
+
+// Accusés arrivés par push (l'autre téléphone a reçu nos messages sans connexion directe).
+function receiveAcks(core: ChatCore, contact: string, data: Payload) {
+  const strings = (value: unknown) => (Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string').slice(0, 100) : []);
+  for (const id of strings(data.ids)) setStatus(id, contact, 'delivered');
+  for (const id of strings(data.events)) removeOutboxEvent(id, contact);
+  core.notify();
 }
 
 // Refaire la même action ne change rien : un événement renvoyé après une coupure est sans danger.
@@ -69,7 +87,7 @@ function receiveEvent(core: ChatCore, contact: string, data: Payload) {
       deleteOldAvatars(contact, 0, null);
     }
   }
-  core.links.get(contact)?.peer.send({ type: 'event-ack', id: data.eventId });
+  acknowledge(core, contact, { eventId: data.eventId });
   core.notify();
 }
 
@@ -86,7 +104,7 @@ function receiveText(core: ChatCore, contact: string, data: Payload) {
     created_at: Date.now(),
     reply_to: typeof data.reply_to === 'string' ? data.reply_to : null,
   });
-  core.links.get(contact)?.peer.send({ type: 'ack', id: data.id });
+  acknowledge(core, contact, { id: data.id });
   flush(core, contact);
   const message = getMessage(data.id, contact);
   if (isNew && !foreground && message) notifyMessage(core, contact, message);

@@ -8,6 +8,16 @@ export class ChatCore {
   links = new Map<string, Link>();
   names = new Map<string, string>();
   lastWake = new Map<string, number>();
+  // Calculés une fois par contact : secret partagé (hors connexion) et clés des pushs.
+  secrets = new Map<string, Uint8Array>();
+  pushKeys = new Map<string, { tag: string; key: Uint8Array }>();
+  // Messages et événements déjà partis par push : on ne les renvoie pas tant que l'app tourne. Ils
+  // repartiront en direct à la prochaine connexion (l'autre téléphone ignore les doublons).
+  pushed = new Set<string>();
+  // Accusés de réception à renvoyer par push, par contact.
+  pushAcks = new Map<string, { ids: Set<string>; events: Set<string> }>();
+  pushAckTimer?: ReturnType<typeof setTimeout>;
+  pushAckFlush: Promise<void> = Promise.resolve();
   wakeTimer?: ReturnType<typeof setInterval>;
   version = 0;
   listeners = new Set<() => void>();

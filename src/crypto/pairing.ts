@@ -61,6 +61,16 @@ export function deriveSignalingKeys(secret: Uint8Array) {
   };
 }
 
+// Étiquette d'un contact dans les pushs : le destinataire retrouve l'expéditeur sans que Google ni le
+// serveur ne voient sa clé ou son nom. Elle ne permet pas de retrouver le secret.
+// La clé chiffre l'en-tête du ratchet dans les pushs (voir src/chat/pushPayload.ts).
+export function derivePushKeys(secret: Uint8Array) {
+  return {
+    tag: to_base64(crypto_kdf_derive_from_key(16, 5, 'pearpush', secret)),
+    key: crypto_kdf_derive_from_key(KEY_BYTES, 6, 'pearpush', secret),
+  };
+}
+
 export function deriveMessageKey(secret: Uint8Array): Uint8Array {
   return crypto_kdf_derive_from_key(KEY_BYTES, 4, 'pearmsgs', secret);
 }

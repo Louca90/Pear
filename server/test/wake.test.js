@@ -31,11 +31,12 @@ const { state, loadHandler, call, reset } = require('./harness');
   assert.equal(await code({ body: { token, type: 'msg', payload: 'A'.repeat(3501) } }), 400);
   assert.equal(await code({ body: { token, type: 'msg', payload: '<script>' } }), 400);
   assert.equal(await code({ body: { token, v: 2 } }), 400);
-  assert.equal(await code({ body: { token, type: 'wake', payload: 'QUJD' } }), 400);
+  assert.equal(await code({ body: { token, type: 'wake', payload: 'A'.repeat(65) } }), 400);
+  assert.equal(await code({ body: { token, type: 'msg', payload: 'tag~a.b~c.d' } }), 204);
   assert.equal(await code({ body: { token, type: 'pair' } }), 400);
 
-  // Limite par destinataire : 20 par minute (2 appels déjà faits).
-  for (let i = 0; i < 18; i++) assert.equal(await code({ body: { token } }), 204);
+  // Limite par destinataire : 20 par minute (3 appels déjà faits).
+  for (let i = 0; i < 17; i++) assert.equal(await code({ body: { token } }), 204);
   assert.equal(await code({ body: { token } }), 429);
 
   // Limite par appelant : 30 par minute, même vers des destinataires différents.
