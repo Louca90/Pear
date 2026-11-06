@@ -68,6 +68,11 @@
     }
   },
   "jest": {
-    "preset": "jest-expo"
+    "preset": "jest-expo",
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "/server/",
+      "/android/"
+    ]
   }
 }
