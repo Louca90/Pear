@@ -2,11 +2,13 @@ import { RefObject, useEffect, useRef, useState } from 'react';
 import { FlatList, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 
 import { Message } from '../../../chat/database';
+import { chat } from '../../../chat/manager';
 
 import { AT_BOTTOM_PX, MEDIA_SETTLE_MS } from '../constants';
 
 // La liste est inversée : le bas de la conversation est l'offset 0.
-export function useChatScroll(list: RefObject<FlatList<Message> | null>, messages: Message[]) {
+// preview : la page affichée sous le geste de retour ne doit rien marquer comme lu.
+export function useChatScroll(list: RefObject<FlatList<Message> | null>, messages: Message[], preview?: boolean) {
   const atBottom = useRef(true);
   const [newCount, setNewCount] = useState(0);
   const newest = useRef(messages[0]?.id);
@@ -24,6 +26,7 @@ export function useChatScroll(list: RefObject<FlatList<Message> | null>, message
   const onScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     atBottom.current = event.nativeEvent.contentOffset.y < AT_BOTTOM_PX;
     if (atBottom.current) setNewCount(0);
+    if (!preview) chat.setAtBottom(atBottom.current);
   };
 
   const scrollToBottom = () => {

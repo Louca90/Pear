@@ -78,6 +78,15 @@ class ChatManager extends ChatCore {
   // La conversation affichée à l'écran : ses messages comptent comme lus.
   setOpenConversation(contact: string | null) {
     this.openConversation = contact;
+    this.atBottom = true;
+    this.markOpenConversationRead();
+    this.notify();
+  }
+
+  // La conversation ouverte est-elle affichée tout en bas ? En y revenant, ses messages deviennent lus.
+  setAtBottom(atBottom: boolean) {
+    if (this.atBottom === atBottom) return;
+    this.atBottom = atBottom;
     this.markOpenConversationRead();
     this.notify();
   }
@@ -159,7 +168,7 @@ class ChatManager extends ChatCore {
 
   private markOpenConversationRead() {
     const contact = this.openConversation;
-    if (!contact || AppState.currentState !== 'active') return;
+    if (!contact || !this.atBottom || AppState.currentState !== 'active') return;
     markConversationRead(contact);
     clearMessageNotification(contact);
     flush(this, contact);

@@ -73,7 +73,7 @@ function receiveText(core: ChatCore, contact: string, data: any) {
     contact,
     mine: 0,
     text,
-    status: foreground && core.openConversation === contact ? 'read-pending' : 'delivered',
+    status: foreground && core.isReading(contact) ? 'read-pending' : 'delivered',
     created_at: Date.now(),
     reply_to: typeof data.reply_to === 'string' ? data.reply_to : null,
   });

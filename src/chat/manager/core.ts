@@ -16,6 +16,8 @@ export class ChatCore {
   watching = false;
   myToken: string | null = null;
   openConversation: string | null = null;
+  // Vrai quand la conversation ouverte est affichée tout en bas : on lit vraiment les derniers messages.
+  atBottom = true;
   lastActivity = 0;
   sendingFiles = new Set<string>();
   // Pour chaque fichier en cours d'envoi, le nombre de morceaux que le receveur a confirmé.
@@ -34,6 +36,11 @@ export class ChatCore {
   };
 
   getVersion = () => this.version;
+
+  // Les messages reçus ne comptent comme lus que si on regarde les derniers, pas en étant remonté.
+  isReading(contact: string) {
+    return this.openConversation === contact && this.atBottom;
+  }
 
   notify() {
     this.version += 1;

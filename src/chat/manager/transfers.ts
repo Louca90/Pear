@@ -223,7 +223,7 @@ function finishFile(core: ChatCore, contact: string, id: string, incoming: Incom
   core.incomingFiles.delete(id);
   core.progress.delete(id);
   const foreground = AppState.currentState === 'active';
-  finishIncomingFile(id, contact, foreground && core.openConversation === contact ? 'read-pending' : 'delivered');
+  finishIncomingFile(id, contact, foreground && core.isReading(contact) ? 'read-pending' : 'delivered');
   core.links.get(contact)?.peer.send({ type: 'file-done', id });
   flush(core, contact);
   const message = getMessage(id, contact);
