@@ -1,0 +1,31 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "signals": {
+      "$room": {
+        ".read": "auth != null && $room.matches(/^[A-Za-z0-9_-]{43}$/)",
+        "$id": {
+          ".write": "auth != null && $room.matches(/^[A-Za-z0-9_-]{43}$/) && (!newData.exists() || !data.exists())",
+          ".validate": "newData.hasChildren(['from', 'data', 'at'])",
+          "from": {
+            ".validate": "newData.isString() && (newData.val() === 'a' || newData.val() === 'b')"
+          },
+          "data": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 16000"
+          },
+          "at": {
+            ".validate": "newData.isNumber()"
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
+      }
+    },
+    "rateLimits": {
+      ".read": false,
+      ".write": false
+    }
+  }
+}
