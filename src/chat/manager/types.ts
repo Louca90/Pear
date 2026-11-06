@@ -47,6 +47,8 @@ export type PickedFile = {
 // Ce qui arrive de l'autre téléphone n'est jamais supposé valide : chaque champ est vérifié avant usage.
 export type Payload = Record<string, unknown>;
 
+export { isSupportedVersion, PROTOCOL_VERSION, UPDATE_REQUIRED } from '../protocol';
+
 export function asPayload(value: unknown): Payload | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as Payload) : null;
 }

@@ -3,6 +3,7 @@ import { Text, View } from 'react-native';
 import { Message } from '../../../chat/database';
 import { createStyles, useColors } from '../../../theme';
 
+import { UPDATE_REQUIRED } from '../../../chat/protocol';
 import { systemAction } from '../format';
 import { useChatStyles } from '../styles';
 import { t } from '../../../i18n';
@@ -14,7 +15,7 @@ export function SystemRow({ message, name, hasWallpaper }: { message: Message; n
   const author = message.mine === 1 ? t('chat.vousAvez') : t('chat.contactA', { nom: name });
   return (
     <View style={[styles.systemRow, hasWallpaper && styles.metaPill]}>
-      <Text style={[styles.systemText, hasWallpaper && { color: colors.onMedia }]}>{`${author} ${systemAction(message)}`}</Text>
+      <Text style={[styles.systemText, hasWallpaper && { color: colors.onMedia }]}>{message.text === UPDATE_REQUIRED ? systemAction(message) : `${author} ${systemAction(message)}`}</Text>
     </View>
   );
 }

@@ -1,4 +1,5 @@
 import type { Message } from '../../chat/database';
+import { UPDATE_REQUIRED } from '../../chat/protocol';
 import { t } from '../../i18n';
 
 export function formatTime(timestamp: number) {
@@ -19,6 +20,7 @@ export function formatClock(seconds: number) {
 
 export function systemAction(message: Message) {
   if (message.kind === 'wallpaper') return t('chat.fondChange');
+  if (message.text === UPDATE_REQUIRED) return t('chat.majRequise');
   if (!message.text.startsWith('saved:')) return t('chat.fondRetire');
   const [, kind, owner] = message.text.split(':');
   const noun = kind === 'video' ? t('chat.video') : t('chat.photo');

@@ -113,6 +113,7 @@ export const fr = {
     vousMeme: 'vous-même',
     votre: 'votre',
     sa: 'sa',
+    majRequise: 'Mets à jour Pear pour lire ce message',
   },
   profil: {
     themeAuto: 'Automatique',

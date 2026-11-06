@@ -6,6 +6,7 @@ import { LATEST_VERSION, migrate, schemaVersion } from './db/migrations';
 import { deleteStoredFile, formatSize } from './files';
 import { DB_NAME } from '../config';
 import { t } from '../i18n';
+import { UPDATE_REQUIRED } from './protocol';
 
 // Mes messages : sending (pas encore confirmé), delivered (reçu par l'autre), read (lu par l'autre),
 // refused (fichier refusé par l'autre : il ne repart plus).
@@ -329,6 +330,7 @@ const KIND_LABELS: Partial<Record<MessageKind, string>> = { image: t('apercu.pho
 export function describeMessage(message: Message): string {
   if (message.status === 'offered') return t('apercu.enAttente', { type: KIND_LABELS[message.kind] ?? t('apercu.fichier'), taille: formatSize(message.file_size ?? 0) });
   if (message.kind === 'wallpaper') return t('apercu.fondChange');
+  if (message.kind === 'system' && message.text === UPDATE_REQUIRED) return t('chat.majRequise');
   if (message.kind === 'system' && message.text.startsWith('saved:')) return message.text.includes(':video') ? t('apercu.videoEnregistree') : t('apercu.photoEnregistree');
   if (message.kind === 'system') return t('apercu.fondRetire');
   if (message.kind === 'image') return t('apercu.photo');

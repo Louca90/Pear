@@ -23,7 +23,7 @@ import { notifyMessage } from './notify';
 import { addSystemMessage, flush } from './outbox';
 import { loadOrCreateRatchet } from './secure';
 import { dropIncomingFile, receiveFileOffer, setProgress, streamFile } from './transfers';
-import { asPayload, isCount, MAX_PROFILE_NAME_LENGTH, MAX_REACTION_LENGTH, MAX_SAVED_ID_LENGTH, MAX_TEXT_LENGTH, Payload } from './types';
+import { asPayload, isCount, isSupportedVersion, UPDATE_REQUIRED, MAX_PROFILE_NAME_LENGTH, MAX_REACTION_LENGTH, MAX_SAVED_ID_LENGTH, MAX_TEXT_LENGTH, Payload } from './types';
 import { log } from '../../log';
 
 // L'état n'est enregistré que si le message est authentique : un message forgé ne change rien.
@@ -31,6 +31,13 @@ function receiveRatchet(core: ChatCore, contact: string, envelope: unknown) {
   const { state, text } = ratchetDecrypt(loadOrCreateRatchet(core, contact), envelope);
   saveRatchet(contact, state);
   const message = asPayload(JSON.parse(text));
+  if (message && !isSupportedVersion(message)) {
+    // L'id du message (s'il existe) évite d'afficher l'avertissement deux fois pour un même envoi.
+    const id = typeof message.id === 'string' ? `${UPDATE_REQUIRED}:${message.id}` : undefined;
+    addSystemMessage(contact, 0, UPDATE_REQUIRED, id);
+    core.notify();
+    return;
+  }
   if (message?.type === 'file-offer') receiveFileOffer(core, contact, message);
   else if (message?.type === 'message') receiveText(core, contact, message);
   else if (message?.type === 'event') receiveEvent(core, contact, message);
