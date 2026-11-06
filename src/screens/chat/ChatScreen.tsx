@@ -1,5 +1,5 @@
 import { ComponentRef, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { Animated, FlatList, Image, Keyboard, KeyboardAvoidingView, StatusBar, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Animated, FlatList, Image, Keyboard, KeyboardAvoidingView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { BlurTargetView } from 'expo-blur';
 import * as Clipboard from 'expo-clipboard';
 import * as DocumentPicker from 'expo-document-picker';
@@ -13,7 +13,7 @@ import { exportCopy, formatSize, MAX_FILE_BYTES, saveToGallery, videoThumbnail }
 import { chat, PickedFile } from '../../chat/manager';
 import { showDialog } from '../../components/dialog';
 import { MediaPicker } from '../../components/MediaPicker';
-import { Screen } from '../../components/ui';
+import { Screen, useInsets } from '../../components/ui';
 import { bubblePalette, colors, spacing } from '../../theme';
 
 import { AttachMenu } from './components/AttachMenu';
@@ -24,7 +24,7 @@ import { MediaViewer, Viewing } from './components/MediaViewer';
 import { Bubble } from './components/MessageBubble';
 import { MessageSelection } from './components/MessageSelection';
 import { Toast } from './components/Toast';
-import { JUMP_PULSE_DELAY_MS } from './constants';
+import { JUMP_PULSE_DELAY_MS, LIKE } from './constants';
 import { useKeyboardOpen } from './hooks/useKeyboardOpen';
 import { sharedStyles } from './styles';
 import { Action, Palettes, Rect, ViewRef } from './types';
@@ -55,6 +55,7 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
   const list = useRef<FlatList<Message>>(null);
   const [pulsing, setPulsing] = useState<{ id: string; token: number } | null>(null);
   const keyboardOpen = useKeyboardOpen();
+  const { top: topInset } = useInsets();
   useSyncExternalStore(chat.subscribe, chat.getVersion);
 
   const messages = getMessages(contactKey);
@@ -115,6 +116,11 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
     }
     list.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true });
     setTimeout(() => setPulsing({ id, token: Date.now() }), JUMP_PULSE_DELAY_MS);
+  };
+
+  // Déjà liké : le double appui ne retire pas le like (on le retire depuis le menu des réactions).
+  const likeMessage = (message: Message) => {
+    if (message.my_reaction !== LIKE) chat.react(contactKey, message.id, LIKE);
   };
 
   const startReply = (message: Message) => {
@@ -227,7 +233,7 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
         {settings.wallpaper_uri && <Image source={{ uri: settings.wallpaper_uri }} style={styles.wallpaper} resizeMode="cover" />}
         <ChatHeader contactKey={contactKey} name={name} onBack={onBack} onInfo={onInfo} onCustomize={onCustomize} />
         {/* Le décalage compense la barre d'état, placée au-dessus de la zone floutée. */}
-        <KeyboardAvoidingView behavior="padding" keyboardVerticalOffset={StatusBar.currentHeight ?? 0} style={styles.flex}>
+        <KeyboardAvoidingView behavior="padding" keyboardVerticalOffset={topInset} style={styles.flex}>
           <View style={styles.flex}>
           {palettes.hasWallpaper && <ComposerFade />}
           {messages.length === 0 ? (
@@ -258,7 +264,7 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
                   mediaHidden={viewing?.message.id === item.id}
                   onOpenFile={openFile}
                   onSelect={selectMessage}
-                  onDoubleTap={(message) => chat.react(contactKey, message.id, '❤️')}
+                  onDoubleTap={likeMessage}
                   onReply={startReply}
                 />
               )}

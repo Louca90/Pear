@@ -3,10 +3,13 @@ import { NativeModule, requireNativeModule } from 'expo';
 
 export type BackEvent = { type: 'started' | 'progress' | 'cancelled' | 'invoked'; progress: number; fromRight: boolean };
 export type DownloadProgress = { received: number; total: number };
+export type Insets = { top: number; bottom: number };
 
-declare class PearNativeModule extends NativeModule<{ onBack: (event: BackEvent) => void; onDownloadProgress: (event: DownloadProgress) => void }> {
+declare class PearNativeModule extends NativeModule<{ onBack: (event: BackEvent) => void; onDownloadProgress: (event: DownloadProgress) => void; onInsetsChange: (event: Insets) => void }> {
   burnOverlay(videoUri: string, overlayUri: string): Promise<string>;
   navigationBarHeight(): number | null;
+  systemInsets(): Insets | null;
+  watchInsets(): Promise<void>;
   setBackMode(mode: 'system' | 'app' | 'default'): Promise<void>;
   completeBack(): Promise<void>;
   appVersionCode(): number | null;
@@ -73,16 +76,36 @@ export function burnOverlay(videoUri: string, overlayUri: string) {
   return PearNative.burnOverlay(videoUri, overlayUri);
 }
 
-// En attendant de pouvoir lire la vraie valeur : la place de la barre à 3 boutons, la plus haute.
-const NAVIGATION_BAR_FALLBACK = 48;
-let navigationBar: number | null = null;
+// En attendant de pouvoir lire les vraies valeurs : la barre d'état courante et la barre à 3 boutons, la plus haute.
+const INSETS_FALLBACK: Insets = { top: 24, bottom: 48 };
+let insets: Insets = PearNative.systemInsets() ?? INSETS_FALLBACK;
+const insetsListeners = new Set<() => void>();
 
-// La barre change si on passe des gestes aux boutons dans les réglages : on la relit au retour dans l'app.
-AppState.addEventListener('change', () => {
-  navigationBar = null;
+function setInsets(next: Insets | null) {
+  if (!next || (next.top === insets.top && next.bottom === insets.bottom)) return;
+  insets = next;
+  insetsListeners.forEach((listener) => listener());
+}
+
+// Le natif prévient à chaque changement (déverrouillage, passage des gestes aux boutons…). Au retour
+// dans l'app, on relit aussi les valeurs, au cas où l'événement serait passé pendant l'arrière-plan.
+PearNative.addListener('onInsetsChange', setInsets);
+PearNative.watchInsets().catch((e) => console.warn('Pear marges :', e));
+AppState.addEventListener('change', (state) => {
+  if (state === 'active') setInsets(PearNative.systemInsets());
 });
 
+export function subscribeInsets(listener: () => void) {
+  insetsListeners.add(listener);
+  return () => {
+    insetsListeners.delete(listener);
+  };
+}
+
+export function getInsets() {
+  return insets;
+}
+
 export function navigationBarHeight() {
-  navigationBar ??= PearNative.navigationBarHeight();
-  return navigationBar ?? NAVIGATION_BAR_FALLBACK;
+  return insets.bottom;
 }

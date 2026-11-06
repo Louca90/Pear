@@ -1,5 +1,5 @@
 import { ComponentRef, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, FlatList, Linking, Modal, PanResponder, Pressable, StatusBar as NativeStatusBar, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, Easing, FlatList, Linking, Modal, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import { CameraType, CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
 import { NavigationBar } from 'expo-navigation-bar';
@@ -12,7 +12,7 @@ import { chat } from '../chat/manager';
 import { useBottomBarSpace } from '../components/BottomBar';
 import { showDialog } from '../components/dialog';
 import { MediaEditor, MediaEditorHandle } from '../components/MediaEditor';
-import { Avatar, Button, IconButton, useNavigationBarHeight } from '../components/ui';
+import { Avatar, Button, IconButton, useInsets, useNavigationBarHeight } from '../components/ui';
 import { Contact } from '../storage';
 import { colors, radius, spacing } from '../theme';
 
@@ -52,6 +52,7 @@ type ReviewProps = {
 
 // Après la prise : on garde, on envoie à un contact, ou on jette. Rien ne part sans un choix.
 function CaptureReview({ capture, contacts, onDiscard, onSent }: ReviewProps) {
+  const { top: topInset } = useInsets();
   const bottom = useNavigationBarHeight();
   const [picking, setPicking] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -108,7 +109,7 @@ function CaptureReview({ capture, contacts, onDiscard, onSent }: ReviewProps) {
     <Modal visible animationType="fade" onRequestClose={() => (picking ? setPicking(false) : onDiscard())} statusBarTranslucent navigationBarTranslucent>
       <View style={styles.review}>
         <MediaEditor ref={editor} uri={capture.uri} kind={capture.kind} takenAt={capture.takenAt} bottomSpace={bottom + REVIEW_SEND_SPACE} />
-        <View style={styles.topControls}>
+        <View style={[styles.topControls, { top: topInset + spacing.md }]}>
           <IconButton onPress={onDiscard} label="Jeter" style={styles.roundControl}>
             <X size={24} color={colors.background} strokeWidth={1.75} />
           </IconButton>
@@ -162,6 +163,7 @@ type Props = {
 
 // Comme sur Snap : un appui prend une photo, le maintien filme, et glisser vers le cadenas libère le doigt.
 export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
+  const { top: topInset } = useInsets();
   const [cameraPermission, requestCamera] = useCameraPermissions();
   const [microphonePermission, requestMicrophone] = useMicrophonePermissions();
   const [facing, setFacing] = useState<CameraType>('back');
@@ -396,7 +398,7 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
       <View collapsable={false} style={StyleSheet.absoluteFill} accessibilityLabel="Double appui ou glissé pour changer de caméra" {...surface.panHandlers} />
 
       {!filming && (
-        <View style={styles.topControls}>
+        <View style={[styles.topControls, { top: topInset + spacing.md }]}>
           <IconButton onPress={() => setFlashOn(!flashOn)} label={flashOn ? 'Couper le flash' : 'Activer le flash'} style={styles.roundControl}>
             {flashOn ? <Zap size={24} color={colors.background} fill={colors.background} strokeWidth={1.75} /> : <ZapOff size={24} color={colors.background} strokeWidth={1.75} />}
           </IconButton>
@@ -407,7 +409,7 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
       )}
 
       {recording && (
-        <View style={styles.timer}>
+        <View style={[styles.timer, { top: topInset + spacing.md }]}>
           <View style={styles.timerDot} />
           <Text style={styles.timerText}>{formatElapsed(elapsed)}</Text>
         </View>
@@ -485,7 +487,6 @@ const styles = StyleSheet.create({
   },
   topControls: {
     position: 'absolute',
-    top: (NativeStatusBar.currentHeight ?? 0) + spacing.md,
     left: spacing.lg,
     right: spacing.lg,
     flexDirection: 'row',
@@ -501,7 +502,6 @@ const styles = StyleSheet.create({
   },
   timer: {
     position: 'absolute',
-    top: (NativeStatusBar.currentHeight ?? 0) + spacing.md,
     alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',

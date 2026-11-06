@@ -1,17 +1,24 @@
-import { ReactNode, useRef } from 'react';
-import { Animated, Image, Pressable, StatusBar, StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
+import { ReactNode, useRef, useSyncExternalStore } from 'react';
+import { Animated, Image, Pressable, StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { ArrowLeft, LucideIcon, User } from 'lucide-react-native';
 
-import { navigationBarHeight } from '../../modules/pear-native';
+import { getInsets, subscribeInsets } from '../../modules/pear-native';
 import { colors, radius, spacing } from '../theme';
+
+// Les barres d'Android (en dp), toujours à jour : remesurées au déverrouillage, au retour dans l'app
+// et quand on passe des gestes aux boutons.
+export function useInsets() {
+  return useSyncExternalStore(subscribeInsets, getInsets);
+}
 
 // La barre d'Android reste visible, sur un fond transparent : l'interface se place juste au-dessus.
 export function useNavigationBarHeight() {
-  return navigationBarHeight();
+  return useInsets().bottom;
 }
 
 export function Screen({ children, edgeToEdgeBottom }: { children: ReactNode; edgeToEdgeBottom?: boolean }) {
-  return <View style={[styles.screen, edgeToEdgeBottom && styles.noBottom]}>{children}</View>;
+  const { top } = useInsets();
+  return <View style={[styles.screen, { paddingTop: top }, edgeToEdgeBottom && styles.noBottom]}>{children}</View>;
 }
 
 type HeaderProps = {
@@ -107,7 +114,6 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: colors.background,
-    paddingTop: StatusBar.currentHeight,
     paddingBottom: spacing.lg,
   },
   noBottom: {

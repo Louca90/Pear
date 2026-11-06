@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { FlatList, Image, Linking, Modal, Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Image, Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { File } from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library/legacy';
 import { ArrowLeft, ArrowUp, Images, Play, Settings, X } from 'lucide-react-native';
@@ -7,7 +7,7 @@ import { ArrowLeft, ArrowUp, Images, Play, Settings, X } from 'lucide-react-nati
 import { PickedFile } from '../chat/manager';
 import { colors, radius, spacing } from '../theme';
 import { showDialog } from './dialog';
-import { Button, IconButton, useNavigationBarHeight } from './ui';
+import { Button, IconButton, useInsets, useNavigationBarHeight } from './ui';
 
 type Section = 'photos' | 'videos' | 'albums';
 type AlbumRow = { album: MediaLibrary.Album; cover: string | null };
@@ -139,6 +139,7 @@ function AlbumList({ onOpen }: { onOpen: (album: MediaLibrary.Album) => void }) 
 // Notre propre galerie : photos, vidéos et albums, sans quitter l'app. La permission n'est demandée qu'ici.
 export function MediaPicker({ onPick, onClose }: { onPick: (files: PickedFile[]) => void; onClose: () => void }) {
   const bottom = useNavigationBarHeight();
+  const { top: topInset } = useInsets();
   const [allowed, setAllowed] = useState<boolean | null>(null);
   const [section, setSection] = useState<Section>('photos');
   const [album, setAlbum] = useState<MediaLibrary.Album | null>(null);
@@ -168,7 +169,7 @@ export function MediaPicker({ onPick, onClose }: { onPick: (files: PickedFile[])
 
   return (
     <Modal visible animationType="slide" onRequestClose={back} statusBarTranslucent navigationBarTranslucent>
-      <View style={styles.screen}>
+      <View style={[styles.screen, { paddingTop: topInset }]}>
         <View style={styles.header}>
           <IconButton onPress={back} label={album ? 'Retour aux albums' : 'Fermer'}>
             {album ? <ArrowLeft size={24} color={colors.text} strokeWidth={1.75} /> : <X size={24} color={colors.text} strokeWidth={1.75} />}
@@ -218,7 +219,6 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: colors.background,
-    paddingTop: StatusBar.currentHeight,
   },
   header: {
     flexDirection: 'row',

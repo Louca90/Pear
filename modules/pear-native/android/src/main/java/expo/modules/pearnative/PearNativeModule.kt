@@ -7,6 +7,8 @@ import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.view.View
+import android.view.ViewTreeObserver
 import androidx.activity.BackEventCompat
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
@@ -56,6 +58,50 @@ class PearNativeModule : Module() {
   }
   private var backRegistered = false
 
+  // Les marges système, remesurées à chaque mise en page et quand la fenêtre reprend le focus
+  // (déverrouillage) : lancée sous l'écran de verrouillage, l'app peut lire des valeurs fausses au départ.
+  private var insetsView: View? = null
+  private var lastInsets: Map<String, Double>? = null
+  private val layoutListener = ViewTreeObserver.OnGlobalLayoutListener { emitInsets() }
+  private val focusListener = ViewTreeObserver.OnWindowFocusChangeListener { emitInsets() }
+
+  private fun readInsets(): Map<String, Double>? {
+    val activity = appContext.currentActivity ?: return null
+    val insets = activity.window?.decorView?.rootWindowInsets ?: return null
+    val compat = WindowInsetsCompat.toWindowInsetsCompat(insets)
+    val density = activity.resources.displayMetrics.density
+    val top = compat.getInsets(WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.displayCutout()).top
+    val bottom = compat.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
+    return mapOf("top" to (top / density).toDouble(), "bottom" to (bottom / density).toDouble())
+  }
+
+  private fun emitInsets() {
+    val insets = readInsets() ?: return
+    if (insets == lastInsets) return
+    lastInsets = insets
+    sendEvent("onInsetsChange", insets)
+  }
+
+  private fun watchInsets() {
+    val view = appContext.currentActivity?.window?.decorView ?: return
+    if (insetsView === view) return
+    unwatchInsets()
+    view.viewTreeObserver.addOnGlobalLayoutListener(layoutListener)
+    view.viewTreeObserver.addOnWindowFocusChangeListener(focusListener)
+    insetsView = view
+    emitInsets()
+  }
+
+  private fun unwatchInsets() {
+    insetsView?.viewTreeObserver?.let {
+      if (it.isAlive) {
+        it.removeOnGlobalLayoutListener(layoutListener)
+        it.removeOnWindowFocusChangeListener(focusListener)
+      }
+    }
+    insetsView = null
+  }
+
   private fun sendBack(type: String, event: BackEventCompat?) {
     sendEvent("onBack", mapOf("type" to type, "progress" to (event?.progress ?: 0f), "fromRight" to (event?.swipeEdge == BackEventCompat.EDGE_RIGHT)))
   }
@@ -73,7 +119,7 @@ class PearNativeModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("PearNative")
 
-    Events("onBack", "onDownloadProgress")
+    Events("onBack", "onDownloadProgress", "onInsetsChange")
 
     // "system" : Android montre son propre aperçu pour quitter. "app" : l'app anime elle-même le geste.
     // "default" : retour normal, sans aperçu.
@@ -84,6 +130,19 @@ class PearNativeModule : Module() {
 
     OnDestroy {
       backCallback.remove()
+      unwatchInsets()
+    }
+
+    // Barre d'état (et encoche) en haut, barre de navigation en bas, en dp. null si l'app n'a pas encore de fenêtre.
+    Function("systemInsets") { readInsets() }
+
+    AsyncFunction("watchInsets") { watchInsets() }.runOnQueue(Queues.MAIN)
+
+    OnActivityEntersForeground {
+      appContext.currentActivity?.runOnUiThread {
+        watchInsets()
+        emitInsets()
+      }
     }
 
     // La hauteur réelle de la barre d'Android : fine avec les gestes, plus haute avec les 3 boutons.

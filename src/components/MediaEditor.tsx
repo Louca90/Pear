@@ -1,5 +1,5 @@
 import { ComponentRef, Ref, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { Dimensions, Image, PanResponder, Pressable, StatusBar, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Dimensions, Image, PanResponder, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { File, Paths } from 'expo-file-system';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { getThumbnailAsync } from 'expo-video-thumbnails';
@@ -8,7 +8,7 @@ import Svg, { G, Image as SvgImage, Rect, Text as SvgText } from 'react-native-s
 
 import { burnOverlay } from '../../modules/pear-native';
 import { colors, radius, spacing } from '../theme';
-import { IconButton } from './ui';
+import { IconButton, useInsets } from './ui';
 
 type Filter = 'none' | 'dark' | 'time' | 'date';
 
@@ -82,6 +82,7 @@ type Props = {
 // Tout est dessiné dans un même SVG. Une photo y est dessinée aussi. Une vidéo passe dessous :
 // le SVG, transparent, devient alors le calque que Media3 incruste dans toute la vidéo.
 export function MediaEditor({ uri, kind, takenAt, bottomSpace, ref }: Props) {
+  const { top: topInset } = useInsets();
   const [size, setSize] = useState<{ width: number; height: number } | null>(null);
   const [filter, setFilter] = useState<Filter>('none');
   const [caption, setCaption] = useState('');
@@ -192,7 +193,7 @@ export function MediaEditor({ uri, kind, takenAt, bottomSpace, ref }: Props) {
         <View collapsable={false} style={StyleSheet.absoluteFill} accessibilityLabel="Toucher pour écrire, glisser pour changer de filtre" {...pan.panHandlers} />
       </View>
 
-      <View style={styles.textButton}>
+      <View style={[styles.textButton, { top: topInset + spacing.md }]}>
         <IconButton onPress={() => setDraft(caption)} label="Ajouter du texte" style={styles.round}>
           <Type size={24} color={colors.background} strokeWidth={1.75} />
         </IconButton>
@@ -241,7 +242,6 @@ const styles = StyleSheet.create({
   },
   textButton: {
     position: 'absolute',
-    top: (StatusBar.currentHeight ?? 0) + spacing.md,
     alignSelf: 'center',
   },
   round: {
