@@ -57,6 +57,7 @@
       "expo-sharing",
       "expo-video",
       "./plugins/with-release-signing",
+      "./plugins/with-dark-launch",
       [
         "expo-navigation-bar",
         {
