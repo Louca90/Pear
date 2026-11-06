@@ -1,6 +1,7 @@
 import { Directory, File, FileMode, Paths } from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library/legacy';
 import { getThumbnailAsync } from 'expo-video-thumbnails';
+import { log } from '../log';
 
 // Limite d'environ 16 Ko par message DataChannel : on garde de la place pour l'en-tête et le chiffrement.
 export const CHUNK_BYTES = 14 * 1024;
@@ -60,7 +61,7 @@ export function deleteStoredFile(uri: string) {
     const file = new File(uri);
     if (file.exists) file.delete();
   } catch (e) {
-    console.warn('Pear suppression du fichier :', e);
+    log.warn('suppression du fichier', e);
   }
 }
 

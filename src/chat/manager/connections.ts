@@ -10,13 +10,14 @@ import { flush } from './outbox';
 import { receiveChunk } from './transfers';
 import { Link, OFFLINE_DELAY_MS } from './types';
 import { shareToken } from './wake';
+import { log } from '../../log';
 
 export function connect(core: ChatCore, identity: Identity, contact: string) {
   let secret: Uint8Array;
   try {
     secret = deriveSharedSecret(identity, contact);
   } catch (e) {
-    console.warn('Pear contact non valide :', e);
+    log.warn('contact non valide', e);
     return;
   }
   const link: Link = {
@@ -41,7 +42,7 @@ export function connect(core: ChatCore, identity: Identity, contact: string) {
       onBytes: (bytes) => {
         core.writeQueue = core.writeQueue
           .then(() => receiveChunk(core, contact, bytes))
-          .catch((e) => console.warn('Pear écriture du fichier :', e));
+          .catch((e) => log.warn('écriture du fichier', e));
       },
     }),
   };
@@ -59,7 +60,7 @@ export function watch(core: ChatCore) {
 
   // Android indique directement si le téléphone a internet : c'est immédiat.
   const update = (state: NetworkState) => setOnline(core, state.isInternetReachable ?? state.isConnected ?? true);
-  getNetworkStateAsync().then(update).catch((e) => console.warn('Pear réseau :', e));
+  getNetworkStateAsync().then(update).catch((e) => log.warn('réseau', e));
   addNetworkStateListener(update);
 
   const messaging = getMessaging();
@@ -68,7 +69,7 @@ export function watch(core: ChatCore) {
       core.myToken = token;
       shareToken(core);
     })
-    .catch((e) => console.warn('Pear token FCM :', e));
+    .catch((e) => log.warn('token FCM', e));
   onTokenRefresh(messaging, (token) => {
     core.myToken = token;
     shareToken(core);

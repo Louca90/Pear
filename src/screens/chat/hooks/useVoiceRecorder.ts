@@ -6,6 +6,7 @@ import * as Haptics from 'expo-haptics';
 import { showDialog } from '../../../components/dialog';
 
 import { VOICE_CANCEL_DISTANCE, VOICE_LOCK_DISTANCE, VOICE_MIN_MS } from '../constants';
+import { log } from '../../../log';
 
 // Maintenir le micro enregistre, lâcher envoie. Glisser à gauche annule, glisser vers le haut verrouille :
 // le doigt est alors libre, et on choisit ensuite d'envoyer ou de supprimer.
@@ -57,7 +58,7 @@ export function useVoiceRecorder(onRecorded: (uri: string, seconds: number) => v
       recorder.record();
       startedAt.current = Date.now();
       changePhase('holding');
-      Haptics.performAndroidHapticsAsync(Haptics.AndroidHaptics.Long_Press).catch((e) => console.warn('Pear vibration :', e));
+      Haptics.performAndroidHapticsAsync(Haptics.AndroidHaptics.Long_Press).catch((e) => log.warn('vibration', e));
     } catch (e) {
       showDialog('Enregistrement impossible', String(e));
     }
@@ -100,12 +101,12 @@ export function useVoiceRecorder(onRecorded: (uri: string, seconds: number) => v
     const cancelling = sideways && dx < -VOICE_CANCEL_DISTANCE;
     if (cancelling !== overCancel.current) {
       overCancel.current = cancelling;
-      if (cancelling) Haptics.selectionAsync().catch((e) => console.warn('Pear vibration :', e));
+      if (cancelling) Haptics.selectionAsync().catch((e) => log.warn('vibration', e));
     }
     if (!sideways && dy < -VOICE_LOCK_DISTANCE) {
       changePhase('locked');
       overCancel.current = false;
-      Haptics.performAndroidHapticsAsync(Haptics.AndroidHaptics.Confirm).catch((e) => console.warn('Pear vibration :', e));
+      Haptics.performAndroidHapticsAsync(Haptics.AndroidHaptics.Confirm).catch((e) => log.warn('vibration', e));
       settle(dragX, 0);
       settle(dragY, 0);
       settle(scale, 1);

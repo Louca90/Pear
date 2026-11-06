@@ -22,20 +22,21 @@ import { notifyMessage } from './notify';
 import { addSystemMessage, flush } from './outbox';
 import { loadOrCreateRatchet } from './secure';
 import { dropIncomingFile, receiveFileOffer, setProgress, streamFile } from './transfers';
-import { MAX_PROFILE_NAME_LENGTH, MAX_REACTION_LENGTH, MAX_SAVED_ID_LENGTH, MAX_TEXT_LENGTH } from './types';
+import { asPayload, isCount, MAX_PROFILE_NAME_LENGTH, MAX_REACTION_LENGTH, MAX_SAVED_ID_LENGTH, MAX_TEXT_LENGTH, Payload } from './types';
+import { log } from '../../log';
 
 // L'état n'est enregistré que si le message est authentique : un message forgé ne change rien.
 function receiveRatchet(core: ChatCore, contact: string, envelope: unknown) {
   const { state, text } = ratchetDecrypt(loadOrCreateRatchet(core, contact), envelope);
   saveRatchet(contact, state);
-  const message = JSON.parse(text);
+  const message = asPayload(JSON.parse(text));
   if (message?.type === 'file-offer') receiveFileOffer(core, contact, message);
   else if (message?.type === 'message') receiveText(core, contact, message);
   else if (message?.type === 'event') receiveEvent(core, contact, message);
 }
 
 // Refaire la même action ne change rien : un événement renvoyé après une coupure est sans danger.
-function receiveEvent(core: ChatCore, contact: string, data: any) {
+function receiveEvent(core: ChatCore, contact: string, data: Payload) {
   if (typeof data.eventId !== 'string' || typeof data.id !== 'string') return;
   if (data.action === 'edit' && typeof data.text === 'string') {
     editMessage(data.id, contact, 0, data.text.slice(0, MAX_TEXT_LENGTH));
@@ -64,7 +65,7 @@ function receiveEvent(core: ChatCore, contact: string, data: any) {
   core.notify();
 }
 
-function receiveText(core: ChatCore, contact: string, data: any) {
+function receiveText(core: ChatCore, contact: string, data: Payload) {
   if (typeof data.id !== 'string' || typeof data.text !== 'string') return;
   const foreground = AppState.currentState === 'active';
   const text = data.text.slice(0, MAX_TEXT_LENGTH);
@@ -85,28 +86,30 @@ function receiveText(core: ChatCore, contact: string, data: any) {
 }
 
 // Le contenu n'est accepté que par le ratchet : ici, seulement des messages de contrôle.
-export function receive(core: ChatCore, contact: string, data: any) {
+export function receive(core: ChatCore, contact: string, received: unknown) {
+  const data = asPayload(received);
+  if (!data) return;
   core.lastActivity = Date.now();
-  if (data?.type === 'ratchet') {
+  if (data.type === 'ratchet') {
     const { type: _type, ...envelope } = data;
     receiveRatchet(core, contact, envelope);
-  } else if (data?.type === 'file-resume' && isValidFileId(data.id) && Number.isSafeInteger(data.from) && data.from >= 0) {
-    streamFile(core, contact, data.id, data.from).catch((e) => console.warn('Pear envoi du fichier :', e));
-  } else if (data?.type === 'file-ack' && isValidFileId(data.id) && Number.isSafeInteger(data.next) && data.next >= 0) {
+  } else if (data.type === 'file-resume' && isValidFileId(data.id) && isCount(data.from)) {
+    streamFile(core, contact, data.id, data.from).catch((e) => log.warn('envoi du fichier', e));
+  } else if (data.type === 'file-ack' && isValidFileId(data.id) && isCount(data.next)) {
     // La barre de l'envoyeur suit ce que le receveur a vraiment écrit : les deux restent alignées.
     core.confirmedChunks.set(data.id, data.next);
     const size = getMessage(data.id, contact)?.file_size;
     if (size) setProgress(core, data.id, Math.min(1, (data.next * CHUNK_BYTES) / size));
-  } else if (data?.type === 'file-done' && isValidFileId(data.id)) {
+  } else if (data.type === 'file-done' && isValidFileId(data.id)) {
     setStatus(data.id, contact, 'delivered');
     core.progress.delete(data.id);
     core.notify();
-  } else if (data?.type === 'event-ack' && typeof data.id === 'string') {
+  } else if (data.type === 'event-ack' && typeof data.id === 'string') {
     removeOutboxEvent(data.id, contact);
-  } else if ((data?.type === 'ack' || data?.type === 'read') && typeof data.id === 'string') {
+  } else if ((data.type === 'ack' || data.type === 'read') && typeof data.id === 'string') {
     setStatus(data.id, contact, data.type === 'read' ? 'read' : 'delivered');
     core.notify();
-  } else if (data?.type === 'token' && typeof data.token === 'string' && data.token.length <= 4096) {
+  } else if (data.type === 'token' && typeof data.token === 'string' && data.token.length <= 4096) {
     setContactToken(contact, data.token);
   }
 }

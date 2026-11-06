@@ -11,6 +11,7 @@ import { LONG_PRESS_MS } from '../constants';
 import { isBareMedia } from '../format';
 import { sharedStyles } from '../styles';
 import { Rect, ViewRef } from '../types';
+import { log } from '../../../log';
 
 function VideoPreview({ message }: { message: Message }) {
   const [thumbnail, setThumbnail] = useState<string | null>(null);
@@ -21,7 +22,7 @@ function VideoPreview({ message }: { message: Message }) {
       .then((uri) => {
         if (!cancelled) setThumbnail(uri);
       })
-      .catch((e) => console.warn('Pear miniature :', e));
+      .catch((e) => log.warn('miniature', e));
     return () => {
       cancelled = true;
     };

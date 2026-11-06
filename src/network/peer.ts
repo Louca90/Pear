@@ -1,9 +1,11 @@
 import { RTCIceCandidate, RTCPeerConnection, RTCSessionDescription } from 'react-native-webrtc';
+import type RTCDataChannel from 'react-native-webrtc/lib/typescript/RTCDataChannel';
 import { randombytes_buf, to_base64 } from 'react-native-libsodium';
 
 import { open, seal } from '../crypto/box';
 import { deriveMessageKey } from '../crypto/pairing';
 import { Role, SignalingChannel } from './signaling';
+import { log } from '../log';
 
 // STUN aide chaque téléphone à découvrir son adresse publique. Plusieurs serveurs en cas de panne.
 const ICE_SERVERS = [
@@ -28,7 +30,12 @@ export type RouteType = 'host' | 'srflx' | 'relay';
 type Signal =
   | { kind: 'hello' }
   | { kind: 'offer' | 'answer'; session: string; sdp: { type: string; sdp: string } }
-  | { kind: 'candidate'; session: string; candidate: object };
+  | { kind: 'candidate'; session: string; candidate: IceCandidateInit };
+
+type IceCandidateInit = { candidate?: string; sdpMLineIndex?: number | null; sdpMid?: string | null };
+
+// Ce que les statistiques WebRTC donnent sur le chemin utilisé.
+type StatsReport = { id: string; type: string; state?: string; nominated?: boolean; localCandidateId?: string; remoteCandidateId?: string; candidateType?: string };
 
 type Callbacks = {
   onStatus: (status: PeerStatus) => void;
@@ -41,9 +48,9 @@ export class PeerLink {
   private signaling: SignalingChannel;
   private messageKey: Uint8Array;
   private pc: RTCPeerConnection | null = null;
-  private channel: any = null;
+  private channel: RTCDataChannel | null = null;
   private session: string | null = null;
-  private pendingCandidates: object[] = [];
+  private pendingCandidates: IceCandidateInit[] = [];
   private queue: Promise<void> = Promise.resolve();
   private timer?: ReturnType<typeof setInterval>;
   private lastSeen = 0;
@@ -91,10 +98,10 @@ export class PeerLink {
   // Le morceau est déjà chiffré avec la clé de son fichier.
   // Renvoie false si la connexion a changé : le destinataire redemandera la suite à la reconnexion.
   async sendChunk(epoch: number, bytes: Uint8Array): Promise<boolean> {
-    while (this.isCurrent(epoch) && this.channel.bufferedAmount > MAX_BUFFERED_BYTES) {
+    while (this.isCurrent(epoch) && (this.channel?.bufferedAmount ?? 0) > MAX_BUFFERED_BYTES) {
       await new Promise((resolve) => setTimeout(resolve, DRAIN_POLL_MS));
     }
-    if (!this.isCurrent(epoch)) return false;
+    if (!this.isCurrent(epoch) || !this.channel) return false;
     this.channel.send(bytes);
     return true;
   }
@@ -145,7 +152,7 @@ export class PeerLink {
 
   private fail(error: unknown) {
     if (this.stopped) return;
-    console.warn('Pear connexion :', error);
+    log.warn('connexion', error);
     this.callbacks.onStatus('error');
   }
 
@@ -163,7 +170,7 @@ export class PeerLink {
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     this.pc = pc;
 
-    pc.addEventListener('icecandidate', (event: any) => {
+    pc.addEventListener('icecandidate', (event) => {
       if (event.candidate && this.pc === pc) {
         this.signaling.send({ kind: 'candidate', session, candidate: event.candidate.toJSON() });
       }
@@ -171,11 +178,11 @@ export class PeerLink {
     pc.addEventListener('connectionstatechange', () => {
       if (this.pc === pc && pc.connectionState === 'failed') this.markOffline();
     });
-    pc.addEventListener('datachannel', (event: any) => this.attachChannel(event.channel, pc));
+    pc.addEventListener('datachannel', (event) => this.attachChannel(event.channel, pc));
     return pc;
   }
 
-  private attachChannel(channel: any, pc: RTCPeerConnection) {
+  private attachChannel(channel: RTCDataChannel, pc: RTCPeerConnection) {
     this.channel = channel;
     this.epoch += 1;
     channel.addEventListener('open', () => {
@@ -188,17 +195,18 @@ export class PeerLink {
     channel.addEventListener('close', () => {
       if (this.pc === pc && !this.stopped) this.markOffline();
     });
-    channel.addEventListener('message', (event: any) => {
+    channel.addEventListener('message', (event) => {
       this.lastSeen = Date.now();
       try {
         if (typeof event.data !== 'string') {
-          this.callbacks.onBytes(new Uint8Array(event.data));
+          // react-native-webrtc livre toujours les données binaires en ArrayBuffer, jamais en Blob.
+          this.callbacks.onBytes(new Uint8Array(event.data as ArrayBuffer));
           return;
         }
         const message = JSON.parse(open(event.data, this.messageKey, CONTEXT));
         if (message.type !== 'heartbeat') this.callbacks.onMessage(message);
       } catch (e) {
-        console.warn('Pear message illisible :', e);
+        log.warn('message illisible', e);
       }
     });
   }
@@ -247,7 +255,7 @@ export class PeerLink {
       await this.flushCandidates(this.pc);
     } else if (signal.kind === 'candidate') {
       // Un candidat peut arriver avant la description de l'autre téléphone : on le garde de côté.
-      if (this.pc.remoteDescription) await this.pc.addIceCandidate(new RTCIceCandidate(signal.candidate as any));
+      if (this.pc.remoteDescription) await this.pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
       else this.pendingCandidates.push(signal.candidate);
     }
   }
@@ -255,15 +263,15 @@ export class PeerLink {
   private async flushCandidates(pc: RTCPeerConnection) {
     const candidates = this.pendingCandidates;
     this.pendingCandidates = [];
-    for (const candidate of candidates) await pc.addIceCandidate(new RTCIceCandidate(candidate as any));
+    for (const candidate of candidates) await pc.addIceCandidate(new RTCIceCandidate(candidate));
   }
 
   // Lit dans les statistiques WebRTC le chemin réellement utilisé, pour l'afficher à l'écran.
   private async reportRoute(pc: RTCPeerConnection) {
     try {
-      const stats: any = await pc.getStats();
-      const reports: any[] = [];
-      stats.forEach((report: any) => reports.push(report));
+      const stats: { forEach: (visit: (report: StatsReport) => void) => void } = await pc.getStats();
+      const reports: StatsReport[] = [];
+      stats.forEach((report) => reports.push(report));
       const pair = reports.find((r) => r.type === 'candidate-pair' && r.state === 'succeeded' && r.nominated);
       const local = reports.find((r) => r.id === pair?.localCandidateId);
       const remote = reports.find((r) => r.id === pair?.remoteCandidateId);
@@ -273,7 +281,7 @@ export class PeerLink {
         this.callbacks.onRoute(relayed ? 'relay' : direct ? 'host' : 'srflx');
       }
     } catch (e) {
-      console.warn('Pear statistiques :', e);
+      log.warn('statistiques', e);
     }
   }
 }

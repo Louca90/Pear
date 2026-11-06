@@ -1,4 +1,5 @@
 import notifee, { AndroidImportance, AndroidVisibility } from '@notifee/react-native';
+import { log } from '../log';
 
 const CHANNEL_ID = 'messages';
 
@@ -26,5 +27,5 @@ export async function showMessageNotification(contact: string, name: string, tex
 }
 
 export function clearMessageNotification(contact: string) {
-  notifee.cancelNotification(contact).catch((e) => console.warn('Pear notification :', e));
+  notifee.cancelNotification(contact).catch((e) => log.warn('notification', e));
 }

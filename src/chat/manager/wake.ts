@@ -3,6 +3,7 @@ import { getContactToken, getOutboxEvents, getUndelivered } from '../database';
 
 import { ChatCore } from './core';
 import { WAKE_INTERVAL_MS } from './types';
+import { log } from '../../log';
 
 export function wakeIfNeeded(core: ChatCore, contact: string) {
   if (!core.online || core.links.get(contact)?.status === 'connected') return;
@@ -11,7 +12,7 @@ export function wakeIfNeeded(core: ChatCore, contact: string) {
   const token = getContactToken(contact);
   if (!token) return;
   core.lastWake.set(contact, Date.now());
-  wakeContact(token).catch((e) => console.warn('Pear réveil :', e));
+  wakeContact(token).catch((e) => log.warn('réveil', e));
 }
 
 // Le token voyage dans la connexion chiffrée : ni le QR code ni Firebase ne le transportent.

@@ -118,14 +118,15 @@ function turnRatchet(state: RatchetState, theirKey: string) {
   state.sendChain = sending.chain;
 }
 
-function isValidEnvelope(envelope: any): envelope is RatchetEnvelope {
+const isCount = (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) >= 0;
+
+function isValidEnvelope(value: unknown): value is RatchetEnvelope {
+  const envelope = value as Partial<Record<keyof RatchetEnvelope, unknown>> | null;
   return (
     typeof envelope?.dh === 'string' &&
     from_base64(envelope.dh).length === KEY_BYTES &&
-    Number.isSafeInteger(envelope.n) &&
-    envelope.n >= 0 &&
-    Number.isSafeInteger(envelope.pn) &&
-    envelope.pn >= 0 &&
+    isCount(envelope.n) &&
+    isCount(envelope.pn) &&
     typeof envelope.cipher === 'string'
   );
 }

@@ -15,6 +15,7 @@ import { MediaEditor, MediaEditorHandle } from '../components/MediaEditor';
 import { Avatar, Button, IconButton, RowPressable, useInsets, useNavigationBarHeight } from '../components/ui';
 import { Contact } from '../storage';
 import { colors, radius, spacing } from '../theme';
+import { log } from '../log';
 
 // En dessous de ce temps, c'est une photo. Au-delà, le maintien filme.
 const HOLD_MS = 250;
@@ -36,7 +37,7 @@ const REVIEW_SEND_SPACE = 52 + spacing.lg + spacing.md;
 type Capture = { uri: string; kind: 'image' | 'video'; takenAt: number };
 
 function vibrate() {
-  Haptics.selectionAsync().catch((e) => console.warn('Pear vibration :', e));
+  Haptics.selectionAsync().catch((e) => log.warn('vibration', e));
 }
 
 function formatElapsed(seconds: number) {
@@ -239,7 +240,7 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
         if (video?.uri) setCapture({ uri: video.uri, kind: 'video', takenAt: Date.now() });
       })
       .catch((e) => {
-        console.warn('Pear vidéo :', e);
+        log.warn('vidéo', e);
         showDialog('Vidéo non enregistrée', "Maintenez le bouton un peu plus longtemps.");
       })
       .finally(resetFilming);

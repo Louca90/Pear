@@ -30,6 +30,7 @@ import { useChatScroll } from './hooks/useChatScroll';
 import { useKeyboardOpen } from './hooks/useKeyboardOpen';
 import { sharedStyles } from './styles';
 import { Action, Palettes, Rect, ViewRef } from './types';
+import { log } from '../../log';
 
 type Props = {
   contactKey: string;
@@ -80,7 +81,7 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
 
   const selectMessage = (message: Message, rect: Rect) => {
     Keyboard.dismiss();
-    Haptics.performAndroidHapticsAsync(Haptics.AndroidHaptics.Long_Press).catch((e) => console.warn('Pear vibration :', e));
+    Haptics.performAndroidHapticsAsync(Haptics.AndroidHaptics.Long_Press).catch((e) => log.warn('vibration', e));
     root.current?.measureInWindow((_x, y, _width, height) =>
       listArea.current?.measureInWindow((_listX, listY, _listWidth, listHeight) =>
         setSelection({ message, rect, origin: { y, height }, clip: { top: listY, bottom: listY + listHeight } }),
@@ -142,7 +143,7 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
   const saveMedia = async (message: Message) => {
     try {
       await saveToGallery(message.file_uri ?? '', message.text);
-      Haptics.selectionAsync().catch((e) => console.warn('Pear vibration :', e));
+      Haptics.selectionAsync().catch((e) => log.warn('vibration', e));
       setToast({ text: 'Enregistré sur votre téléphone', token: Date.now() });
       if (message.kind === 'image' || message.kind === 'video') chat.markSaved(contactKey, message.id, message.kind);
     } catch (e) {

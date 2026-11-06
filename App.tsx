@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, AppState, BackHandler, Dimensions, StyleSheet, Text, View } from 'react-native';
+import { Animated, AppState, BackHandler, Dimensions, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as Linking from 'expo-linking';
 import notifee, { EventType } from '@notifee/react-native';
@@ -11,6 +11,7 @@ import { clearNotificationTarget, setNotificationTarget, useNotificationTarget }
 import { chat } from './src/chat/manager';
 import { BottomBar, Tab } from './src/components/BottomBar';
 import { DialogHost, showDialog } from './src/components/dialog';
+import { ErrorBoundary, ErrorScreen } from './src/components/ErrorBoundary';
 import { deriveSharedSecret, getVerificationCode, Identity, parsePairingLink } from './src/crypto/pairing';
 import { AddContactScreen } from './src/screens/AddContactScreen';
 import { CameraScreen } from './src/screens/CameraScreen';
@@ -26,6 +27,7 @@ import { markUpdateSeen, pendingUpdatedInfo, UpdatedInfo } from './src/update/up
 import { UpdatedPopup } from './src/update/UpdatedPopup';
 import { checkForUpdate, isBlocking, useUpdateState } from './src/update/updates';
 import { UpdateScreen } from './src/update/UpdateScreen';
+import { log } from './src/log';
 
 type Route =
   | { name: 'home' }
@@ -43,12 +45,22 @@ const BACK_SETTLE_MS = 250;
 const BACK_PAGE_SHIFT = 20;
 const TAB_ROUTES: string[] = ['add', 'home', 'camera'];
 
-export default function App() {
+export default function Root() {
+  return (
+    <ErrorBoundary name="app">
+      <App />
+    </ErrorBoundary>
+  );
+}
+
+function App() {
   const [identity, setIdentity] = useState<Identity | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [route, setRoute] = useState<Route>({ name: 'home' });
   const [active, setActive] = useState(AppState.currentState === 'active');
   const [error, setError] = useState<string | null>(null);
+  // « Relancer » sur l'écran d'erreur du démarrage refait tout le chargement.
+  const [attempt, setAttempt] = useState(0);
   const [filming, setFilming] = useState(false);
   // L'écran précédent, montré sous la page pendant le geste de retour.
   const [peek, setPeek] = useState<{ route: Route; direction: number } | null>(null);
@@ -71,8 +83,11 @@ export default function App() {
         setIdentity(savedIdentity);
         setUpdatedInfo(pendingUpdatedInfo(existed));
       })
-      .catch((e) => setError(String(e)));
-  }, []);
+      .catch((e) => {
+        log.error('démarrage', e);
+        setError(String(e));
+      });
+  }, [attempt]);
 
   // Au lancement et à chaque retour au premier plan, avec un délai minimum entre deux vérifications.
   useEffect(() => {
@@ -85,7 +100,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    notifee.requestPermission().catch((e) => console.warn('Pear notification :', e));
+    notifee.requestPermission().catch((e) => log.warn('notification', e));
 
     // Appuyer sur une notification ouvre directement la conversation : app fermée (notification
     // initiale), au premier plan (ici) ou en arrière-plan (index.ts). L'ouverture se fait plus bas.
@@ -160,7 +175,7 @@ export default function App() {
   // Sur l'accueil, Android montre lui-même l'aperçu pour quitter. L'appareil photo n'a pas d'aperçu.
   useEffect(() => {
     const mode = blocked ? 'default' : route.name === 'home' ? 'system' : route.name === 'camera' ? 'default' : 'app';
-    setBackMode(mode).catch((e) => console.warn('Pear retour :', e));
+    setBackMode(mode).catch((e) => log.warn('retour', e));
   }, [route.name, blocked]);
 
   const resetBackGesture = useRef(() => {
@@ -189,11 +204,11 @@ export default function App() {
         Animated.spring(backGesture, { toValue: 0, useNativeDriver: true, damping: 18, stiffness: 260 }).start(resetBackGesture);
       } else if (gestureStarted.current) {
         Animated.timing(backGesture, { toValue: 2, duration: BACK_EXIT_MS, useNativeDriver: true }).start(() => {
-          completeBack().catch((e) => console.warn('Pear retour :', e));
+          completeBack().catch((e) => log.warn('retour', e));
           setTimeout(resetBackGesture, BACK_SETTLE_MS);
         });
       } else {
-        completeBack().catch((e) => console.warn('Pear retour :', e));
+        completeBack().catch((e) => log.warn('retour', e));
       }
     });
     return () => subscription.remove();
@@ -226,9 +241,13 @@ export default function App() {
   const render = (current: Route, preview = false) => {
     if (error) {
       return (
-        <View style={styles.center}>
-          <Text style={styles.error}>{error}</Text>
-        </View>
+        <ErrorScreen
+          detail={error}
+          onRetry={() => {
+            setError(null);
+            setAttempt((count) => count + 1);
+          }}
+        />
       );
     }
     if (!identity) return <View style={styles.center} />;
@@ -361,7 +380,9 @@ export default function App() {
           },
         ]}
       >
-        {render(route)}
+        <ErrorBoundary key={route.name + ('publicKey' in route ? route.publicKey : '')} name={route.name}>
+          {render(route)}
+        </ErrorBoundary>
       </Animated.View>
       {identity && !error && !filming && TAB_ROUTES.includes(route.name) && (
         <BottomBar active={route.name as Tab} onChange={(tab) => setRoute({ name: tab } as Route)} />
@@ -397,10 +418,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.lg,
-  },
-  error: {
-    fontSize: 14,
-    color: colors.text,
-    textAlign: 'center',
   },
 });

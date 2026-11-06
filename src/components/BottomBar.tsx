@@ -6,6 +6,7 @@ import { Circle } from 'react-native-svg';
 
 import { colors, radius, spacing } from '../theme';
 import { useNavigationBarHeight } from './ui';
+import { log } from '../log';
 
 export type Tab = 'add' | 'home' | 'camera';
 
@@ -92,7 +93,7 @@ function TabButton({ tab, icon: Icon, label, active, onPress }: { tab: Tab; icon
   }, [active]);
 
   const press = () => {
-    Haptics.selectionAsync().catch((e) => console.warn('Pear vibration :', e));
+    Haptics.selectionAsync().catch((e) => log.warn('vibration', e));
     if (active) playKick();
     else onPress();
   };

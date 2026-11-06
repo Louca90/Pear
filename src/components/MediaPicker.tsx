@@ -8,6 +8,7 @@ import { PickedFile } from '../chat/manager';
 import { colors, radius, spacing } from '../theme';
 import { showDialog } from './dialog';
 import { Button, IconButton, useInsets, useNavigationBarHeight } from './ui';
+import { log } from '../log';
 
 type Section = 'photos' | 'videos' | 'albums';
 type AlbumRow = { album: MediaLibrary.Album; cover: string | null };
@@ -73,7 +74,7 @@ function AssetGrid({ section, album, selected, onToggle }: { section: Section; a
   };
 
   useEffect(() => {
-    load().catch((e) => console.warn('Pear galerie :', e));
+    load().catch((e) => log.warn('galerie', e));
   }, [section, album]);
 
   return (
@@ -85,7 +86,7 @@ function AssetGrid({ section, album, selected, onToggle }: { section: Section; a
       contentContainerStyle={styles.grid}
       onEndReachedThreshold={1}
       onEndReached={() => {
-        if (next) load(next).catch((e) => console.warn('Pear galerie :', e));
+        if (next) load(next).catch((e) => log.warn('galerie', e));
       }}
       renderItem={({ item }) => (
         <AssetTile
@@ -115,7 +116,7 @@ function AlbumList({ onOpen }: { onOpen: (album: MediaLibrary.Album) => void }) 
         ),
       )
       .then(setRows)
-      .catch((e) => console.warn('Pear albums :', e));
+      .catch((e) => log.warn('albums', e));
   }, []);
 
   return (
@@ -149,7 +150,7 @@ export function MediaPicker({ onPick, onClose }: { onPick: (files: PickedFile[])
     MediaLibrary.requestPermissionsAsync(false, ['photo', 'video'])
       .then(({ granted }) => setAllowed(granted))
       .catch((e) => {
-        console.warn('Pear galerie :', e);
+        log.warn('galerie', e);
         setAllowed(false);
       });
   }, []);

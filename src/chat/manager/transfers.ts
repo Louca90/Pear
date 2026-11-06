@@ -8,7 +8,6 @@ import {
   deleteOldAvatars,
   finishIncomingFile,
   getMessage,
-  MessageKind,
   setContactProfileField,
   setConversationSetting,
 } from '../database';
@@ -24,12 +23,16 @@ import {
   FILE_KEY_BYTES,
   fileContext,
   IncomingFile,
+  isCount,
+  isFileKind,
+  Payload,
   PickedFile,
   PROGRESS_NOTIFY_MS,
   SEND_WINDOW_CHUNKS,
   WINDOW_POLL_MS,
 } from './types';
 import { wakeIfNeeded } from './wake';
+import { log } from '../../log';
 
 export async function sendFile(core: ChatCore, contact: string, file: PickedFile) {
   const id = to_base64(randombytes_buf(FILE_ID_BYTES));
@@ -64,7 +67,7 @@ export function dropIncomingFile(core: ChatCore, contact: string, id: string) {
   if (incoming?.contact !== contact) return;
   core.incomingFiles.delete(id);
   core.progress.delete(id);
-  core.writeQueue = core.writeQueue.then(() => incoming.handle.close()).catch((e) => console.warn('Pear écriture du fichier :', e));
+  core.writeQueue = core.writeQueue.then(() => incoming.handle.close()).catch((e) => log.warn('écriture du fichier', e));
 }
 
 export function setProgress(core: ChatCore, id: string, value: number) {
@@ -117,7 +120,7 @@ export async function streamFile(core: ChatCore, contact: string, id: string, fr
       }
     }
   } catch (e) {
-    console.warn('Pear envoi du fichier :', e);
+    log.warn('envoi du fichier', e);
   } finally {
     handle.close();
     core.sendingFiles.delete(id);
@@ -125,12 +128,11 @@ export async function streamFile(core: ChatCore, contact: string, id: string, fr
   }
 }
 
-export function receiveFileOffer(core: ChatCore, contact: string, data: any) {
+export function receiveFileOffer(core: ChatCore, contact: string, data: Payload) {
   const peer = core.links.get(contact)?.peer;
   const size = data.size;
-  const kinds: MessageKind[] = ['image', 'video', 'audio', 'file', 'wallpaper', 'avatar'];
-  if (!peer || !isValidFileId(data.id) || typeof data.name !== 'string' || !kinds.includes(data.kind)) return;
-  if (!Number.isSafeInteger(size) || size < 0 || size > MAX_FILE_BYTES) return;
+  if (!peer || !isValidFileId(data.id) || typeof data.name !== 'string' || !isFileKind(data.kind)) return;
+  if (!isCount(size) || size > MAX_FILE_BYTES) return;
   if (typeof data.key !== 'string' || from_base64(data.key).length !== FILE_KEY_BYTES) return;
 
   const existing = getMessage(data.id, contact);
@@ -149,7 +151,7 @@ export function receiveFileOffer(core: ChatCore, contact: string, data: any) {
       partial.close();
     }
     if (size - partialSize > Paths.availableDiskSpace) {
-      console.warn('Pear : pas assez de place pour recevoir ce fichier');
+      log.warn('pas assez de place pour recevoir un fichier');
       return;
     }
     if (!file.exists) file.create();
@@ -248,5 +250,5 @@ export function closeIncomingFiles(core: ChatCore) {
         incoming.handle.close();
       }
     })
-    .catch((e) => console.warn('Pear écriture du fichier :', e));
+    .catch((e) => log.warn('écriture du fichier', e));
 }

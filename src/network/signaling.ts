@@ -3,6 +3,7 @@ import { DatabaseReference, getDatabase, onChildAdded, onDisconnect, push, ref, 
 
 import { open, seal } from '../crypto/box';
 import { deriveSignalingKeys } from '../crypto/pairing';
+import { log } from '../log';
 
 // Au-delà, une offre ne sert plus à rien : le téléphone qui l'a envoyée a déjà réessayé.
 const MAX_AGE_MS = 2 * 60 * 1000;
@@ -41,7 +42,7 @@ export class SignalingChannel {
           onSignal(JSON.parse(open(record.data, this.key, CONTEXT)));
         } catch (e) {
           // Message illisible ou modifié : on l'ignore, mais on le signale dans les logs.
-          console.warn('Pear signal illisible :', e);
+          log.warn('signal illisible', e);
         }
       },
       onError,

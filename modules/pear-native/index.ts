@@ -1,5 +1,6 @@
 import { AppState } from 'react-native';
 import { NativeModule, requireNativeModule } from 'expo';
+import { log } from '../../src/log';
 
 export type BackEvent = { type: 'started' | 'progress' | 'cancelled' | 'invoked'; progress: number; fromRight: boolean };
 export type DownloadProgress = { received: number; total: number };
@@ -90,7 +91,7 @@ function setInsets(next: Insets | null) {
 // Le natif prévient à chaque changement (déverrouillage, passage des gestes aux boutons…). Au retour
 // dans l'app, on relit aussi les valeurs, au cas où l'événement serait passé pendant l'arrière-plan.
 PearNative.addListener('onInsetsChange', setInsets);
-PearNative.watchInsets().catch((e) => console.warn('Pear marges :', e));
+PearNative.watchInsets().catch((e) => log.warn('marges', e));
 AppState.addEventListener('change', (state) => {
   if (state === 'active') setInsets(PearNative.systemInsets());
 });

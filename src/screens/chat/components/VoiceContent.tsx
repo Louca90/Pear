@@ -11,6 +11,7 @@ import { BubblePalette, radius, spacing } from '../../../theme';
 import { SeekBar } from './SeekBar';
 import { formatClock } from '../format';
 import { sharedStyles } from '../styles';
+import { log } from '../../../log';
 
 // Un seul vocal à la fois : en lancer un met le précédent en pause.
 let playingVoice: AudioPlayer | null = null;
@@ -24,7 +25,7 @@ export function VoiceContent({ message, palette }: { message: Message; palette: 
   useEffect(() => {
     if (!status.didJustFinish) return;
     player.pause();
-    player.seekTo(0).catch((e) => console.warn('Pear vocal :', e));
+    player.seekTo(0).catch((e) => log.warn('vocal', e));
   }, [status.didJustFinish, player]);
 
   const toggle = () => {
@@ -44,7 +45,7 @@ export function VoiceContent({ message, palette }: { message: Message; palette: 
   };
 
   const seek = (ratio: number) => {
-    if (status.duration > 0) player.seekTo(ratio * status.duration).catch((e) => console.warn('Pear vocal :', e));
+    if (status.duration > 0) player.seekTo(ratio * status.duration).catch((e) => log.warn('vocal', e));
   };
 
   return (

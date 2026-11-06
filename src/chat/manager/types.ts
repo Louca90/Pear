@@ -57,4 +57,22 @@ export type PickedFile = {
   kind: MessageKind;
 };
 
+// Ce qui arrive de l'autre téléphone n'est jamais supposé valide : chaque champ est vérifié avant usage.
+export type Payload = Record<string, unknown>;
+
+export function asPayload(value: unknown): Payload | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as Payload) : null;
+}
+
+// Un entier positif ou nul (taille, numéro de morceau).
+export function isCount(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) >= 0;
+}
+
+const FILE_KINDS: MessageKind[] = ['image', 'video', 'audio', 'file', 'wallpaper', 'avatar'];
+
+export function isFileKind(value: unknown): value is MessageKind {
+  return FILE_KINDS.includes(value as MessageKind);
+}
+
 export const fileContext = (id: string) => `pear-file-v2.${id}`;

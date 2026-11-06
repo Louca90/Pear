@@ -9,6 +9,7 @@ import Svg, { G, Image as SvgImage, Rect, Text as SvgText } from 'react-native-s
 import { burnOverlay } from '../../modules/pear-native';
 import { colors, radius, spacing } from '../theme';
 import { IconButton, useInsets } from './ui';
+import { log } from '../log';
 
 type Filter = 'none' | 'dark' | 'time' | 'date';
 
@@ -93,7 +94,7 @@ export function MediaEditor({ uri, kind, takenAt, bottomSpace, ref }: Props) {
 
   useEffect(() => {
     const measured = kind === 'video' ? getThumbnailAsync(uri, { time: 0 }) : Image.getSize(uri);
-    measured.then(({ width: measuredWidth, height: measuredHeight }) => setSize({ width: measuredWidth, height: measuredHeight })).catch((e) => console.warn('Pear média :', e));
+    measured.then(({ width: measuredWidth, height: measuredHeight }) => setSize({ width: measuredWidth, height: measuredHeight })).catch((e) => log.warn('média', e));
   }, [uri, kind]);
 
   const fit = size ? Math.min(screen.width / size.width, screen.height / size.height) : 1;

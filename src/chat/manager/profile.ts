@@ -7,6 +7,7 @@ import { ChatCore } from './core';
 import { sendEvent } from './outbox';
 import { sendFile } from './transfers';
 import { FILE_ID_BYTES, PROFILE_NAME, PROFILE_PHOTO, PROFILE_VERSION } from './types';
+import { log } from '../../log';
 
 export function getMyProfile() {
   return { name: getSetting(PROFILE_NAME), photo: getSetting(PROFILE_PHOTO) };
@@ -37,5 +38,5 @@ export function shareProfile(core: ChatCore, contact: string) {
   // Une copie par contact : l'envoi déplace le fichier qu'il reçoit.
   exportCopy(photo, `avatar-${to_base64(randombytes_buf(8))}.jpg`)
     .then((uri) => sendFile(core, contact, { uri, name: 'avatar.jpg', size: 0, mime: 'image/jpeg', kind: 'avatar' }))
-    .catch((e) => console.warn('Pear photo de profil :', e));
+    .catch((e) => log.warn('photo de profil', e));
 }

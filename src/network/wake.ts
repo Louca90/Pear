@@ -1,6 +1,7 @@
 import { getAuth, getIdToken } from '@react-native-firebase/auth';
 
 import { WAKE_URL } from '../config';
+import { log } from '../log';
 
 // Demande à Vercel un push vide vers ce token. Aucun contenu ne part d'ici.
 export async function wakeContact(fcmToken: string) {
@@ -15,5 +16,5 @@ export async function wakeContact(fcmToken: string) {
     },
     body: JSON.stringify({ token: fcmToken }),
   });
-  if (!response.ok) console.warn('Pear réveil refusé :', response.status);
+  if (!response.ok) log.warn('réveil refusé', response.status);
 }

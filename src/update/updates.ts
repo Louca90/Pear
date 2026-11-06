@@ -3,6 +3,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 
 import { addDownloadListener, appVersionCode, canRequestPackageInstalls, downloadFile, installApk, openUnknownAppSourcesSettings, sha256File } from '../../modules/pear-native';
 import { parseRelease, Release } from './release';
+import { log } from '../log';
 
 export const LATEST_RELEASE_URL = 'https://api.github.com/repos/Louca90/Pear/releases/latest';
 // Au premier plan, GitHub n'est pas interrogé plus souvent que ça.
@@ -74,7 +75,7 @@ export async function checkForUpdate(force = false) {
       cleanupDownloads();
     }
   } catch (e) {
-    console.warn('Pear mise à jour :', e);
+    log.warn('mise à jour', e);
     set({ status: 'offline' });
   } finally {
     clearTimeout(timeout);
@@ -90,7 +91,7 @@ function cleanupDownloads() {
     const directory = updatesDirectory();
     if (directory.exists) directory.delete();
   } catch (e) {
-    console.warn('Pear mise à jour :', e);
+    log.warn('mise à jour', e);
   }
 }
 
@@ -134,7 +135,7 @@ export async function startUpdate() {
     set({ phase: 'installing', progress: 1 });
     installApk(file.uri);
   } catch (e) {
-    console.warn('Pear mise à jour :', e);
+    log.warn('mise à jour', e);
     set({ phase: 'failed', error: e instanceof Error ? e.message : String(e) });
   } finally {
     subscription.remove();
