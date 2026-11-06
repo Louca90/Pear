@@ -9,7 +9,7 @@ import { IconButton, useNavigationBarHeight } from '../../../components/ui';
 import { colors, radius, spacing } from '../../../theme';
 
 import { SeekBar } from './SeekBar';
-import { VIEWER_CLOSE_DISTANCE, VIEWER_CLOSE_MS, VIEWER_CLOSE_SPEED, VIEWER_DRAG_START, VIEWER_EASING, VIEWER_MIN_SCALE, VIEWER_OPEN_MS } from '../constants';
+import { VIEWER_CANCEL_MS, VIEWER_CLOSE_DISTANCE, VIEWER_CLOSE_MS, VIEWER_CLOSE_SPEED, VIEWER_DRAG_START, VIEWER_EASING, VIEWER_MIN_SCALE, VIEWER_OPEN_MS, VIEWER_TAP_SLOP } from '../constants';
 import { sharedStyles } from '../styles';
 import { Rect } from '../types';
 
@@ -66,7 +66,15 @@ export type Viewing = { message: Message; rect: Rect; poster: string; size: { wi
 // en continu, ne saute jamais. Une vidéo n'est lue qu'une fois le cadre en place, et se met en pause
 // dès la fermeture. Glissé vers le bas, le média suit le doigt ; lâché trop tôt, il revient en plein écran.
 // Le cadre change de taille à chaque image : ces animations ne peuvent pas passer par le pilote natif.
-export function MediaViewer({ viewing: { message, rect, poster, size }, onClose }: { viewing: Viewing; onClose: () => void }) {
+type ViewerProps = {
+  viewing: Viewing;
+  onClose: () => void;
+  // Un tap juste après l'ouverture : vrai si c'était le deuxième appui d'un double tap (like). La
+  // visionneuse se referme alors aussitôt.
+  onEarlyTap?: () => boolean;
+};
+
+export function MediaViewer({ viewing: { message, rect, poster, size }, onClose, onEarlyTap }: ViewerProps) {
   const isVideo = message.kind === 'video';
   const progress = useRef(new Animated.Value(0)).current;
   const drag = useRef(new Animated.ValueXY()).current;
@@ -79,18 +87,19 @@ export function MediaViewer({ viewing: { message, rect, poster, size }, onClose 
     created.timeUpdateEventInterval = 0.25;
   });
 
-  const close = () => {
+  const close = (fast = false) => {
     if (closingRef.current) return;
     closingRef.current = true;
     if (isVideo) player.pause();
     setClosing(true);
+    const duration = fast ? VIEWER_CANCEL_MS : VIEWER_CLOSE_MS;
     Animated.parallel([
-      Animated.timing(progress, { toValue: 0, duration: VIEWER_CLOSE_MS, easing: VIEWER_EASING, useNativeDriver: false }),
-      Animated.timing(drag, { toValue: { x: 0, y: 0 }, duration: VIEWER_CLOSE_MS, easing: VIEWER_EASING, useNativeDriver: false }),
+      Animated.timing(progress, { toValue: 0, duration, easing: VIEWER_EASING, useNativeDriver: false }),
+      Animated.timing(drag, { toValue: { x: 0, y: 0 }, duration, easing: VIEWER_EASING, useNativeDriver: false }),
     ]).start(onClose);
   };
-  const latestClose = useRef(close);
-  latestClose.current = close;
+  const latest = useRef({ close, onEarlyTap });
+  latest.current = { close, onEarlyTap };
 
   useEffect(() => {
     Animated.timing(progress, { toValue: 1, duration: VIEWER_OPEN_MS, easing: VIEWER_EASING, useNativeDriver: false }).start(({ finished }) => {
@@ -100,16 +109,22 @@ export function MediaViewer({ viewing: { message, rect, poster, size }, onClose 
     });
   }, []);
 
+  // Lâché trop tôt, le média revient en plein écran, sans rebond.
+  const settleDrag = () =>
+    Animated.timing(drag, { toValue: { x: 0, y: 0 }, duration: VIEWER_CANCEL_MS, easing: VIEWER_EASING, useNativeDriver: false }).start();
+
   const pan = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_event, gesture) => gesture.dy > VIEWER_DRAG_START && gesture.dy > Math.abs(gesture.dx),
       onPanResponderMove: (_event, gesture) => drag.setValue({ x: gesture.dx, y: Math.max(0, gesture.dy) }),
       onPanResponderRelease: (_event, gesture) => {
-        if (gesture.dy > VIEWER_CLOSE_DISTANCE || gesture.vy > VIEWER_CLOSE_SPEED) latestClose.current();
-        else Animated.spring(drag, { toValue: { x: 0, y: 0 }, useNativeDriver: false, damping: 18, stiffness: 220 }).start();
+        const tap = Math.abs(gesture.dx) < VIEWER_TAP_SLOP && Math.abs(gesture.dy) < VIEWER_TAP_SLOP;
+        if (tap && latest.current.onEarlyTap?.()) latest.current.close(true);
+        else if (gesture.dy > VIEWER_CLOSE_DISTANCE || gesture.vy > VIEWER_CLOSE_SPEED) latest.current.close();
+        else settleDrag();
       },
-      onPanResponderTerminate: () => Animated.spring(drag, { toValue: { x: 0, y: 0 }, useNativeDriver: false }).start(),
+      onPanResponderTerminate: () => settleDrag(),
     }),
   ).current;
 
@@ -124,7 +139,7 @@ export function MediaViewer({ viewing: { message, rect, poster, size }, onClose 
   const chrome = drag.y.interpolate({ inputRange: [0, VIEWER_CLOSE_DISTANCE], outputRange: [1, 0], extrapolate: 'clamp' });
 
   return (
-    <Modal visible transparent animationType="none" onRequestClose={close} statusBarTranslucent navigationBarTranslucent>
+    <Modal visible transparent animationType="none" onRequestClose={() => close()} statusBarTranslucent navigationBarTranslucent>
       <Animated.View style={[StyleSheet.absoluteFill, styles.viewerBackground, { opacity: dimming }]} />
       {/* collapsable : sans contrôles vidéo, cette vue doit exister pour recevoir le doigt sur une photo. */}
       <View collapsable={false} style={StyleSheet.absoluteFill} {...pan.panHandlers}>
@@ -173,7 +188,7 @@ export function MediaViewer({ viewing: { message, rect, poster, size }, onClose 
         )}
       </View>
       <Animated.View style={[styles.viewerClose, { opacity: dimming }]}>
-        <IconButton onPress={close} label="Fermer">
+        <IconButton onPress={() => close()} label="Fermer">
           <X size={28} color={colors.background} strokeWidth={1.75} />
         </IconButton>
       </Animated.View>

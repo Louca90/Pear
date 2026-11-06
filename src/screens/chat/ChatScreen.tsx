@@ -25,7 +25,7 @@ import { Bubble } from './components/MessageBubble';
 import { MessageSelection } from './components/MessageSelection';
 import { NewMessagesButton } from './components/NewMessagesButton';
 import { Toast } from './components/Toast';
-import { JUMP_PULSE_DELAY_MS, LIKE } from './constants';
+import { DOUBLE_TAP_MS, JUMP_PULSE_DELAY_MS, LIKE } from './constants';
 import { useChatScroll } from './hooks/useChatScroll';
 import { useKeyboardOpen } from './hooks/useKeyboardOpen';
 import { sharedStyles } from './styles';
@@ -231,11 +231,30 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
     return media;
   };
 
+  // Une photo ou une vidéo s'ouvre dès le premier appui, sans attendre. Un deuxième appui rapproché
+  // (sur la bulle ou sur la visionneuse en train de s'ouvrir) en fait un double tap : like, et la
+  // visionneuse revient aussitôt vers la bulle.
+  const lastMediaTap = useRef<{ id: string; at: number } | null>(null);
+  const isSecondTap = (message: Message) => {
+    const last = lastMediaTap.current;
+    if (!last || last.id !== message.id || Date.now() - last.at >= DOUBLE_TAP_MS) return false;
+    lastMediaTap.current = null;
+    likeMessage(message);
+    return true;
+  };
+
   const openFile = async (message: Message, rect: Rect) => {
     if (message.kind !== 'file') {
+      if (isSecondTap(message)) {
+        // La visionneuse n'a pas encore eu le temps de s'afficher : elle ne s'ouvre pas.
+        setViewing(null);
+        return;
+      }
+      lastMediaTap.current = { id: message.id, at: Date.now() };
       Keyboard.dismiss();
       try {
         const media = await (prepareMedia(message) ?? Promise.reject(new Error('Média introuvable.')));
+        if (lastMediaTap.current?.id !== message.id) return;
         setViewing({ message, rect, ...media });
       } catch (e) {
         showDialog('Ouverture impossible', String(e));
@@ -345,7 +364,7 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
           onClose={closeSelection}
         />
       )}
-      {viewing && <MediaViewer viewing={viewing} onClose={() => setViewing(null)} />}
+      {viewing && <MediaViewer viewing={viewing} onClose={() => setViewing(null)} onEarlyTap={() => isSecondTap(viewing.message)} />}
       {galleryOpen && <MediaPicker onPick={sendFromGallery} onClose={() => setGalleryOpen(false)} />}
     </Screen>
   );

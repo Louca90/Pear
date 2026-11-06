@@ -108,7 +108,7 @@ export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, on
           ) : message.kind === 'audio' && message.status !== 'receiving' ? (
             <VoiceContent message={message} palette={palette} />
           ) : (
-            <FileContent message={message} palette={palette} mediaHidden={mediaHidden} onOpen={(rect) => onOpenFile?.(message, rect)} onLongPress={select} onDoubleTap={onDoubleTap && (() => onDoubleTap(message))} onPrepare={onPrepareFile && (() => onPrepareFile(message))} />
+            <FileContent message={message} palette={palette} mediaHidden={mediaHidden} onOpen={(rect) => onOpenFile?.(message, rect)} onLongPress={select} onPrepare={onPrepareFile && (() => onPrepareFile(message))} />
           )}
           {bare ? (
             <MessageMeta message={message} tone={palettes.hasWallpaper ? ON_WALLPAPER_TONE : PLAIN_TONE} pill={palettes.hasWallpaper} />

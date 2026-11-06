@@ -33,6 +33,10 @@ export const VIEWER_DRAG_START = 10;
 export const VIEWER_MIN_SCALE = 0.55;
 export const VIEWER_OPEN_MS = 300;
 export const VIEWER_CLOSE_MS = 240;
+// Double tap sur un média : la visionneuse à peine ouverte revient vite vers la bulle.
+export const VIEWER_CANCEL_MS = 160;
+// Au-delà de ce déplacement, un appui dans la visionneuse est un glissé, pas un tap.
+export const VIEWER_TAP_SLOP = 10;
 export const VIEWER_EASING = Easing.bezier(0.2, 0.8, 0.2, 1);
 export const COMPOSER_FADE_HEIGHT = 140;
 export const ATTACH_CLOSE_MS = 140;

@@ -9,7 +9,6 @@ import { BubblePalette, colors, radius, spacing } from '../../../theme';
 
 import { LONG_PRESS_MS } from '../constants';
 import { isBareMedia } from '../format';
-import { useDoubleTap } from '../hooks/useDoubleTap';
 import { sharedStyles } from '../styles';
 import { Rect, ViewRef } from '../types';
 
@@ -44,25 +43,22 @@ type FileContentProps = {
   mediaHidden?: boolean;
   onOpen: (rect: Rect) => void;
   onLongPress: () => void;
-  // Photos et vidéos : deux appuis rapprochés likent au lieu d'ouvrir la visionneuse.
-  onDoubleTap?: () => void;
   // Appelé dès que le doigt touche le média : la visionneuse prépare l'image pendant la fenêtre du double appui.
   onPrepare?: () => void;
 };
 
-export function FileContent({ message, palette, mediaHidden, onOpen, onLongPress, onDoubleTap, onPrepare }: FileContentProps) {
+export function FileContent({ message, palette, mediaHidden, onOpen, onLongPress, onPrepare }: FileContentProps) {
   const media = useRef<ViewRef>(null);
   const bare = isBareMedia(message);
   const foreground = bare ? colors.text : palette.text;
   const secondary = bare ? colors.textMuted : palette.muted;
   const progress = chat.getProgress(message.id);
   const open = () => media.current?.measureInWindow((x, y, width, height) => onOpen({ x, y, width, height }));
-  const press = useDoubleTap(bare ? onDoubleTap : undefined, open);
 
   return (
     <Pressable
       ref={media}
-      onPress={press}
+      onPress={open}
       onPressIn={onPrepare}
       onLongPress={onLongPress}
       delayLongPress={LONG_PRESS_MS}
