@@ -15,7 +15,7 @@ Messagerie Android privée, chiffrée de bout en bout, en pair à pair. Expo 58,
 ## Commandes
 
 - `npm run typecheck` (tsc) et `npm test` (Jest, fonctions pures). Les deux doivent passer avant chaque commit.
-- Dev : APK debug installé sur les téléphones + `npx expo start` (Metro), `adb -s <id> reverse tcp:8081 tcp:8081` pour chaque téléphone.
+- Dev : APK debug installé sur les téléphones + `npx expo start` (Metro), `adb -s <id> reverse tcp:8081 tcp:8081` pour chaque téléphone. Jamais `CI=1` pour Metro : ce mode ne surveille pas les fichiers et sert l'ancien code.
 - Build natif : `npx expo prebuild` régénère `android/` (ignoré par git, `--clean` l'efface), puis Gradle (`JAVA_HOME` = `C:\Program Files\Android\Android Studio\jbr`, absent du PATH ; téléphones arm64 : `-PreactNativeArchitectures=arm64-v8a`). Debug et release sont signés avec la même clé (hors dépôt, `~/.gradle/gradle.properties`).
 
 ## Règles
