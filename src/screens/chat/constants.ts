@@ -4,6 +4,10 @@ import { RouteType } from '../../network/peer';
 
 export const DOUBLE_TAP_MS = 280;
 export const LIKE = '❤️';
+// En deçà de cette distance du bas, on considère qu'on lit les derniers messages.
+export const AT_BOTTOM_PX = 80;
+// Le temps qu'une photo ou une vidéo envoyée prenne sa hauteur finale dans la liste.
+export const MEDIA_SETTLE_MS = 350;
 export const LONG_PRESS_MS = 350;
 export const EMOJI_COLUMNS = 8;
 // Place réservée autour du message sélectionné : les réactions au-dessus, les actions en dessous.

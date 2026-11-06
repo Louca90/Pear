@@ -23,8 +23,10 @@ import { ComposerFade } from './components/ComposerFade';
 import { MediaViewer, Viewing } from './components/MediaViewer';
 import { Bubble } from './components/MessageBubble';
 import { MessageSelection } from './components/MessageSelection';
+import { NewMessagesButton } from './components/NewMessagesButton';
 import { Toast } from './components/Toast';
 import { JUMP_PULSE_DELAY_MS, LIKE } from './constants';
+import { useChatScroll } from './hooks/useChatScroll';
 import { useKeyboardOpen } from './hooks/useKeyboardOpen';
 import { sharedStyles } from './styles';
 import { Action, Palettes, Rect, ViewRef } from './types';
@@ -59,6 +61,7 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
   useSyncExternalStore(chat.subscribe, chat.getVersion);
 
   const messages = getMessages(contactKey);
+  const scroll = useChatScroll(list, messages);
   const settings = getConversationSettings(contactKey);
   const palettes: Palettes = {
     mine: bubblePalette(settings.my_bubble ?? colors.text),
@@ -89,6 +92,7 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
     } else {
       chat.send(contactKey, text, replyingTo?.id ?? null);
       setReplyingTo(null);
+      scroll.followSent();
     }
     setDraft('');
   };
@@ -179,6 +183,7 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
     }
     try {
       await chat.sendFile(contactKey, file);
+      scroll.followSent();
     } catch (e) {
       showDialog('Envoi impossible', String(e));
     }
@@ -270,8 +275,10 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
               )}
               contentContainerStyle={styles.list}
               keyboardShouldPersistTaps="handled"
+              {...scroll.listProps}
             />
           )}
+          <NewMessagesButton count={scroll.newCount} onPress={scroll.scrollToBottom} />
           {toast && <Toast text={toast.text} token={toast.token} />}
           <AttachMenu
             open={attachOpen}
