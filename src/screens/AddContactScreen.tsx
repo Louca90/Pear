@@ -1,4 +1,4 @@
-import { ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, Share, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import QRCode from 'react-native-qrcode-svg';
 import { ClipboardPaste, ScanLine, Share2 } from 'lucide-react-native';
@@ -7,7 +7,7 @@ import { useBottomBarSpace } from '../components/BottomBar';
 import { showDialog } from '../components/dialog';
 import { Button, Header, Screen } from '../components/ui';
 import { buildPairingLink, parsePairingLink } from '../crypto/pairing';
-import { colors, radius, spacing } from '../theme';
+import { createStyles, radius, spacing } from '../theme';
 
 type Props = {
   publicKey: string;
@@ -16,6 +16,7 @@ type Props = {
 };
 
 export function AddContactScreen({ publicKey, onScan, onKeyReceived }: Props) {
+  const styles = useStyles();
   const link = buildPairingLink(publicKey);
   const barSpace = useBottomBarSpace();
 
@@ -49,7 +50,7 @@ export function AddContactScreen({ publicKey, onScan, onKeyReceived }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createStyles((colors) => ({
   content: {
     alignItems: 'center',
     padding: spacing.lg,
@@ -73,4 +74,4 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     gap: spacing.sm,
   },
-});
+}));

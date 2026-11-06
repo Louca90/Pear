@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, AppState, BackHandler, Dimensions, StyleSheet, View } from 'react-native';
+import { NavigationBar } from 'expo-navigation-bar';
 import { StatusBar } from 'expo-status-bar';
 import * as Linking from 'expo-linking';
 import notifee, { EventType } from '@notifee/react-native';
@@ -24,7 +25,7 @@ import { HomeScreen } from './src/screens/HomeScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { ScannerScreen } from './src/screens/ScannerScreen';
 import { Contact, hasIdentity, loadContacts, loadOrCreateIdentity, saveContacts } from './src/storage';
-import { colors, radius, spacing } from './src/theme';
+import { createStyles, loadTheme, radius, spacing, useColors } from './src/theme';
 import { markUpdateSeen, pendingUpdatedInfo, UpdatedInfo } from './src/update/updated';
 import { UpdatedPopup } from './src/update/UpdatedPopup';
 import { checkForUpdate, isBlocking, useUpdateState } from './src/update/updates';
@@ -56,6 +57,9 @@ export default function Root() {
 }
 
 function App() {
+  const styles = useStyles();
+  // Icônes des barres système : foncées sur le thème clair, claires sur le sombre.
+  const barStyle = useColors().scheme === 'dark' ? 'light' : 'dark';
   const [identity, setIdentity] = useState<Identity | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [route, setRoute] = useState<Route>({ name: 'home' });
@@ -78,6 +82,7 @@ function App() {
     // La base est ouverte et migrée avant tout : un échec affiche une erreur au lieu de planter en boucle.
     Promise.resolve()
       .then(openDatabase)
+      .then(loadTheme)
       .then(cleanupCache)
       .then(() => {
         refreshRemoteConfig();
@@ -353,7 +358,8 @@ function App() {
   if (blocked && update.release) {
     return (
       <>
-        <StatusBar style="dark" />
+        <StatusBar style={barStyle} />
+        <NavigationBar style={barStyle} />
         <UpdateScreen release={update.release} />
         <DialogHost />
       </>
@@ -362,7 +368,8 @@ function App() {
 
   return (
     <>
-      <StatusBar style="dark" />
+      <StatusBar style={barStyle} />
+      <NavigationBar style={barStyle} />
       {peek && (
         <View pointerEvents="none" style={StyleSheet.absoluteFill}>
           {render(peek.route, true)}
@@ -412,7 +419,7 @@ function App() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createStyles((colors) => ({
   flex: {
     flex: 1,
   },
@@ -430,4 +437,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: spacing.lg,
   },
-});
+}));

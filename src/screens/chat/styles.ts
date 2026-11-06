@@ -1,9 +1,9 @@
-import { StyleSheet } from 'react-native';
+import { useMemo } from 'react';
 
-import { colors, radius, spacing } from '../../theme';
+import { createStyles, radius, spacing } from '../../theme';
 
 // Styles utilisés par plusieurs composants de la conversation.
-export const sharedStyles = StyleSheet.create({
+export const useSharedStyles = createStyles((colors) => ({
   flex: {
     flex: 1,
   },
@@ -28,4 +28,10 @@ export const sharedStyles = StyleSheet.create({
   time: {
     fontSize: 12,
   },
-});
+}));
+
+// Styles partagés + styles propres au composant. `local` doit être stable (créé par createStyles ou StyleSheet).
+export function useChatStyles<T extends object>(local: T) {
+  const sharedStyles = useSharedStyles();
+  return useMemo(() => ({ ...sharedStyles, ...local }), [sharedStyles, local]);
+}

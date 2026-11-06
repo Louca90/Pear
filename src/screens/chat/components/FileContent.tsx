@@ -1,19 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, Text, View } from 'react-native';
 import { FileText, Images, Mic, Play } from 'lucide-react-native';
 
 import { Message } from '../../../chat/database';
 import { formatSize, videoThumbnail } from '../../../chat/files';
 import { chat } from '../../../chat/manager';
-import { BubblePalette, colors, radius, spacing } from '../../../theme';
+import { BubblePalette, createStyles, radius, spacing, useColors } from '../../../theme';
 
 import { LONG_PRESS_MS } from '../constants';
 import { isBareMedia } from '../format';
-import { sharedStyles } from '../styles';
+import { useChatStyles } from '../styles';
 import { Rect, ViewRef } from '../types';
 import { log } from '../../../log';
 
 function VideoPreview({ message }: { message: Message }) {
+  const styles = useStyles();
+  const colors = useColors();
   const [thumbnail, setThumbnail] = useState<string | null>(null);
 
   useEffect(() => {
@@ -32,7 +34,7 @@ function VideoPreview({ message }: { message: Message }) {
     <View style={styles.video}>
       {thumbnail && <Image source={{ uri: thumbnail }} style={styles.image} resizeMode="cover" />}
       <View style={styles.playButton}>
-        <Play size={24} color={colors.background} fill={colors.background} strokeWidth={1.75} />
+        <Play size={24} color={colors.onMedia} fill={colors.onMedia} strokeWidth={1.75} />
       </View>
     </View>
   );
@@ -52,6 +54,8 @@ type FileContentProps = {
 };
 
 export function FileContent({ message, palette, mediaHidden, onOpen, onLongPress, onPrepare, onAccept, onRefuse }: FileContentProps) {
+  const styles = useStyles();
+  const colors = useColors();
   const media = useRef<ViewRef>(null);
   const bare = isBareMedia(message);
   const foreground = bare ? colors.text : palette.text;
@@ -114,7 +118,7 @@ export function FileContent({ message, palette, mediaHidden, onOpen, onLongPress
   );
 }
 
-const localStyles = StyleSheet.create({
+const useLocalStyles = createStyles((colors) => ({
   video: {
     width: 220,
     height: 220,
@@ -167,6 +171,6 @@ const localStyles = StyleSheet.create({
   progressBar: {
     height: 3,
   },
-});
+}));
 
-const styles = { ...sharedStyles, ...localStyles };
+const useStyles = () => useChatStyles(useLocalStyles());

@@ -1,13 +1,15 @@
 import { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, Text } from 'react-native';
+import { Animated, Text } from 'react-native';
 import { Check } from 'lucide-react-native';
 
-import { colors, radius, spacing } from '../../../theme';
+import { createStyles, radius, spacing, useColors } from '../../../theme';
 
 import { TOAST_VISIBLE_MS } from '../constants';
 
 // Une petite annonce sous la barre du haut : elle descend, reste un instant, puis repart.
 export function Toast({ text, token }: { text: string; token: number }) {
+  const colors = useColors();
+  const styles = useStyles();
   const progress = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -31,7 +33,7 @@ export function Toast({ text, token }: { text: string; token: number }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createStyles((colors) => ({
   toast: {
     position: 'absolute',
     top: spacing.sm,
@@ -49,4 +51,4 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: colors.background,
   },
-});
+}));

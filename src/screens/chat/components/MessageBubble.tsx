@@ -1,9 +1,9 @@
 import { useEffect, useRef } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, Text, View } from 'react-native';
 import { Reply } from 'lucide-react-native';
 
 import { Message } from '../../../chat/database';
-import { colors, radius, spacing } from '../../../theme';
+import { createStyles, radius, spacing, useColors } from '../../../theme';
 
 import { FileContent } from './FileContent';
 import { FittedText, TextFit } from './FittedText';
@@ -15,12 +15,10 @@ import { LONG_PRESS_MS, SWIPE_REPLY, SWIPE_START, TEXT_LINE_HEIGHT } from '../co
 import { isBareMedia } from '../format';
 import { useDoubleTap } from '../hooks/useDoubleTap';
 import { useSwipeReply } from '../hooks/useSwipeReply';
-import { sharedStyles } from '../styles';
-import { MetaTone, Palettes, Rect, ViewRef } from '../types';
+import { useChatStyles } from '../styles';
+import { Palettes, Rect, ViewRef } from '../types';
 
 // Sans bulle, l'heure et les coches sont posées sur le fond : sur une image, elles gardent leur propre pastille sombre.
-const PLAIN_TONE: MetaTone = { text: colors.text, muted: colors.textMuted };
-const ON_WALLPAPER_TONE: MetaTone = { text: colors.background, muted: colors.onDarkMuted };
 
 type BubbleProps = {
   message: Message;
@@ -43,6 +41,8 @@ type BubbleProps = {
 };
 
 export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, onOpenFile, onPrepareFile, onAcceptFile, onRefuseFile, onSelect, onDoubleTap, onReply, onJump, fit }: BubbleProps) {
+  const styles = useStyles();
+  const colors = useColors();
   const container = useRef<ViewRef>(null);
   const mine = message.mine === 1;
   const bare = isBareMedia(message);
@@ -113,7 +113,7 @@ export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, on
             <FileContent message={message} palette={palette} mediaHidden={mediaHidden} onOpen={(rect) => onOpenFile?.(message, rect)} onLongPress={select} onPrepare={onPrepareFile && (() => onPrepareFile(message))} onAccept={onAcceptFile && (() => onAcceptFile(message))} onRefuse={onRefuseFile && (() => onRefuseFile(message))} />
           )}
           {bare ? (
-            <MessageMeta message={message} tone={palettes.hasWallpaper ? ON_WALLPAPER_TONE : PLAIN_TONE} pill={palettes.hasWallpaper} />
+            <MessageMeta message={message} tone={palettes.hasWallpaper ? { text: colors.onMedia, muted: colors.onDarkMuted } : { text: colors.text, muted: colors.textMuted }} pill={palettes.hasWallpaper} />
           ) : (
             <MessageMeta message={message} tone={palette} />
           )}
@@ -130,7 +130,7 @@ export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, on
   );
 }
 
-const localStyles = StyleSheet.create({
+const useLocalStyles = createStyles((colors) => ({
   row: {
     maxWidth: '80%',
   },
@@ -188,6 +188,6 @@ const localStyles = StyleSheet.create({
   reactionEmoji: {
     fontSize: 14,
   },
-});
+}));
 
-const styles = { ...sharedStyles, ...localStyles };
+const useStyles = () => useChatStyles(useLocalStyles());

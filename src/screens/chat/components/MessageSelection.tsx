@@ -6,7 +6,7 @@ import { SmilePlus } from 'lucide-react-native';
 import { Message } from '../../../chat/database';
 import { QUICK_REACTIONS } from '../../../chat/emojis';
 import { IconButton, useNavigationBarHeight } from '../../../components/ui';
-import { colors, radius, spacing } from '../../../theme';
+import { createStyles, radius, spacing, useColors } from '../../../theme';
 
 import { EmojiPicker } from './EmojiPicker';
 import { Bubble } from './MessageBubble';
@@ -31,6 +31,8 @@ type SelectionProps = {
 // Comme dans Google Messages : tout s'assombrit et se floute, le message monte et grossit,
 // avec les réactions au-dessus et les actions en dessous.
 export function MessageSelection({ message, name, palettes, rect, origin, clip, blurTarget, actions, onReact, onClose }: SelectionProps) {
+  const colors = useColors();
+  const styles = useStyles();
   const progress = useRef(new Animated.Value(0)).current;
   const [pickerOpen, setPickerOpen] = useState(false);
   const closing = useRef(false);
@@ -133,7 +135,7 @@ export function MessageSelection({ message, name, palettes, rect, origin, clip, 
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createStyles((colors) => ({
   alignEnd: {
     right: spacing.md,
   },
@@ -198,4 +200,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.text,
   },
-});
+}));

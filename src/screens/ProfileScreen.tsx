@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AppState, KeyboardAvoidingView, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { AppState, KeyboardAvoidingView, Linking, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Bell, Camera, Check, ChevronRight, Download, ImageMinus, RefreshCw, ShieldCheck } from 'lucide-react-native';
 
@@ -8,11 +8,20 @@ import { appVersionCode, appVersionName } from '../../modules/pear-native';
 import { chat, MAX_PROFILE_NAME_LENGTH } from '../chat/manager';
 import { showDialog } from '../components/dialog';
 import { Avatar, Button, Header, IconButton, Screen } from '../components/ui';
-import { colors, radius, spacing } from '../theme';
+import { createStyles, radius, setThemePreference, spacing, ThemePreference, useColors, useThemePreference } from '../theme';
 import { checkForUpdate, getInstallPermission, previewUpdateScreen, requestInstallPermission, useUpdateState } from '../update/updates';
 import { PROFILE_PHOTO_QUALITY } from '../config';
 
+const THEMES: { value: ThemePreference; label: string }[] = [
+  { value: 'auto', label: 'Automatique' },
+  { value: 'light', label: 'Clair' },
+  { value: 'dark', label: 'Sombre' },
+];
+
 export function ProfileScreen({ onBack }: { onBack: () => void }) {
+  const colors = useColors();
+  const styles = useStyles();
+  const theme = useThemePreference();
   const saved = chat.getMyProfile();
   const [name, setName] = useState(saved.name ?? '');
   const [photo, setPhoto] = useState(saved.photo);
@@ -94,6 +103,24 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
             <ChevronRight size={20} color={colors.textMuted} strokeWidth={1.75} />
           </Pressable>
 
+          <Text style={[styles.label, styles.section]}>Apparence</Text>
+          <View style={styles.segment}>
+            {THEMES.map((option) => {
+              const selected = option.value === theme;
+              return (
+                <Pressable
+                  key={option.value}
+                  onPress={() => setThemePreference(option.value)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected }}
+                  style={[styles.segmentItem, selected && styles.segmentItemSelected]}
+                >
+                  <Text style={[styles.segmentLabel, selected && styles.segmentLabelSelected]}>{option.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
           <Text style={[styles.label, styles.section]}>Mises à jour</Text>
           <View style={styles.rows}>
             <Pressable onPress={() => checkForUpdate(true)} style={({ pressed }) => [styles.setting, pressed && styles.pressed]}>
@@ -126,7 +153,7 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createStyles((colors) => ({
   flex: {
     flex: 1,
   },
@@ -212,4 +239,28 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.6,
   },
-});
+  segment: {
+    flexDirection: 'row',
+    padding: 4,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+  },
+  segmentItem: {
+    flex: 1,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.sm,
+  },
+  segmentItemSelected: {
+    backgroundColor: colors.accent,
+  },
+  segmentLabel: {
+    fontSize: 15,
+    color: colors.text,
+  },
+  segmentLabelSelected: {
+    color: colors.onAccent,
+    fontWeight: '600',
+  },
+}));

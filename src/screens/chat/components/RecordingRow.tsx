@@ -3,13 +3,15 @@ import { Animated, StyleSheet, Text, View } from 'react-native';
 import { Lock, Trash2 } from 'lucide-react-native';
 
 import { IconButton } from '../../../components/ui';
-import { colors, radius, spacing } from '../../../theme';
+import { createStyles, radius, spacing, useColors } from '../../../theme';
 
 import { VOICE_CANCEL_DISTANCE, VOICE_DOT_MS } from '../constants';
 import { formatClock } from '../format';
 
 // Le texte passe en fondu de l'un à l'autre, au fil du glissé.
 export function RecordingRow({ seconds, locked, dragX, onDiscard }: { seconds: number; locked: boolean; dragX: Animated.Value; onDiscard: () => void }) {
+  const colors = useColors();
+  const styles = useStyles();
   const pulse = useRef(new Animated.Value(1)).current;
   const lockAppear = useRef(new Animated.Value(0)).current;
   const cancelRange = { inputRange: [-VOICE_CANCEL_DISTANCE, -VOICE_CANCEL_DISTANCE * 0.5], extrapolate: 'clamp' as const };
@@ -75,7 +77,7 @@ export function RecordingRow({ seconds, locked, dragX, onDiscard }: { seconds: n
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createStyles((colors) => ({
   recordingRow: {
     flex: 1,
     flexDirection: 'row',
@@ -111,4 +113,4 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textAlign: 'right',
   },
-});
+}));

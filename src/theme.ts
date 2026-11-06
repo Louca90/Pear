@@ -1,5 +1,38 @@
-// Toutes les couleurs et tailles de l'app, au même endroit.
-export const colors = {
+import { useSyncExternalStore } from 'react';
+import { Appearance, ImageStyle, StyleSheet, TextStyle, ViewStyle } from 'react-native';
+
+import { getSetting, setSetting } from './chat/database';
+import { log } from './log';
+
+// Toutes les couleurs et tailles de l'app, au même endroit. Les écrans lisent la palette du thème
+// courant avec useColors() et leurs styles avec createStyles() : rien n'est écrit en dur ailleurs.
+export type Palette = {
+  scheme: 'light' | 'dark';
+  background: string;
+  surface: string;
+  border: string;
+  text: string;
+  textMuted: string;
+  // Texte et pistes posés sur un fond sombre (bulle foncée, visionneuse, caméra), quel que soit le thème.
+  onDarkMuted: string;
+  onDarkTrack: string;
+  overlay: string;
+  selectionDim: string;
+  disabled: string;
+  danger: string;
+  // Bouton principal : fond de la couleur du texte, libellé de la couleur du fond.
+  accent: string;
+  onAccent: string;
+  shadow: string;
+  // Icônes et texte posés sur une photo ou une vidéo : toujours blancs.
+  onMedia: string;
+  // Bulles par défaut, quand la conversation n'a pas de couleur choisie.
+  bubbleMine: string;
+  bubbleTheirs: string;
+};
+
+const light: Palette = {
+  scheme: 'light',
   background: '#FFFFFF',
   surface: '#F5F5F5',
   border: '#E8E8E8',
@@ -11,7 +44,128 @@ export const colors = {
   selectionDim: 'rgba(0, 0, 0, 0.12)',
   disabled: '#C4C4C4',
   danger: '#C62828',
+  accent: '#000000',
+  onAccent: '#FFFFFF',
+  shadow: 'rgba(0, 0, 0, 0.14)',
+  onMedia: '#FFFFFF',
+  bubbleMine: '#000000',
+  bubbleTheirs: '#F5F5F5',
 };
+
+const dark: Palette = {
+  scheme: 'dark',
+  background: '#000000',
+  surface: '#161616',
+  border: '#2A2A2A',
+  text: '#FFFFFF',
+  textMuted: '#9A9A9A',
+  onDarkMuted: '#B8B8B8',
+  onDarkTrack: '#4A4A4A',
+  overlay: 'rgba(0, 0, 0, 0.7)',
+  selectionDim: 'rgba(0, 0, 0, 0.45)',
+  disabled: '#4A4A4A',
+  danger: '#EF5350',
+  accent: '#FFFFFF',
+  onAccent: '#000000',
+  shadow: 'rgba(0, 0, 0, 0.6)',
+  onMedia: '#FFFFFF',
+  bubbleMine: '#FFFFFF',
+  bubbleTheirs: '#1F1F1F',
+};
+
+// --- Choix du thème : suit le système, ou forcé clair / sombre (réglage du profil) ---
+
+export type ThemePreference = 'auto' | 'light' | 'dark';
+const SETTING_KEY = 'theme';
+
+let preference: ThemePreference | null = null;
+// Avant la lecture du réglage (base pas encore ouverte), on suit le système.
+let palette: Palette = Appearance.getColorScheme() === 'dark' ? dark : light;
+const listeners = new Set<() => void>();
+
+function readPreference(): ThemePreference {
+  if (preference) return preference;
+  try {
+    const saved = getSetting(SETTING_KEY);
+    preference = saved === 'light' || saved === 'dark' ? saved : 'auto';
+  } catch (e) {
+    log.warn('thème', e);
+    preference = 'auto';
+  }
+  return preference;
+}
+
+function update() {
+  const wanted = readPreference();
+  const scheme = wanted === 'auto' ? (Appearance.getColorScheme() === 'dark' ? 'dark' : 'light') : wanted;
+  const next = scheme === 'dark' ? dark : light;
+  if (next === palette) return;
+  palette = next;
+  listeners.forEach((listener) => listener());
+}
+
+Appearance.addChangeListener(update);
+
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+// Appelé au démarrage, une fois la base ouverte.
+export function loadTheme() {
+  update();
+}
+
+export function themePreference() {
+  return readPreference();
+}
+
+export function setThemePreference(next: ThemePreference) {
+  preference = next;
+  setSetting(SETTING_KEY, next);
+  update();
+}
+
+export function useColors(): Palette {
+  return useSyncExternalStore(subscribe, () => palette);
+}
+
+export function useThemePreference(): ThemePreference {
+  return useSyncExternalStore(subscribe, () => readPreference());
+}
+
+type NamedStyles<T> = { [P in keyof T]: ViewStyle | TextStyle | ImageStyle };
+
+// Des styles qui dépendent de la palette, créés une seule fois par thème.
+export function createStyles<T extends NamedStyles<T>>(factory: (colors: Palette) => T) {
+  const cache = new Map<Palette, T>();
+  return function useStyles(): T {
+    const colors = useColors();
+    let styles = cache.get(colors);
+    if (!styles) {
+      styles = StyleSheet.create(factory(colors));
+      cache.set(colors, styles);
+    }
+    return styles;
+  };
+}
+
+// Caméra, éditeur et visionneuse sont toujours sur fond noir et gardent la même palette quel que soit
+// le thème (dessinée pour eux : `background` y est le blanc des icônes, `text` le noir des pastilles).
+export function useMediaColors(): Palette {
+  return light;
+}
+
+export function createMediaStyles<T extends NamedStyles<T>>(factory: (colors: Palette) => T) {
+  const styles = StyleSheet.create(factory(light));
+  return function useStyles(): T {
+    return styles;
+  };
+}
+
+// --- Bulles ---
 
 // Couleurs proposées pour les bulles. Des aplats uniquement.
 export const BUBBLE_COLORS = ['#000000', '#3A3A3A', '#F5F5F5', '#FFFFFF', '#1F6F54', '#2F5D8A', '#A5473E', '#C98A1B', '#D8E8DF', '#DCE6F2', '#F4DEDA', '#F5E8C8'];
@@ -32,12 +186,13 @@ function luminance(hex: string) {
 }
 
 // Choisit le texte le plus lisible sur cette couleur, avec la formule de contraste des normes d'accessibilité (WCAG).
+// Indépendant du thème : seule la couleur de la bulle compte.
 export function bubblePalette(background: string): BubblePalette {
   const level = luminance(background);
   const whiteWins = 1.05 / (level + 0.05) > (level + 0.05) / 0.05;
   return whiteWins
-    ? { background, text: colors.background, muted: colors.onDarkMuted, track: colors.onDarkTrack }
-    : { background, text: colors.text, muted: colors.textMuted, track: colors.border };
+    ? { background, text: light.background, muted: light.onDarkMuted, track: light.onDarkTrack }
+    : { background, text: light.text, muted: light.textMuted, track: light.border };
 }
 
 export const spacing = {

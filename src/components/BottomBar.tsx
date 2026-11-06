@@ -4,7 +4,7 @@ import * as Haptics from 'expo-haptics';
 import { Camera, LucideIcon, MessageCircle, QrCode } from 'lucide-react-native';
 import { Circle } from 'react-native-svg';
 
-import { colors, radius, spacing } from '../theme';
+import { createStyles, radius, spacing, useColors } from '../theme';
 import { useNavigationBarHeight } from './ui';
 import { log } from '../log';
 
@@ -38,6 +38,7 @@ function kickTransform(tab: Tab, kick: Animated.Value) {
 
 // Le détail qui bouge dans l'icône remplie : la ligne de scan du QR, l'obturateur de l'appareil photo.
 function KickDetail({ tab, kick }: { tab: Tab; kick: Animated.Value }) {
+  const styles = useStyles();
   if (tab === 'add') {
     return (
       <Animated.View
@@ -63,6 +64,7 @@ function KickDetail({ tab, kick }: { tab: Tab; kick: Animated.Value }) {
 
 // Le contenu blanc de l'icône remplie : l'objectif de l'appareil, les trois points de la bulle.
 function FilledDetails({ tab }: { tab: Tab }) {
+  const colors = useColors();
   if (tab === 'camera') return <Circle cx={12} cy={13} r={3.5} fill={colors.background} stroke="none" />;
   if (tab === 'home') {
     return (
@@ -77,6 +79,8 @@ function FilledDetails({ tab }: { tab: Tab }) {
 }
 
 function TabButton({ tab, icon: Icon, label, active, onPress }: { tab: Tab; icon: LucideIcon; label: string; active: boolean; onPress: () => void }) {
+  const colors = useColors();
+  const styles = useStyles();
   const fill = useRef(new Animated.Value(active ? 1 : 0)).current;
   const kick = useRef(new Animated.Value(0)).current;
   const mounted = useRef(false);
@@ -117,6 +121,7 @@ function TabButton({ tab, icon: Icon, label, active, onPress }: { tab: Tab; icon
 
 // Une pilule flottante : un cercle pâle glisse sous l'onglet choisi, et elle reste au-dessus de la barre d'Android.
 export function BottomBar({ active, onChange }: { active: Tab; onChange: (tab: Tab) => void }) {
+  const styles = useStyles();
   const bottom = useNavigationBarHeight();
   const activeIndex = TABS.findIndex(({ tab }) => tab === active);
   const position = useRef(new Animated.Value(activeIndex)).current;
@@ -146,7 +151,7 @@ export function BottomBar({ active, onChange }: { active: Tab; onChange: (tab: T
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createStyles((colors) => ({
   wrapper: {
     position: 'absolute',
     left: 0,
@@ -158,7 +163,7 @@ const styles = StyleSheet.create({
     padding: BAR_PADDING,
     borderRadius: radius.full,
     backgroundColor: colors.background,
-    boxShadow: '0px 8px 28px rgba(0, 0, 0, 0.14)',
+    boxShadow: `0px 8px 28px ${colors.shadow}`,
   },
   indicator: {
     position: 'absolute',
@@ -199,4 +204,4 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     backgroundColor: colors.text,
   },
-});
+}));

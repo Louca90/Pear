@@ -1,12 +1,13 @@
-import { FlatList, Modal, Pressable, StyleSheet, Text } from 'react-native';
+import { FlatList, Modal, Pressable, Text } from 'react-native';
 
 import { ALL_EMOJIS } from '../../../chat/emojis';
 import { useNavigationBarHeight } from '../../../components/ui';
-import { colors, radius, spacing } from '../../../theme';
+import { createStyles, radius, spacing } from '../../../theme';
 
 import { EMOJI_COLUMNS } from '../constants';
 
 export function EmojiPicker({ onPick, onClose }: { onPick: (emoji: string) => void; onClose: () => void }) {
+  const styles = useStyles();
   const bottom = useNavigationBarHeight();
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
@@ -28,7 +29,7 @@ export function EmojiPicker({ onPick, onClose }: { onPick: (emoji: string) => vo
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createStyles((colors) => ({
   emojiOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
@@ -50,4 +51,4 @@ const styles = StyleSheet.create({
   emojiLarge: {
     fontSize: 28,
   },
-});
+}));

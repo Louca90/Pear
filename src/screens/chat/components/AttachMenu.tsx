@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Animated, StyleSheet, Text, View } from 'react-native';
+import { Animated, Text, View } from 'react-native';
 import { FileText, Images } from 'lucide-react-native';
 
 import { IconButton } from '../../../components/ui';
-import { colors, radius, spacing } from '../../../theme';
+import { createStyles, radius, spacing, useColors } from '../../../theme';
 
 import { ATTACH_CLOSE_MS } from '../constants';
 
@@ -16,6 +16,8 @@ type AttachMenuProps = {
 
 // Les deux choix montent depuis le trombone, l'un après l'autre, puis redescendent à la fermeture.
 export function AttachMenu({ open, progress, onPhotos, onFile }: AttachMenuProps) {
+  const colors = useColors();
+  const styles = useStyles();
   const [mounted, setMounted] = useState(open);
 
   useEffect(() => {
@@ -54,7 +56,7 @@ export function AttachMenu({ open, progress, onPhotos, onFile }: AttachMenuProps
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createStyles((colors) => ({
   attachMenu: {
     position: 'absolute',
     left: spacing.md,
@@ -70,11 +72,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     borderRadius: radius.full,
     backgroundColor: colors.background,
-    boxShadow: '0px 4px 16px rgba(0, 0, 0, 0.14)',
+    boxShadow: `0px 4px 16px ${colors.shadow}`,
   },
   attachLabel: {
     fontSize: 14,
     fontWeight: '500',
     color: colors.text,
   },
-});
+}));

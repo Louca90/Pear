@@ -7,12 +7,13 @@ import { getConversationSettings, setConversationSetting } from '../chat/databas
 import { chat } from '../chat/manager';
 import { showDialog } from '../components/dialog';
 import { Button, Header, IconButton, Screen } from '../components/ui';
-import { BUBBLE_COLORS, bubblePalette, colors, radius, spacing } from '../theme';
+import { BUBBLE_COLORS, bubblePalette, createStyles, radius, spacing, useColors } from '../theme';
 
 // Le fond voyage sur le réseau : une image moins lourde arrive plus vite, sans perte visible en plein écran.
 const WALLPAPER_QUALITY = 0.8;
 
 function ColorChoices({ selected, onPick }: { selected: string; onPick: (color: string) => void }) {
+  const styles = useStyles();
   return (
     <View style={styles.swatches}>
       {BUBBLE_COLORS.map((color) => (
@@ -31,6 +32,7 @@ function ColorChoices({ selected, onPick }: { selected: string; onPick: (color: 
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
+  const styles = useStyles();
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -40,6 +42,8 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 function SettingRow({ icon: Icon, label, onPress }: { icon: LucideIcon; label: string; onPress: () => void }) {
+  const colors = useColors();
+  const styles = useStyles();
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
       <Icon size={20} color={colors.text} strokeWidth={1.75} />
@@ -57,6 +61,8 @@ type Props = {
 };
 
 export function CustomizeScreen({ contactKey, name, onBack, onInfo }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const [busy, setBusy] = useState(false);
   useSyncExternalStore(chat.subscribe, chat.getVersion);
 
@@ -130,7 +136,7 @@ export function CustomizeScreen({ contactKey, name, onBack, onInfo }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createStyles((colors) => ({
   content: {
     padding: spacing.lg,
     paddingTop: spacing.sm,
@@ -213,4 +219,4 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.6,
   },
-});
+}));

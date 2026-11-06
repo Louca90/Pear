@@ -1,10 +1,10 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { Flame } from 'lucide-react-native';
 
 import { getContactProfile, getStreak } from '../../../chat/database';
 import { chat } from '../../../chat/manager';
 import { Avatar, Header, IconButton } from '../../../components/ui';
-import { colors, radius, spacing } from '../../../theme';
+import { createStyles, radius, spacing, useColors } from '../../../theme';
 
 import { ROUTE } from '../constants';
 
@@ -17,6 +17,8 @@ type Props = {
 };
 
 export function ChatHeader({ contactKey, name, onBack, onInfo, onCustomize }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const streak = getStreak(contactKey);
   const photo = getContactProfile(contactKey).photo_uri;
   const { status, route } = chat.getLink(contactKey);
@@ -53,7 +55,7 @@ export function ChatHeader({ contactKey, name, onBack, onInfo, onCustomize }: Pr
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createStyles((colors) => ({
   headerBar: {
     backgroundColor: colors.background,
   },
@@ -85,4 +87,4 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     backgroundColor: colors.text,
   },
-});
+}));

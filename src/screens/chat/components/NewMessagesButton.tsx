@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, Text } from 'react-native';
+import { Animated, Easing, Pressable, Text } from 'react-native';
 import { ArrowDown } from 'lucide-react-native';
 
-import { colors, radius, spacing } from '../../../theme';
+import { createStyles, radius, spacing, useColors } from '../../../theme';
 
 // Juste au-dessus de la barre de saisie, centré : apparaît quand des messages arrivent pendant qu'on est remonté.
 export function NewMessagesButton({ count, onPress }: { count: number; onPress: () => void }) {
+  const colors = useColors();
+  const styles = useStyles();
   const appear = useRef(new Animated.Value(0)).current;
   const [shown, setShown] = useState(count);
 
@@ -32,7 +34,7 @@ export function NewMessagesButton({ count, onPress }: { count: number; onPress: 
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createStyles((colors) => ({
   wrap: {
     position: 'absolute',
     bottom: spacing.md,
@@ -46,11 +48,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     borderRadius: radius.full,
     backgroundColor: colors.text,
-    boxShadow: '0px 4px 16px rgba(0, 0, 0, 0.18)',
+    boxShadow: `0px 4px 16px ${colors.shadow}`,
   },
   label: {
     fontSize: 15,
     fontWeight: '600',
     color: colors.background,
   },
-});
+}));

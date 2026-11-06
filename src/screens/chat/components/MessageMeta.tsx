@@ -5,7 +5,7 @@ import { Check, CheckCheck } from 'lucide-react-native';
 import { Message, MessageStatus } from '../../../chat/database';
 
 import { formatTime } from '../format';
-import { sharedStyles } from '../styles';
+import { useChatStyles } from '../styles';
 import { MetaTone } from '../types';
 
 // 1 coche : pas encore reçu. 2 coches grises : reçu par l'autre. 2 coches contrastées : conversation ouverte par l'autre.
@@ -16,6 +16,7 @@ function statusIcon(status: MessageStatus, tone: MetaTone) {
 }
 
 export function MessageMeta({ message, tone, pill }: { message: Message; tone: MetaTone; pill?: boolean }) {
+  const styles = useStyles();
   const { Icon: StatusIcon, color: statusColor, label: statusLabel } = statusIcon(message.status, tone);
   const pop = useRef(new Animated.Value(1)).current;
   const lastStatus = useRef(message.status);
@@ -53,4 +54,4 @@ const localStyles = StyleSheet.create({
   },
 });
 
-const styles = { ...sharedStyles, ...localStyles };
+const useStyles = () => useChatStyles(localStyles);

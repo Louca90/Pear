@@ -14,7 +14,7 @@ import { showDialog } from '../components/dialog';
 import { MediaEditor, MediaEditorHandle } from '../components/MediaEditor';
 import { Avatar, Button, IconButton, RowPressable, useInsets, useNavigationBarHeight } from '../components/ui';
 import { Contact } from '../storage';
-import { colors, radius, spacing } from '../theme';
+import { createMediaStyles, radius, spacing, useMediaColors } from '../theme';
 import { log } from '../log';
 import { VIDEO_BITRATE } from '../config';
 
@@ -52,6 +52,8 @@ type ReviewProps = {
 
 // Après la prise : on garde, on envoie à un contact, ou on jette. Rien ne part sans un choix.
 function CaptureReview({ capture, contacts, onDiscard, onSent }: ReviewProps) {
+  const colors = useMediaColors();
+  const styles = useStyles();
   const { top: topInset } = useInsets();
   const bottom = useNavigationBarHeight();
   const [picking, setPicking] = useState(false);
@@ -163,6 +165,8 @@ type Props = {
 
 // Comme sur Snap : un appui prend une photo, le maintien filme, et glisser vers le cadenas libère le doigt.
 export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
+  const colors = useMediaColors();
+  const styles = useStyles();
   const { top: topInset } = useInsets();
   const [cameraPermission, requestCamera] = useCameraPermissions();
   const [microphonePermission, requestMicrophone] = useMicrophonePermissions();
@@ -467,7 +471,7 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createMediaStyles((colors) => ({
   screen: {
     flex: 1,
     backgroundColor: colors.text,
@@ -622,4 +626,4 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: colors.text,
   },
-});
+}));

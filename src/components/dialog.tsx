@@ -1,7 +1,7 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { Animated, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors, radius, spacing } from '../theme';
+import { createStyles, radius, spacing, useColors } from '../theme';
 
 export type DialogButton = {
   label: string;
@@ -36,6 +36,8 @@ function subscribe(listener: () => void) {
 }
 
 function DialogBox({ dialog }: { dialog: Dialog }) {
+  const colors = useColors();
+  const styles = useStyles();
   const progress = useRef(new Animated.Value(0)).current;
   const closing = useRef(false);
 
@@ -93,7 +95,7 @@ export function DialogHost() {
   return dialog ? <DialogBox dialog={dialog} /> : null;
 }
 
-const styles = StyleSheet.create({
+const useStyles = createStyles((colors) => ({
   overlay: {
     backgroundColor: colors.overlay,
   },
@@ -147,4 +149,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
   },
-});
+}));

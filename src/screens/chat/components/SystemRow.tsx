@@ -1,13 +1,15 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { Message } from '../../../chat/database';
-import { colors } from '../../../theme';
+import { createStyles, useColors } from '../../../theme';
 
 import { systemAction } from '../format';
-import { sharedStyles } from '../styles';
+import { useChatStyles } from '../styles';
 
 // Les événements de la conversation : centrés, sans bulle, comme un message du système.
 export function SystemRow({ message, name, hasWallpaper }: { message: Message; name: string; hasWallpaper: boolean }) {
+  const styles = useStyles();
+  const colors = useColors();
   const author = message.mine === 1 ? 'Vous avez' : `${name} a`;
   return (
     <View style={[styles.systemRow, hasWallpaper && styles.metaPill]}>
@@ -16,7 +18,7 @@ export function SystemRow({ message, name, hasWallpaper }: { message: Message; n
   );
 }
 
-const localStyles = StyleSheet.create({
+const useLocalStyles = createStyles((colors) => ({
   systemRow: {
     alignSelf: 'center',
     paddingVertical: 2,
@@ -25,6 +27,6 @@ const localStyles = StyleSheet.create({
     fontSize: 12,
     color: colors.textMuted,
   },
-});
+}));
 
-const styles = { ...sharedStyles, ...localStyles };
+const useStyles = () => useChatStyles(useLocalStyles());

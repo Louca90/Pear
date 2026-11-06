@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, Linking, Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { Check, ExternalLink } from 'lucide-react-native';
 
 import { Button } from '../components/ui';
-import { colors, radius, spacing } from '../theme';
+import { createStyles, radius, spacing, useColors } from '../theme';
 import { fetchSummary, UpdatedInfo } from './updated';
 
 // Courbe douce, sans rebond.
@@ -11,6 +11,8 @@ const SMOOTH = Easing.bezier(0.2, 0.8, 0.2, 1);
 
 // Une fois, au premier lancement après une mise à jour. Le retour d'Android fait comme OK.
 export function UpdatedPopup({ info, onClose }: { info: UpdatedInfo; onClose: () => void }) {
+  const colors = useColors();
+  const styles = useStyles();
   const [summary, setSummary] = useState(info.summary);
   const appear = useRef(new Animated.Value(0)).current;
   const check = useRef(new Animated.Value(0)).current;
@@ -55,7 +57,7 @@ export function UpdatedPopup({ info, onClose }: { info: UpdatedInfo; onClose: ()
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createStyles((colors) => ({
   backdrop: {
     flex: 1,
     backgroundColor: colors.overlay,
@@ -120,4 +122,4 @@ const styles = StyleSheet.create({
     color: colors.text,
     textDecorationLine: 'underline',
   },
-});
+}));

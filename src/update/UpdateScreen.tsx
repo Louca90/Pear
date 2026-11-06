@@ -1,15 +1,17 @@
 import { useEffect } from 'react';
-import { AppState, BackHandler, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AppState, BackHandler, Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import { Download, ExternalLink, LogOut, RotateCw, Settings } from 'lucide-react-native';
 
 import { formatSize } from '../chat/files';
 import { Button, Screen, useNavigationBarHeight } from '../components/ui';
-import { colors, radius, spacing } from '../theme';
+import { createStyles, radius, spacing, useColors } from '../theme';
 import { Release } from './release';
 import { getInstallPermission, previewUpdateScreen, requestInstallPermission, startUpdate, useUpdateState } from './updates';
 
 // Plein écran et bloquant : ni le bouton retour ni le geste ne le ferment. On met à jour, ou on quitte.
 export function UpdateScreen({ release }: { release: Release }) {
+  const colors = useColors();
+  const styles = useStyles();
   const { phase, progress, error, preview } = useUpdateState();
   const bottom = useNavigationBarHeight();
   const busy = phase === 'downloading' || phase === 'verifying';
@@ -84,7 +86,7 @@ export function UpdateScreen({ release }: { release: Release }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createStyles((colors) => ({
   content: {
     flex: 1,
     paddingHorizontal: spacing.lg,
@@ -160,4 +162,4 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingBottom: spacing.md,
   },
-});
+}));

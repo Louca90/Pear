@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Text, View } from 'react-native';
 import { Flame, Plus, Users } from 'lucide-react-native';
 
 import { describeMessage, getContactProfile, getLastMessage, getStreak } from '../chat/database';
@@ -7,7 +7,7 @@ import { chat } from '../chat/manager';
 import { useBottomBarSpace } from '../components/BottomBar';
 import { Avatar, Button, Header, IconButton, RowPressable, Screen } from '../components/ui';
 import { Contact } from '../storage';
-import { colors, radius, spacing } from '../theme';
+import { createStyles, radius, spacing, useColors } from '../theme';
 
 type Props = {
   contacts: Contact[];
@@ -17,6 +17,8 @@ type Props = {
 };
 
 export function HomeScreen({ contacts, onAdd, onOpen, onProfile }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   useSyncExternalStore(chat.subscribe, chat.getVersion);
   const barSpace = useBottomBarSpace();
 
@@ -83,7 +85,7 @@ export function HomeScreen({ contacts, onAdd, onOpen, onProfile }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createStyles((colors) => ({
   empty: {
     flex: 1,
     alignItems: 'center',
@@ -157,4 +159,4 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: '700',
   },
-});
+}));

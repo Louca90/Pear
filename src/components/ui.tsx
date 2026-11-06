@@ -1,9 +1,9 @@
 import { ReactNode, useRef, useSyncExternalStore } from 'react';
-import { Animated, Image, Pressable, StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
+import { Animated, Image, Pressable, StyleProp, Text, View, ViewStyle } from 'react-native';
 import { ArrowLeft, LucideIcon, User } from 'lucide-react-native';
 
 import { getInsets, subscribeInsets } from '../../modules/pear-native';
-import { colors, radius, spacing } from '../theme';
+import { createStyles, radius, spacing, useColors } from '../theme';
 
 // Les barres d'Android (en dp), toujours à jour : remesurées au déverrouillage, au retour dans l'app
 // et quand on passe des gestes aux boutons.
@@ -17,6 +17,7 @@ export function useNavigationBarHeight() {
 }
 
 export function Screen({ children, edgeToEdgeBottom }: { children: ReactNode; edgeToEdgeBottom?: boolean }) {
+  const styles = useStyles();
   const { top } = useInsets();
   return <View style={[styles.screen, { paddingTop: top }, edgeToEdgeBottom && styles.noBottom]}>{children}</View>;
 }
@@ -58,6 +59,8 @@ export function IconButton({ onPress, label, disabled, hitSlop = 12, style, chil
 }
 
 export function Avatar({ uri, size = 44 }: { uri?: string | null; size?: number }) {
+  const colors = useColors();
+  const styles = useStyles();
   const shape = { width: size, height: size, borderRadius: size / 2 };
   if (uri) return <Image source={{ uri }} style={shape} resizeMode="cover" />;
   return (
@@ -68,6 +71,8 @@ export function Avatar({ uri, size = 44 }: { uri?: string | null; size?: number 
 }
 
 export function Header({ title, subtitle, onBack, action, avatar, onTitlePress }: HeaderProps) {
+  const colors = useColors();
+  const styles = useStyles();
   return (
     <View style={styles.header}>
       {onBack && (
@@ -98,6 +103,7 @@ type RowPressableProps = {
 // Une ligne qu'on touche (liste, menu) : le fond d'appui suit ses coins arrondis au lieu de déborder
 // en rectangle sur les bords du conteneur.
 export function RowPressable({ onPress, onLongPress, style, label, children }: RowPressableProps) {
+  const styles = useStyles();
   return (
     <Pressable
       onPress={onPress}
@@ -119,6 +125,8 @@ type ButtonProps = {
 };
 
 export function Button({ label, icon: Icon, onPress, variant = 'primary' }: ButtonProps) {
+  const colors = useColors();
+  const styles = useStyles();
   const primary = variant === 'primary';
   const foreground = primary ? colors.background : colors.text;
   const scale = useRef(new Animated.Value(1)).current;
@@ -133,7 +141,7 @@ export function Button({ label, icon: Icon, onPress, variant = 'primary' }: Butt
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createStyles((colors) => ({
   // L'app s'affiche sous les barres d'Android : on réserve leur place.
   screen: {
     flex: 1,
@@ -207,4 +215,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
   },
-});
+}));

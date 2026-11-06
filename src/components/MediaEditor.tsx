@@ -8,7 +8,7 @@ import Svg, { G, Image as SvgImage, Rect, Text as SvgText } from 'react-native-s
 
 import { burnOverlay } from '../../modules/pear-native';
 import { VIDEO_BITRATE } from '../config';
-import { colors, radius, spacing } from '../theme';
+import { createMediaStyles, radius, spacing, useMediaColors } from '../theme';
 import { IconButton, useInsets } from './ui';
 import { log } from '../log';
 
@@ -56,6 +56,7 @@ function formatStamp(timestamp: number) {
 }
 
 function ShadowedText({ x, y, size, weight, children }: { x: number; y: number; size: number; weight: '400' | '600'; children: string }) {
+  const colors = useMediaColors();
   const shared = { fontSize: size, fontWeight: weight, textAnchor: 'middle' as const };
   return (
     <>
@@ -84,6 +85,8 @@ type Props = {
 // Tout est dessiné dans un même SVG. Une photo y est dessinée aussi. Une vidéo passe dessous :
 // le SVG, transparent, devient alors le calque que Media3 incruste dans toute la vidéo.
 export function MediaEditor({ uri, kind, takenAt, bottomSpace, ref }: Props) {
+  const colors = useMediaColors();
+  const styles = useStyles();
   const { top: topInset } = useInsets();
   const [size, setSize] = useState<{ width: number; height: number } | null>(null);
   const [filter, setFilter] = useState<Filter>('none');
@@ -238,7 +241,7 @@ export function MediaEditor({ uri, kind, takenAt, bottomSpace, ref }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createMediaStyles((colors) => ({
   canvas: {
     position: 'absolute',
   },
@@ -295,4 +298,4 @@ const styles = StyleSheet.create({
     color: colors.background,
     backgroundColor: colors.overlay,
   },
-});
+}));

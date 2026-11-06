@@ -5,11 +5,11 @@ import { ArrowUp, Check, ChevronUp, Lock, Mic, Paperclip, Pencil, Reply, Trash2,
 import { describeMessage, Message } from '../../../chat/database';
 import { MAX_TEXT_LENGTH } from '../../../chat/manager';
 import { IconButton, useNavigationBarHeight } from '../../../components/ui';
-import { colors, radius, spacing } from '../../../theme';
+import { createStyles, radius, spacing, useColors } from '../../../theme';
 
 import { VOICE_CANCEL_DISTANCE, VOICE_LOCK_DISTANCE } from '../constants';
 import { useVoiceRecorder } from '../hooks/useVoiceRecorder';
-import { sharedStyles } from '../styles';
+import { useChatStyles } from '../styles';
 import { RecordingRow } from './RecordingRow';
 
 type Props = {
@@ -46,6 +46,8 @@ export function Composer({
   onVoiceRecorded,
   onVoiceTooShort,
 }: Props) {
+  const styles = useStyles();
+  const colors = useColors();
   const bottom = useNavigationBarHeight();
   const voice = useVoiceRecorder(onVoiceRecorded, onVoiceTooShort);
   // Le micro devient progressivement une poubelle, au fil du glissé vers la gauche.
@@ -134,7 +136,7 @@ export function Composer({
   );
 }
 
-const localStyles = StyleSheet.create({
+const useLocalStyles = createStyles((colors) => ({
   composerArea: {
     backgroundColor: colors.background,
   },
@@ -191,7 +193,7 @@ const localStyles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderRadius: radius.full,
     backgroundColor: colors.background,
-    boxShadow: '0px 4px 16px rgba(0, 0, 0, 0.14)',
+    boxShadow: `0px 4px 16px ${colors.shadow}`,
     alignItems: 'center',
     gap: 2,
   },
@@ -215,6 +217,6 @@ const localStyles = StyleSheet.create({
   micTrash: {
     backgroundColor: colors.danger,
   },
-});
+}));
 
-const styles = { ...sharedStyles, ...localStyles };
+const useStyles = () => useChatStyles(useLocalStyles());

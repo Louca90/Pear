@@ -10,13 +10,14 @@ import { BubblePalette, radius, spacing } from '../../../theme';
 
 import { SeekBar } from './SeekBar';
 import { formatClock } from '../format';
-import { sharedStyles } from '../styles';
+import { useChatStyles } from '../styles';
 import { log } from '../../../log';
 
 // Un seul vocal à la fois : en lancer un met le précédent en pause.
 let playingVoice: AudioPlayer | null = null;
 
 export function VoiceContent({ message, palette }: { message: Message; palette: BubblePalette }) {
+  const styles = useStyles();
   const player = useAudioPlayer(message.file_uri ?? null, { updateInterval: 200 });
   const status = useAudioPlayerStatus(player);
   const progress = chat.getProgress(message.id);
@@ -84,4 +85,4 @@ const localStyles = StyleSheet.create({
   },
 });
 
-const styles = { ...sharedStyles, ...localStyles };
+const useStyles = () => useChatStyles(localStyles);

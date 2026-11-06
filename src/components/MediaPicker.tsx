@@ -5,7 +5,7 @@ import * as MediaLibrary from 'expo-media-library/legacy';
 import { ArrowLeft, ArrowUp, Images, Play, Settings, X } from 'lucide-react-native';
 
 import { PickedFile } from '../chat/manager';
-import { colors, radius, spacing } from '../theme';
+import { createStyles, radius, spacing, useColors } from '../theme';
 import { showDialog } from './dialog';
 import { Button, IconButton, useInsets, useNavigationBarHeight } from './ui';
 import { log } from '../log';
@@ -39,6 +39,8 @@ function toPickedFile(asset: MediaLibrary.Asset): PickedFile {
 }
 
 function AssetTile({ asset, order, onPress }: { asset: MediaLibrary.Asset; order: number; onPress: () => void }) {
+  const colors = useColors();
+  const styles = useStyles();
   const video = asset.mediaType === MediaLibrary.MediaType.video;
   return (
     <Pressable onPress={onPress} accessibilityLabel={asset.filename} accessibilityState={{ selected: order > 0 }} style={styles.tile}>
@@ -58,6 +60,7 @@ function AssetTile({ asset, order, onPress }: { asset: MediaLibrary.Asset; order
 }
 
 function AssetGrid({ section, album, selected, onToggle }: { section: Section; album: MediaLibrary.Album | null; selected: MediaLibrary.Asset[]; onToggle: (asset: MediaLibrary.Asset) => void }) {
+  const styles = useStyles();
   const [assets, setAssets] = useState<MediaLibrary.Asset[]>([]);
   const [next, setNext] = useState<string | null>(null);
 
@@ -101,6 +104,7 @@ function AssetGrid({ section, album, selected, onToggle }: { section: Section; a
 }
 
 function AlbumList({ onOpen }: { onOpen: (album: MediaLibrary.Album) => void }) {
+  const styles = useStyles();
   const [rows, setRows] = useState<AlbumRow[]>([]);
 
   useEffect(() => {
@@ -139,6 +143,8 @@ function AlbumList({ onOpen }: { onOpen: (album: MediaLibrary.Album) => void }) 
 
 // Notre propre galerie : photos, vidéos et albums, sans quitter l'app. La permission n'est demandée qu'ici.
 export function MediaPicker({ onPick, onClose }: { onPick: (files: PickedFile[]) => void; onClose: () => void }) {
+  const colors = useColors();
+  const styles = useStyles();
   const bottom = useNavigationBarHeight();
   const { top: topInset } = useInsets();
   const [allowed, setAllowed] = useState<boolean | null>(null);
@@ -216,7 +222,7 @@ export function MediaPicker({ onPick, onClose }: { onPick: (files: PickedFile[])
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createStyles((colors) => ({
   screen: {
     flex: 1,
     backgroundColor: colors.background,
@@ -374,4 +380,4 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: colors.background,
   },
-});
+}));

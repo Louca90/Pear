@@ -14,7 +14,7 @@ import { chat, PickedFile } from '../../chat/manager';
 import { showDialog } from '../../components/dialog';
 import { MediaPicker } from '../../components/MediaPicker';
 import { Screen, useInsets } from '../../components/ui';
-import { bubblePalette, colors, spacing } from '../../theme';
+import { bubblePalette, createStyles, spacing, useColors } from '../../theme';
 
 import { AttachMenu } from './components/AttachMenu';
 import { ChatHeader } from './components/ChatHeader';
@@ -28,7 +28,7 @@ import { Toast } from './components/Toast';
 import { JUMP_PULSE_DELAY_MS, LIKE } from './constants';
 import { useChatScroll } from './hooks/useChatScroll';
 import { useKeyboardOpen } from './hooks/useKeyboardOpen';
-import { sharedStyles } from './styles';
+import { useChatStyles } from './styles';
 import { Action, Palettes, Rect, ViewRef } from './types';
 import { log } from '../../log';
 
@@ -43,6 +43,8 @@ type Props = {
 };
 
 export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, preview }: Props) {
+  const styles = useStyles();
+  const colors = useColors();
   const [draft, setDraft] = useState('');
   const [attachOpen, setAttachOpen] = useState(false);
   const attachProgress = useRef(new Animated.Value(0)).current;
@@ -355,7 +357,7 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
   );
 }
 
-const localStyles = StyleSheet.create({
+const useLocalStyles = createStyles((colors) => ({
   wallpaper: {
     ...StyleSheet.absoluteFill,
   },
@@ -376,6 +378,6 @@ const localStyles = StyleSheet.create({
     paddingVertical: spacing.sm,
     gap: spacing.sm,
   },
-});
+}));
 
-const styles = { ...sharedStyles, ...localStyles };
+const useStyles = () => useChatStyles(useLocalStyles());

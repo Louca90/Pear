@@ -6,15 +6,17 @@ import { Pause, Play, X } from 'lucide-react-native';
 
 import { Message } from '../../../chat/database';
 import { IconButton, useNavigationBarHeight } from '../../../components/ui';
-import { colors, radius, spacing } from '../../../theme';
+import { createMediaStyles, radius, spacing, useMediaColors } from '../../../theme';
 
 import { SeekBar } from './SeekBar';
 import { VIEWER_CANCEL_MS, VIEWER_CLOSE_DISTANCE, VIEWER_CLOSE_MS, VIEWER_CLOSE_SPEED, VIEWER_DRAG_START, VIEWER_EASING, VIEWER_MIN_SCALE, VIEWER_OPEN_MS } from '../constants';
-import { sharedStyles } from '../styles';
+import { useChatStyles } from '../styles';
 import { Rect } from '../types';
 
 // Plein écran : juste lecture ou pause et une barre pour se déplacer.
 function VideoControls({ player }: { player: VideoPlayer }) {
+  const styles = useStyles();
+  const colors = useMediaColors();
   const bottom = useNavigationBarHeight();
   const { isPlaying } = useEvent(player, 'playingChange', { isPlaying: player.playing, oldIsPlaying: false });
   const { currentTime } = useEvent(player, 'timeUpdate', { currentTime: player.currentTime, currentLiveTimestamp: null, currentOffsetFromLive: null, bufferedPosition: 0 });
@@ -67,6 +69,8 @@ export type Viewing = { message: Message; rect: Rect; poster: string; size: { wi
 // dès la fermeture. Glissé vers le bas, le média suit le doigt ; lâché trop tôt, il revient en plein écran.
 // Le cadre change de taille à chaque image : ces animations ne peuvent pas passer par le pilote natif.
 export function MediaViewer({ viewing: { message, rect, poster, size }, onClose }: { viewing: Viewing; onClose: () => void }) {
+  const styles = useStyles();
+  const colors = useMediaColors();
   const isVideo = message.kind === 'video';
   const progress = useRef(new Animated.Value(0)).current;
   const drag = useRef(new Animated.ValueXY()).current;
@@ -186,7 +190,7 @@ export function MediaViewer({ viewing: { message, rect, poster, size }, onClose 
   );
 }
 
-const localStyles = StyleSheet.create({
+const useLocalStyles = createMediaStyles((colors) => ({
   videoTap: {
     ...StyleSheet.absoluteFill,
     alignItems: 'center',
@@ -214,6 +218,6 @@ const localStyles = StyleSheet.create({
     top: 56,
     right: spacing.lg,
   },
-});
+}));
 
-const styles = { ...sharedStyles, ...localStyles };
+const useStyles = () => useChatStyles(useLocalStyles());

@@ -1,12 +1,13 @@
 import { StyleSheet, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect as SvgRect, Stop } from 'react-native-svg';
 
-import { colors } from '../../../theme';
+import { useColors } from '../../../theme';
 
 import { COMPOSER_FADE_HEIGHT, COMPOSER_FADE_STOPS } from '../constants';
 
 // Le fond s'efface doucement vers la zone de saisie. Placé sous la liste, il ne couvre jamais les messages.
 export function ComposerFade() {
+  const colors = useColors();
   return (
     <View pointerEvents="none" style={styles.composerFade}>
       <Svg width="100%" height="100%">

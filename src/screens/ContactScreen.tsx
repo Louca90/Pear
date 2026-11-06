@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Check, QrCode, Trash2 } from 'lucide-react-native';
 
 import { ContactProfile } from '../chat/database';
 import { showDialog } from '../components/dialog';
 import { Avatar, Button, Header, Screen } from '../components/ui';
-import { colors, radius, spacing } from '../theme';
+import { createStyles, radius, spacing, useColors } from '../theme';
 
 type Props = {
   initialName: string;
@@ -20,6 +20,8 @@ type Props = {
 };
 
 export function ContactScreen({ initialName, profile, code, isNew, onBack, onSave, onShowMyCode, onRemove }: Props) {
+  const colors = useColors();
+  const styles = useStyles();
   const [name, setName] = useState(initialName);
 
   const confirmRemove = () => {
@@ -77,7 +79,7 @@ export function ContactScreen({ initialName, profile, code, isNew, onBack, onSav
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createStyles((colors) => ({
   flex: {
     flex: 1,
   },
@@ -145,4 +147,4 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textMuted,
   },
-});
+}));

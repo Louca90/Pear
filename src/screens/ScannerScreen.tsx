@@ -5,7 +5,7 @@ import { Camera } from 'lucide-react-native';
 
 import { Button, Header, Screen } from '../components/ui';
 import { parsePairingLink } from '../crypto/pairing';
-import { colors, radius, spacing } from '../theme';
+import { createStyles, radius, spacing } from '../theme';
 
 type Props = {
   onBack: () => void;
@@ -13,6 +13,7 @@ type Props = {
 };
 
 export function ScannerScreen({ onBack, onKeyReceived }: Props) {
+  const styles = useStyles();
   const [permission, requestPermission] = useCameraPermissions();
   const [invalid, setInvalid] = useState(false);
   // La caméra signale le même QR code plusieurs fois par seconde : on ne garde que le premier.
@@ -60,7 +61,7 @@ export function ScannerScreen({ onBack, onKeyReceived }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = createStyles((colors) => ({
   permission: {
     flex: 1,
     justifyContent: 'center',
@@ -79,4 +80,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     padding: spacing.lg,
   },
-});
+}));
