@@ -8,6 +8,7 @@ import {
   deleteOldAvatars,
   editMessage,
   getMessage,
+  markRefused,
   removeOutboxEvent,
   setContactProfileField,
   setContactToken,
@@ -102,6 +103,11 @@ export function receive(core: ChatCore, contact: string, received: unknown) {
     if (size) setProgress(core, data.id, Math.min(1, (data.next * CHUNK_BYTES) / size));
   } else if (data.type === 'file-done' && isValidFileId(data.id)) {
     setStatus(data.id, contact, 'delivered');
+    core.progress.delete(data.id);
+    core.notify();
+  } else if (data.type === 'file-refused' && isValidFileId(data.id)) {
+    // Fichier refusé par l'autre (trop lourd, ou refusé à la main) : il ne repart plus.
+    markRefused(data.id, contact);
     core.progress.delete(data.id);
     core.notify();
   } else if (data.type === 'event-ack' && typeof data.id === 'string') {

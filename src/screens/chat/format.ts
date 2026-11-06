@@ -7,7 +7,8 @@ export function formatTime(timestamp: number) {
 
 // Photo ou vidéo déjà disponible : affichée seule, sans bulle autour.
 export function isBareMedia(message: Message) {
-  return (message.kind === 'image' || message.kind === 'video') && message.status !== 'receiving';
+  const available = message.status !== 'receiving' && message.status !== 'offered' && message.status !== 'refused';
+  return (message.kind === 'image' || message.kind === 'video') && available;
 }
 
 export function formatClock(seconds: number) {

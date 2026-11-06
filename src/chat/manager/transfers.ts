@@ -8,10 +8,15 @@ import {
   deleteOldAvatars,
   finishIncomingFile,
   getMessage,
+  getPendingIncomingBytes,
   setContactProfileField,
   setConversationSetting,
+  setFileSize,
+  setIncomingStatus,
 } from '../database';
 import { CHUNK_BYTES, deleteStoredFile, isValidFileId, MAX_FILE_BYTES, storedFile, storedSize, storeOutgoingFile } from '../files';
+
+import { decideOffer } from '../limits';
 
 import { ChatCore } from './core';
 import { notifyMessage } from './notify';
@@ -98,8 +103,9 @@ export async function streamFile(core: ChatCore, contact: string, id: string, fr
     handle.offset = from * CHUNK_BYTES;
     let index = from;
     while (index * CHUNK_BYTES < size) {
-      // Le message a été supprimé pendant l'envoi : on arrête.
-      if (!getMessage(id, contact)) return;
+      // Le message a été supprimé pendant l'envoi, ou l'autre a refusé le fichier : on arrête.
+      const current = getMessage(id, contact);
+      if (!current || current.status === 'refused') return;
       const batch = await handle.readBytes(Math.min(DISK_BATCH_BYTES, size - index * CHUNK_BYTES));
       if (batch.length === 0) throw new Error('Fin de fichier inattendue');
       for (let offset = 0; offset < batch.length; offset += CHUNK_BYTES) {
@@ -136,14 +142,59 @@ export function receiveFileOffer(core: ChatCore, contact: string, data: Payload)
   if (typeof data.key !== 'string' || from_base64(data.key).length !== FILE_KEY_BYTES) return;
 
   const existing = getMessage(data.id, contact);
+  if (existing?.status === 'refused') {
+    peer.send({ type: 'file-refused', id: data.id });
+    return;
+  }
+  // Proposé et pas encore accepté : il attend notre accord.
+  if (existing?.status === 'offered') return;
   if (existing && existing.status !== 'receiving') {
     peer.send({ type: 'file-done', id: data.id });
     return;
   }
 
-  let incoming = core.incomingFiles.get(data.id);
+  if (!existing) {
+    // Un fichier trop lourd ne s'installe pas tout seul : on demande, ou on refuse (photo de profil, fond).
+    const decision = decideOffer(data.kind, size, getPendingIncomingBytes(contact));
+    if (decision === 'refuse') {
+      log.warn('fichier refusé (trop lourd)', `${data.kind} ${size}`);
+      peer.send({ type: 'file-refused', id: data.id });
+      return;
+    }
+    addMessage({
+      id: data.id,
+      contact,
+      mine: 0,
+      text: data.name.slice(0, 255),
+      status: decision === 'ask' ? 'offered' : 'receiving',
+      created_at: Date.now(),
+      kind: data.kind,
+      file_uri: storedFile(data.id).uri,
+      file_size: size,
+      file_mime: typeof data.mime === 'string' ? data.mime.slice(0, 255) : null,
+      file_key: data.key,
+    });
+    if (decision === 'ask') {
+      const message = getMessage(data.id, contact);
+      if (message && AppState.currentState !== 'active') notifyMessage(core, contact, message);
+      core.notify();
+      return;
+    }
+  } else if (existing.file_size !== size) {
+    // L'expéditeur a corrigé la taille annoncée : on attend la vraie.
+    setFileSize(data.id, contact, size);
+  }
+  startReceiving(core, contact, data.id, size);
+}
+
+// Ouvre (ou reprend) l'écriture du fichier et demande la suite à l'expéditeur.
+function startReceiving(core: ChatCore, contact: string, id: string, size: number) {
+  const peer = core.links.get(contact)?.peer;
+  const message = getMessage(id, contact);
+  if (!peer || !message?.file_key) return;
+  let incoming = core.incomingFiles.get(id);
   if (!incoming) {
-    const file = storedFile(data.id);
+    const file = storedFile(id);
     let partialSize = 0;
     if (file.exists) {
       const partial = file.open(FileMode.ReadOnly);
@@ -155,31 +206,32 @@ export function receiveFileOffer(core: ChatCore, contact: string, data: Payload)
       return;
     }
     if (!file.exists) file.create();
-    addMessage({
-      id: data.id,
-      contact,
-      mine: 0,
-      text: data.name.slice(0, 255),
-      status: 'receiving',
-      created_at: Date.now(),
-      kind: data.kind,
-      file_uri: file.uri,
-      file_size: size,
-      file_mime: typeof data.mime === 'string' ? data.mime.slice(0, 255) : null,
-      file_key: data.key,
-    });
     // Reprise : les morceaux déjà écrits ne sont pas redemandés.
     const next = Math.floor(partialSize / CHUNK_BYTES);
     const handle = file.open(FileMode.ReadWrite);
     handle.offset = next * CHUNK_BYTES;
     // En cas de reprise, la clé enregistrée reste celle du début du fichier.
-    const key = from_base64(existing?.file_key ?? data.key);
-    incoming = { contact, key, handle, size, next, received: next * CHUNK_BYTES, pending: [], pendingBytes: 0 };
-    core.incomingFiles.set(data.id, incoming);
+    incoming = { contact, key: from_base64(message.file_key), handle, size, next, received: next * CHUNK_BYTES, pending: [], pendingBytes: 0 };
+    core.incomingFiles.set(id, incoming);
   }
 
-  if (incoming.received >= size) finishFile(core, contact, data.id, incoming);
-  else peer.send({ type: 'file-resume', id: data.id, from: incoming.next });
+  if (incoming.received >= size) finishFile(core, contact, id, incoming);
+  else peer.send({ type: 'file-resume', id, from: incoming.next });
+  core.notify();
+}
+
+// Fichier proposé accepté : la réception démarre tout de suite si l'autre est connecté, sinon à sa
+// prochaine offre (il la renvoie à chaque connexion).
+export function acceptFile(core: ChatCore, contact: string, id: string) {
+  setIncomingStatus(id, contact, 'offered', 'receiving');
+  const message = getMessage(id, contact);
+  if (message?.status === 'receiving' && message.file_size !== null) startReceiving(core, contact, id, message.file_size);
+  core.notify();
+}
+
+export function refuseFile(core: ChatCore, contact: string, id: string) {
+  setIncomingStatus(id, contact, 'offered', 'refused');
+  core.links.get(contact)?.peer.send({ type: 'file-refused', id });
   core.notify();
 }
 
@@ -194,6 +246,16 @@ export async function receiveChunk(core: ChatCore, contact: string, bytes: Uint8
   if (index !== incoming.next) return;
 
   const data = plain.slice(CHUNK_INDEX_BYTES);
+  // Plus gros que la taille annoncée : on coupe, le fichier ne remplira pas le téléphone.
+  if (incoming.received + data.length > incoming.size) {
+    log.warn("fichier plus gros qu'annoncé, réception coupée");
+    dropIncomingFile(core, contact, id);
+    deleteStoredFile(storedFile(id).uri);
+    setIncomingStatus(id, contact, 'receiving', 'refused');
+    core.links.get(contact)?.peer.send({ type: 'file-refused', id });
+    core.notify();
+    return;
+  }
   incoming.pending.push(data);
   incoming.pendingBytes += data.length;
   incoming.next += 1;

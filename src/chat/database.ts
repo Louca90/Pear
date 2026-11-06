@@ -2,11 +2,13 @@ import { File } from 'expo-file-system';
 import { defaultDatabaseDirectory, openDatabaseSync, SQLiteDatabase } from 'expo-sqlite';
 
 import { LATEST_VERSION, migrate, schemaVersion } from './db/migrations';
-import { deleteStoredFile } from './files';
+import { deleteStoredFile, formatSize } from './files';
 
-// Mes messages : sending (pas encore confirmé), delivered (reçu par l'autre), read (lu par l'autre).
-// Messages reçus : receiving (fichier en cours), delivered (pas lu), read-pending (lu, l'autre n'est pas encore prévenu), read.
-export type MessageStatus = 'sending' | 'receiving' | 'delivered' | 'read-pending' | 'read';
+// Mes messages : sending (pas encore confirmé), delivered (reçu par l'autre), read (lu par l'autre),
+// refused (fichier refusé par l'autre : il ne repart plus).
+// Messages reçus : offered (fichier trop lourd, il attend notre accord), receiving (fichier en cours),
+// delivered (pas lu), read-pending (lu, l'autre n'est pas encore prévenu), read, refused (fichier refusé).
+export type MessageStatus = 'sending' | 'offered' | 'receiving' | 'delivered' | 'read-pending' | 'read' | 'refused';
 // wallpaper et avatar passent par le transfert de fichiers. avatar n'apparaît jamais dans la conversation.
 export type MessageKind = 'text' | 'image' | 'video' | 'audio' | 'file' | 'wallpaper' | 'avatar' | 'system';
 
@@ -166,6 +168,24 @@ export function finishIncomingFile(id: string, contact: string, status: MessageS
   db().runSync("UPDATE messages SET status = ? WHERE id = ? AND contact = ? AND mine = 0 AND status = 'receiving'", status, id, contact);
 }
 
+// Un fichier reçu passe d'un état à l'autre (proposé → en cours, ou → refusé), seulement depuis l'état attendu.
+export function setIncomingStatus(id: string, contact: string, from: MessageStatus, to: MessageStatus) {
+  db().runSync('UPDATE messages SET status = ? WHERE id = ? AND contact = ? AND mine = 0 AND status = ?', to, id, contact, from);
+}
+
+// L'autre a refusé mon fichier : il ne sera plus proposé.
+export function markRefused(id: string, contact: string) {
+  db().runSync("UPDATE messages SET status = 'refused' WHERE id = ? AND contact = ? AND mine = 1 AND status = 'sending'", id, contact);
+}
+
+// La place que prennent déjà les fichiers en cours de réception chez ce contact.
+export function getPendingIncomingBytes(contact: string): number {
+  return (
+    db().getFirstSync<{ total: number | null }>("SELECT SUM(file_size) AS total FROM messages WHERE contact = ? AND mine = 0 AND status = 'receiving'", contact)
+      ?.total ?? 0
+  );
+}
+
 export function getSetting(key: string): string | null {
   return db().getFirstSync<{ value: string | null }>('SELECT value FROM settings WHERE key = ?', key)?.value ?? null;
 }
@@ -236,7 +256,10 @@ export function getStreak(contact: string): number {
 }
 
 // Le texte montré sur l'accueil et dans les notifications.
+const KIND_LABELS: Partial<Record<MessageKind, string>> = { image: 'Photo', video: 'Vidéo', audio: 'Message vocal', file: 'Fichier' };
+
 export function describeMessage(message: Message): string {
+  if (message.status === 'offered') return `${KIND_LABELS[message.kind] ?? 'Fichier'} en attente (${formatSize(message.file_size ?? 0)})`;
   if (message.kind === 'wallpaper') return 'Fond de discussion changé';
   if (message.kind === 'system' && message.text.startsWith('saved:')) return message.text.includes(':video') ? 'Vidéo enregistrée' : 'Photo enregistrée';
   if (message.kind === 'system') return 'Fond de discussion retiré';
@@ -262,7 +285,7 @@ export function getMessages(contact: string): Message[] {
 
 export function getUndelivered(contact: string): Message[] {
   return db().getAllSync<Message>(
-    "SELECT * FROM messages WHERE contact = ? AND mine = 1 AND status NOT IN ('delivered', 'read') ORDER BY created_at",
+    "SELECT * FROM messages WHERE contact = ? AND mine = 1 AND status NOT IN ('delivered', 'read', 'refused') ORDER BY created_at",
     contact,
   );
 }

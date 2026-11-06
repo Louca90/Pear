@@ -46,9 +46,12 @@ type FileContentProps = {
   onLongPress: () => void;
   // Appelé dès que le doigt touche le média : la visionneuse prépare l'image pendant la fenêtre du double appui.
   onPrepare?: () => void;
+  // Fichier trop lourd proposé par l'autre : on le reçoit ou on le refuse.
+  onAccept?: () => void;
+  onRefuse?: () => void;
 };
 
-export function FileContent({ message, palette, mediaHidden, onOpen, onLongPress, onPrepare }: FileContentProps) {
+export function FileContent({ message, palette, mediaHidden, onOpen, onLongPress, onPrepare, onAccept, onRefuse }: FileContentProps) {
   const media = useRef<ViewRef>(null);
   const bare = isBareMedia(message);
   const foreground = bare ? colors.text : palette.text;
@@ -63,7 +66,7 @@ export function FileContent({ message, palette, mediaHidden, onOpen, onLongPress
       onPressIn={onPrepare}
       onLongPress={onLongPress}
       delayLongPress={LONG_PRESS_MS}
-      disabled={message.status === 'receiving'}
+      disabled={message.status === 'receiving' || message.status === 'offered' || message.status === 'refused'}
       style={mediaHidden && styles.hidden}
     >
       {bare && message.kind === 'image' ? (
@@ -85,8 +88,21 @@ export function FileContent({ message, palette, mediaHidden, onOpen, onLongPress
           )}
           <View style={styles.fileText}>
             <Text style={[styles.fileName, { color: foreground }]} numberOfLines={1}>{message.text}</Text>
-            <Text style={[styles.time, { color: secondary }]}>{formatSize(message.file_size ?? 0)}</Text>
+            <Text style={[styles.time, { color: secondary }]}>
+              {formatSize(message.file_size ?? 0)}
+              {message.status === 'refused' ? (message.mine === 1 ? ' · Refusé par ton contact' : ' · Refusé') : ''}
+            </Text>
           </View>
+        </View>
+      )}
+      {message.status === 'offered' && message.mine === 0 && (
+        <View style={styles.offerActions}>
+          <Pressable onPress={onAccept} accessibilityRole="button" style={[styles.offerButton, { backgroundColor: palette.text }]}>
+            <Text style={[styles.offerLabel, { color: palette.background }]}>Recevoir</Text>
+          </Pressable>
+          <Pressable onPress={onRefuse} accessibilityRole="button" style={[styles.offerButton, { backgroundColor: palette.track }]}>
+            <Text style={[styles.offerLabel, { color: palette.text }]}>Refuser</Text>
+          </Pressable>
         </View>
       )}
       {progress !== undefined && (
@@ -112,6 +128,22 @@ const localStyles = StyleSheet.create({
     width: 220,
     height: 220,
     borderRadius: radius.md,
+  },
+  offerActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  offerButton: {
+    flex: 1,
+    height: 36,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  offerLabel: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   fileRow: {
     flexDirection: 'row',

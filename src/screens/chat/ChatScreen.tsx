@@ -293,6 +293,8 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
                   mediaHidden={viewing?.message.id === item.id}
                   onOpenFile={openFile}
                   onPrepareFile={prepareMedia}
+                  onAcceptFile={(message) => chat.acceptFile(contactKey, message.id)}
+                  onRefuseFile={(message) => chat.refuseFile(contactKey, message.id)}
                   onSelect={selectMessage}
                   onDoubleTap={likeMessage}
                   onReply={startReply}

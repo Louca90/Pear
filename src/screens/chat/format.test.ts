@@ -52,6 +52,8 @@ describe('isBareMedia', () => {
 
   it('garde la bulle pendant la réception et pour les autres types', () => {
     expect(isBareMedia(message({ kind: 'image', status: 'receiving' }))).toBe(false);
+    expect(isBareMedia(message({ kind: 'video', status: 'offered' }))).toBe(false);
+    expect(isBareMedia(message({ kind: 'image', mine: 1, status: 'refused' }))).toBe(false);
     expect(isBareMedia(message({ kind: 'file' }))).toBe(false);
     expect(isBareMedia(message({ kind: 'text' }))).toBe(false);
   });

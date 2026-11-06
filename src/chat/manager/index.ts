@@ -11,7 +11,7 @@ import { connect, retryAll, watch } from './connections';
 import { ChatCore } from './core';
 import { addSystemMessage, flush, sendEvent } from './outbox';
 import { getMyProfile, saveProfile, shareProfile } from './profile';
-import { closeIncomingFiles, dropIncomingFile, sendFile } from './transfers';
+import { acceptFile, closeIncomingFiles, dropIncomingFile, refuseFile, sendFile } from './transfers';
 import { PickedFile, WAKE_CHECK_MS } from './types';
 import { wakeIfNeeded } from './wake';
 
@@ -160,6 +160,15 @@ class ChatManager extends ChatCore {
 
   saveProfile(name: string, photoUri: string | null) {
     return saveProfile(this, name, photoUri);
+  }
+
+  // Un fichier trop lourd attend notre accord avant d'être reçu.
+  acceptFile(contact: string, id: string) {
+    acceptFile(this, contact, id);
+  }
+
+  refuseFile(contact: string, id: string) {
+    refuseFile(this, contact, id);
   }
 
   sendFile(contact: string, file: PickedFile) {

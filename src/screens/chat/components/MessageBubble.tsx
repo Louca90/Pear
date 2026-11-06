@@ -32,6 +32,8 @@ type BubbleProps = {
   pulse?: number;
   onOpenFile?: (message: Message, rect: Rect) => void;
   onPrepareFile?: (message: Message) => void;
+  onAcceptFile?: (message: Message) => void;
+  onRefuseFile?: (message: Message) => void;
   onSelect?: (message: Message, rect: Rect) => void;
   onDoubleTap?: (message: Message) => void;
   onReply?: (message: Message) => void;
@@ -40,7 +42,7 @@ type BubbleProps = {
   fit?: TextFit;
 };
 
-export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, onOpenFile, onPrepareFile, onSelect, onDoubleTap, onReply, onJump, fit }: BubbleProps) {
+export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, onOpenFile, onPrepareFile, onAcceptFile, onRefuseFile, onSelect, onDoubleTap, onReply, onJump, fit }: BubbleProps) {
   const container = useRef<ViewRef>(null);
   const mine = message.mine === 1;
   const bare = isBareMedia(message);
@@ -108,7 +110,7 @@ export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, on
           ) : message.kind === 'audio' && message.status !== 'receiving' ? (
             <VoiceContent message={message} palette={palette} />
           ) : (
-            <FileContent message={message} palette={palette} mediaHidden={mediaHidden} onOpen={(rect) => onOpenFile?.(message, rect)} onLongPress={select} onPrepare={onPrepareFile && (() => onPrepareFile(message))} />
+            <FileContent message={message} palette={palette} mediaHidden={mediaHidden} onOpen={(rect) => onOpenFile?.(message, rect)} onLongPress={select} onPrepare={onPrepareFile && (() => onPrepareFile(message))} onAccept={onAcceptFile && (() => onAcceptFile(message))} onRefuse={onRefuseFile && (() => onRefuseFile(message))} />
           )}
           {bare ? (
             <MessageMeta message={message} tone={palettes.hasWallpaper ? ON_WALLPAPER_TONE : PLAIN_TONE} pill={palettes.hasWallpaper} />
