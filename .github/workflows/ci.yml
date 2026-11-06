@@ -20,3 +20,4 @@ jobs:
       - run: npm run lint
       - run: npm test -- --ci
       - run: node server/test/wake.test.js
+      - run: node server/test/pair.test.js

@@ -26,6 +26,20 @@
     "rateLimits": {
       ".read": false,
       ".write": false
+    },
+    "inboxOwners": {
+      "$inbox": {
+        ".read": "auth != null && data.child('uid').val() === auth.uid",
+        ".write": false
+      }
+    },
+    "requests": {
+      "$inbox": {
+        ".read": "auth != null && root.child('inboxOwners/' + $inbox + '/uid').val() === auth.uid",
+        "$id": {
+          ".write": "auth != null && root.child('inboxOwners/' + $inbox + '/uid').val() === auth.uid && !newData.exists()"
+        }
+      }
     }
   }
 }

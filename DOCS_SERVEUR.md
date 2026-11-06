@@ -15,7 +15,16 @@ Les serveurs ne voient jamais le contenu des messages : tout ce qui y passe est 
 ## Base de données (Realtime Database)
 
 - `signals/{salon}/{id}` = `{ from: 'a' | 'b', data: <texte chiffré>, at: <horodatage> }`. Le salon (43 caractères) est dérivé du secret partagé par les deux contacts : impossible à deviner sans ce secret. Chaque message est supprimé par son destinataire après lecture, et par Firebase si l'expéditeur se déconnecte (`onDisconnect`).
-- `rateLimits/caller/{uid}` et `rateLimits/target/{empreinte du token}` = `{ minute, count }` : un seul nœud par appelant et par destinataire, remis à zéro chaque minute. Écrits uniquement par le serveur (SDK admin) ; aucun client ne peut les lire ni les écrire.
+- `inboxOwners/{inboxId}` = `{ uid, at }` : le compte Firebase qui possède la boîte de demandes de pairing. Écrit uniquement par `/api/inbox`, après une preuve de possession de la clé privée ; lisible seulement par ce compte.
+- `requests/{inboxId}/{id}` = `{ v: 1, data: <boîte scellée libsodium, 2 Ko au plus>, at }` : demandes de pairing. Écrites uniquement par `/api/pair-request` ; le propriétaire de la boîte peut les lire et les supprimer, jamais les modifier. Supprimées après 7 jours (tâche quotidienne), et par l'app après lecture.
+- `rateLimits/{type}/{id}` = `{ minute, count }` : un seul nœud par appelant et par destinataire, remis à zéro chaque minute (`caller`, `target` pour le réveil ; `inboxCaller` ; `pairCaller`, `pairInbox`). Écrits uniquement par le serveur (SDK admin) ; aucun client ne peut les lire ni les écrire. La tâche quotidienne supprime les compteurs périmés.
+
+### Calculs partagés avec l'app
+
+- Clé publique : X25519, 32 octets en base64url sans remplissage (43 caractères).
+- `inboxId` = les 32 premiers caractères du base64url de `SHA-256("pear-inbox-v1:" + clé publique)`.
+- Topic FCM des demandes : `pair_{inboxId}`. L'app s'y abonne au démarrage (lot 5) ; seul le serveur envoie aux topics.
+- Preuve pour `/api/inbox` : `secret = X25519(clé privée du téléphone, serverKey)`, `clé = SHA-256(secret)`, `proof = base64url(HMAC-SHA256(clé, "pear-inbox-v1|{uid}|{clé publique}|{at}"))`, avec `at` l'heure en millisecondes (5 minutes d'écart au plus). `serverKey` est donnée par `GET /api/inbox`. Elle est dérivée de la clé de service Firebase : aucun secret de plus à configurer. Si la clé de service change, `serverKey` change et les téléphones refont leur enregistrement.
 
 ### Règles de sécurité
 
@@ -29,11 +38,29 @@ Elles sont versionnées dans `database.rules.json` : tout est fermé par défaut
 
 ## Fonction `/api/wake`
 
-- `POST` avec `Authorization: Bearer <jeton Firebase>` et un corps `{ "token": "<token FCM>" }`, rien d'autre.
+- `POST` avec `Authorization: Bearer <jeton Firebase>` et un corps `{ token, v?, type?, payload? }`. Les apps d'avant le lot 3 n'envoient que `{ token }` : c'est un réveil simple.
+- `type` : `wake` (réveil, sans contenu, durée de vie 5 minutes), `msg` (texte chiffré dans `payload`, lot 4) ou `file` (fichier prêt à recevoir, lot 7), ces deux derniers gardés 7 jours par FCM si le téléphone est éteint. `payload` : base64, 3 500 caractères au plus (FCM limite un push à 4 Ko).
+- Le push reçu est « data-only » : `{ type, v, payload? }`.
 - Réponses : `204` envoyé, `400` corps invalide, `401` jeton absent ou faux, `405` mauvaise méthode, `410` token FCM périmé, `429` trop d'appels, `502` échec FCM, `500` serveur mal configuré.
 - Limites : 30 appels par minute par appelant, 20 par minute par destinataire. Les comptes anonymes pouvant être recréés à volonté, c'est la limite par destinataire qui protège un téléphone d'être bombardé. Si la base est injoignable, le réveil part quand même (la limite ne bloque jamais un vrai message).
 - App Check n'est pas utilisé : la vérification « Play Integrity » de Google ne reconnaît pas un APK installé hors du Play Store.
 - Test local, sans Firebase : `node server/test/wake.test.js`.
+
+## Fonctions de pairing (lot 3)
+
+- `GET /api/inbox` → `{ v, serverKey }`. `POST /api/inbox` `{ v: 1, publicKey, at, proof }` → `{ v, inboxId }` : enregistre la boîte, ou la reprend après une réinstallation (même clé, nouveau compte anonyme). Réponses : `400` corps ou date invalide, `401`, `403` preuve fausse, `429` (10 par minute et par compte).
+- `POST /api/pair-request` `{ v: 1, inboxId, sealed }` : dépose la demande et envoie un push `{ type: 'pair', v }` au topic du destinataire (gardé 7 jours). Réponses : `204`, `400`, `401`, `413` demande trop grosse, `429` (5 par minute et par expéditeur, 10 par minute et par boîte), `507` boîte pleine (50 demandes en attente).
+- `GET /api/cleanup` : tâche quotidienne à 4 h UTC (`server/vercel.json`, gratuite sur le plan Hobby). Elle supprime les demandes de plus de 7 jours et les compteurs périmés, rien d'autre : l'appeler à la main est sans danger.
+- `turn.js` (lot 4) et le relais de fichiers (lot 7) viendront avec leur lot.
+
+**Tests des abus**, sans Firebase : `node server/test/pair.test.js` (aussi lancé par la CI). Cas couverts :
+
+- quelqu'un qui connaît seulement la clé publique ne peut pas prendre la boîte ;
+- une preuve trop vieille ou faite pour un autre compte est refusée ;
+- le spam d'un même expéditeur, ou de plusieurs comptes vers une même boîte, est limité ;
+- une demande trop grosse, ou envoyée sans jeton valide, est refusée ;
+- une boîte pleine refuse les nouvelles demandes, et les demandes expirées libèrent la place ;
+- le nettoyage quotidien supprime les demandes expirées et les compteurs périmés.
 
 ### Variables d'environnement Vercel (noms seulement)
 
