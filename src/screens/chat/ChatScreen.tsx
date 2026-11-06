@@ -371,6 +371,9 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
 const useLocalStyles = createStyles((colors) => ({
   wallpaper: {
     ...StyleSheet.absoluteFill,
+    // S'arrête derrière la saisie (opaque) : collé au bord, l'arrondi des tailles laissait voir une ligne
+    // du fond d'écran sous la barre de navigation.
+    bottom: spacing.lg,
   },
   empty: {
     flex: 1,
