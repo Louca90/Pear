@@ -95,16 +95,17 @@ function readPreference(): ThemePreference {
   return preference;
 }
 
-function update() {
+// `changed` : le choix lui-même a changé (Automatique → Sombre peut garder la même palette).
+function update(changed = false) {
   const wanted = readPreference();
   const scheme = wanted === 'auto' ? (Appearance.getColorScheme() === 'dark' ? 'dark' : 'light') : wanted;
   const next = scheme === 'dark' ? dark : light;
-  if (next === palette) return;
+  if (next === palette && !changed) return;
   palette = next;
   listeners.forEach((listener) => listener());
 }
 
-Appearance.addChangeListener(update);
+Appearance.addChangeListener(() => update());
 
 function subscribe(listener: () => void) {
   listeners.add(listener);
@@ -115,7 +116,7 @@ function subscribe(listener: () => void) {
 
 // Appelé au démarrage, une fois la base ouverte.
 export function loadTheme() {
-  update();
+  update(true);
 }
 
 export function themePreference() {
@@ -125,7 +126,7 @@ export function themePreference() {
 export function setThemePreference(next: ThemePreference) {
   preference = next;
   setSetting(SETTING_KEY, next);
-  update();
+  update(true);
 }
 
 export function useColors(): Palette {

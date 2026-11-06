@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, AppState, BackHandler, Dimensions, StyleSheet, View } from 'react-native';
+import { Animated, AppState, Easing, BackHandler, Dimensions, StyleSheet, View } from 'react-native';
 import { NavigationBar } from 'expo-navigation-bar';
 import { StatusBar } from 'expo-status-bar';
 import * as Linking from 'expo-linking';
@@ -25,7 +25,7 @@ import { HomeScreen } from './src/screens/HomeScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { ScannerScreen } from './src/screens/ScannerScreen';
 import { Contact, hasIdentity, loadContacts, loadOrCreateIdentity, saveContacts } from './src/storage';
-import { createStyles, loadTheme, radius, spacing, useColors } from './src/theme';
+import { createStyles, loadTheme, Palette, radius, spacing, useColors } from './src/theme';
 import { markUpdateSeen, pendingUpdatedInfo, UpdatedInfo } from './src/update/updated';
 import { UpdatedPopup } from './src/update/UpdatedPopup';
 import { checkForUpdate, isBlocking, useUpdateState } from './src/update/updates';
@@ -59,7 +59,9 @@ export default function Root() {
 function App() {
   const styles = useStyles();
   // Icônes des barres système : foncées sur le thème clair, claires sur le sombre.
-  const barStyle = useColors().scheme === 'dark' ? 'light' : 'dark';
+  const colors = useColors();
+  const barStyle = colors.scheme === 'dark' ? 'light' : 'dark';
+  const themeFade = useThemeFade(colors);
   const [identity, setIdentity] = useState<Identity | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [route, setRoute] = useState<Route>({ name: 'home' });
@@ -415,8 +417,29 @@ function App() {
         />
       )}
       <DialogHost />
+      {themeFade}
     </>
   );
+}
+
+const THEME_FADE_MS = 320;
+
+// Voile de la couleur de l'ancien thème, qui s'efface pendant que le nouveau apparaît dessous.
+function useThemeFade(colors: Palette) {
+  const [veil, setVeil] = useState<string | null>(null);
+  const opacity = useRef(new Animated.Value(0)).current;
+  const previous = useRef(colors);
+
+  useEffect(() => {
+    if (previous.current === colors) return;
+    const from = previous.current.background;
+    previous.current = colors;
+    setVeil(from);
+    opacity.setValue(1);
+    Animated.timing(opacity, { toValue: 0, duration: THEME_FADE_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start(() => setVeil(null));
+  }, [colors, opacity]);
+
+  return veil ? <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: veil, opacity }]} /> : null;
 }
 
 const useStyles = createStyles((colors) => ({

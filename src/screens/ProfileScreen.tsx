@@ -7,6 +7,7 @@ import { appVersionCode, appVersionName } from '../../modules/pear-native';
 
 import { chat, MAX_PROFILE_NAME_LENGTH } from '../chat/manager';
 import { showDialog } from '../components/dialog';
+import { SegmentedControl } from '../components/SegmentedControl';
 import { Avatar, Button, Header, IconButton, Screen } from '../components/ui';
 import { createStyles, radius, setThemePreference, spacing, ThemePreference, useColors, useThemePreference } from '../theme';
 import { checkForUpdate, getInstallPermission, previewUpdateScreen, requestInstallPermission, useUpdateState } from '../update/updates';
@@ -104,22 +105,7 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
           </Pressable>
 
           <Text style={[styles.label, styles.section]}>Apparence</Text>
-          <View style={styles.segment}>
-            {THEMES.map((option) => {
-              const selected = option.value === theme;
-              return (
-                <Pressable
-                  key={option.value}
-                  onPress={() => setThemePreference(option.value)}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected }}
-                  style={[styles.segmentItem, selected && styles.segmentItemSelected]}
-                >
-                  <Text style={[styles.segmentLabel, selected && styles.segmentLabelSelected]}>{option.label}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
+          <SegmentedControl options={THEMES} value={theme} onChange={setThemePreference} />
 
           <Text style={[styles.label, styles.section]}>Mises à jour</Text>
           <View style={styles.rows}>
@@ -238,29 +224,5 @@ const useStyles = createStyles((colors) => ({
   },
   pressed: {
     opacity: 0.6,
-  },
-  segment: {
-    flexDirection: 'row',
-    padding: 4,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-  },
-  segmentItem: {
-    flex: 1,
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.sm,
-  },
-  segmentItemSelected: {
-    backgroundColor: colors.accent,
-  },
-  segmentLabel: {
-    fontSize: 15,
-    color: colors.text,
-  },
-  segmentLabelSelected: {
-    color: colors.onAccent,
-    fontWeight: '600',
   },
 }));
