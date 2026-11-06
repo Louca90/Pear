@@ -7,6 +7,7 @@ import { getMessaging, onMessage } from '@react-native-firebase/messaging';
 
 import { addBackListener, backHookAvailable, completeBack, setBackMode } from './modules/pear-native';
 import { cleanupCache } from './src/chat/cleanup';
+import { refreshRemoteConfig } from './src/remoteConfig';
 import { deleteMessages, getContactProfile, openDatabase } from './src/chat/database';
 import { clearNotificationTarget, setNotificationTarget, useNotificationTarget } from './src/chat/notificationTarget';
 import { chat } from './src/chat/manager';
@@ -78,6 +79,9 @@ function App() {
     Promise.resolve()
       .then(openDatabase)
       .then(cleanupCache)
+      .then(() => {
+        refreshRemoteConfig();
+      })
       .then(hasIdentity)
       .then(async (existed) => {
         const [savedIdentity, savedContacts] = await Promise.all([loadOrCreateIdentity(), loadContacts()]);

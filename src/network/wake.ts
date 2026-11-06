@@ -1,14 +1,15 @@
 import { getAuth, getIdToken } from '@react-native-firebase/auth';
 
-import { WAKE_URL } from '../config';
 import { log } from '../log';
+import { wakeUrl } from '../remoteConfig';
 
 // Demande à Vercel un push vide vers ce token. Aucun contenu ne part d'ici.
 export async function wakeContact(fcmToken: string) {
   const user = getAuth().currentUser;
-  if (!user || !WAKE_URL) return;
+  const url = wakeUrl();
+  if (!user || !url) return;
 
-  const response = await fetch(WAKE_URL, {
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${await getIdToken(user)}`,

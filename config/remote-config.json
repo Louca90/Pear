@@ -1,0 +1,4 @@
+{
+  "payload": "{\"wakeUrl\":\"https://pear-drab.vercel.app/api/wake\",\"iceServers\":[{\"urls\":\"stun:stun.l.google.com:19302\"},{\"urls\":\"stun:stun1.l.google.com:19302\"},{\"urls\":\"stun:stun.cloudflare.com:3478\"}],\"version\":1794001008}",
+  "signature": "15c94980cae798e3c37e70c92a1d7f13d5edfe9590320a3501b75502b5f26b502c7dd84a640314028c467b94720b155ac788c5a6688a2644d267d2a9367e9609"
+}

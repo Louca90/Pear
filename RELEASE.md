@@ -45,3 +45,14 @@ L'app affiche la section « Résumé » (jusqu'au titre suivant) et un lien vers
 - En debug (Metro), l'écran bloquant ne s'affiche jamais. Profil → « Voir l'écran de mise à jour (debug) » permet de le tester.
 - Hors ligne ou GitHub injoignable, l'app s'ouvre normalement.
 - Limite de l'API GitHub sans clé : 60 requêtes par heure et par adresse IP. L'app ne vérifie pas plus d'une fois toutes les 5 minutes.
+
+## Configuration distante (sans nouvel APK)
+
+L'URL du serveur de réveil et les serveurs STUN peuvent changer sans publier d'APK :
+
+1. Modifier `config/remote-config.values.json` (URL en `https://` obligatoire).
+2. `node scripts/sign-config.mjs` : signe vers `config/remote-config.json` avec la clé `~/.pear/remote-config-key.hex`.
+3. Commiter et pousser sur `main`. Les téléphones lisent le fichier au lancement (raw.githubusercontent, quelques minutes de cache).
+
+Un fichier mal signé, non valide ou plus ancien que celui déjà reçu est ignoré : l'app garde sa configuration, ou les valeurs de `src/config.ts`.
+La clé privée ne doit jamais entrer dans le dépôt. La sauvegarder avec le keystore : sans elle, il faut publier un APK avec une nouvelle clé publique (`node scripts/sign-config.mjs init`).

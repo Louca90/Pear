@@ -21,6 +21,13 @@ export const ICE_SERVERS = [
   { urls: 'stun:stun.cloudflare.com:3478' },
 ];
 
+// Configuration distante signée (voir src/remoteConfig/parse.ts) : elle peut remplacer WAKE_URL et
+// ICE_SERVERS sans nouvel APK. Les valeurs ci-dessus restent celles par défaut si elle est injoignable.
+export const REMOTE_CONFIG_URL = 'https://raw.githubusercontent.com/Louca90/Pear/main/config/remote-config.json';
+// Clé publique Ed25519 de signature ; la clé privée est hors du dépôt (scripts/sign-config.mjs).
+export const REMOTE_CONFIG_PUBLIC_KEY = '84740cf7b9d167c8b9878958c4bfc6d2a410104213cc7c043e4098de07770b73';
+export const REMOTE_CONFIG_TIMEOUT_MS = 10 * SECOND;
+
 // Mises à jour : la dernière release du dépôt GitHub (voir RELEASE.md).
 export const LATEST_RELEASE_URL = 'https://api.github.com/repos/Louca90/Pear/releases/latest';
 export const RELEASES_PAGE = 'https://github.com/Louca90/Pear/releases/tag/';

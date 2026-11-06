@@ -6,7 +6,8 @@ import { open, seal } from '../crypto/box';
 import { deriveMessageKey } from '../crypto/pairing';
 import { Role, SignalingChannel } from './signaling';
 import { log } from '../log';
-import { DRAIN_POLL_MS, HEARTBEAT_MS, ICE_SERVERS, MAX_BUFFERED_BYTES, PEER_TIMEOUT_MS, RETRY_MS } from '../config';
+import { DRAIN_POLL_MS, HEARTBEAT_MS, MAX_BUFFERED_BYTES, PEER_TIMEOUT_MS, RETRY_MS } from '../config';
+import { iceServers } from '../remoteConfig';
 
 const CONTEXT = 'pear-message-v1';
 
@@ -154,7 +155,7 @@ export class PeerLink {
   private newConnection(session: string) {
     this.closeConnection();
     this.session = session;
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    const pc = new RTCPeerConnection({ iceServers: iceServers() });
     this.pc = pc;
 
     pc.addEventListener('icecandidate', (event) => {
