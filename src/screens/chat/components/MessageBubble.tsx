@@ -1,6 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Animated, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Reply } from 'lucide-react-native';
 
 import { Message } from '../../../chat/database';
@@ -11,8 +10,10 @@ import { MessageMeta } from './MessageMeta';
 import { ReplyQuote } from './ReplyQuote';
 import { SystemRow } from './SystemRow';
 import { VoiceContent } from './VoiceContent';
-import { DOUBLE_TAP_MS, LONG_PRESS_MS, SWIPE_MAX, SWIPE_REPLY, SWIPE_START } from '../constants';
+import { LONG_PRESS_MS, SWIPE_REPLY, SWIPE_START } from '../constants';
 import { isBareMedia } from '../format';
+import { useDoubleTap } from '../hooks/useDoubleTap';
+import { useSwipeReply } from '../hooks/useSwipeReply';
 import { sharedStyles } from '../styles';
 import { MetaTone, Palettes, Rect, ViewRef } from '../types';
 
@@ -34,9 +35,9 @@ type BubbleProps = {
   onReply?: (message: Message) => void;
   onJump?: (id: string) => void;
 };
+
 export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, onOpenFile, onSelect, onDoubleTap, onReply, onJump }: BubbleProps) {
   const container = useRef<ViewRef>(null);
-  const lastTap = useRef(0);
   const mine = message.mine === 1;
   const bare = isBareMedia(message);
   const palette = mine ? palettes.mine : palettes.theirs;
@@ -51,37 +52,7 @@ export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, on
     ]).start();
   }, [pulse, scale]);
 
-  // Mon message glisse vers la gauche, celui de l'autre vers la droite.
-  const direction = mine ? -1 : 1;
-  const swipe = useRef(new Animated.Value(0)).current;
-  const armed = useRef(false);
-  const reply = useRef(onReply);
-  reply.current = onReply;
-  const reset = () => {
-    armed.current = false;
-    Animated.spring(swipe, { toValue: 0, useNativeDriver: true, damping: 18, stiffness: 260 }).start();
-  };
-  const swipeResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_event, gesture) =>
-        gesture.dx * direction > SWIPE_START && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 2,
-      onPanResponderTerminationRequest: () => false,
-      onPanResponderMove: (_event, gesture) => {
-        const distance = Math.max(0, Math.min(SWIPE_MAX, gesture.dx * direction));
-        swipe.setValue(distance * direction);
-        const reached = distance >= SWIPE_REPLY;
-        if (reached !== armed.current) {
-          armed.current = reached;
-          if (reached) Haptics.selectionAsync().catch((e) => console.warn('Pear vibration :', e));
-        }
-      },
-      onPanResponderRelease: () => {
-        if (armed.current) reply.current?.(message);
-        reset();
-      },
-      onPanResponderTerminate: reset,
-    }),
-  ).current;
+  const { swipe, panHandlers: swipeHandlers } = useSwipeReply(message, mine, onReply);
   const iconRange = mine ? [-SWIPE_REPLY, -SWIPE_START] : [SWIPE_START, SWIPE_REPLY];
   const iconOutput = (hiddenValue: number, shownValue: number) => (mine ? [shownValue, hiddenValue] : [hiddenValue, shownValue]);
 
@@ -89,16 +60,7 @@ export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, on
     container.current?.measureInWindow((x, y, width, height) => onSelect?.(message, { x, y, width, height }));
   };
 
-  const press = () => {
-    if (!onDoubleTap) return;
-    const now = Date.now();
-    if (now - lastTap.current < DOUBLE_TAP_MS) {
-      lastTap.current = 0;
-      onDoubleTap(message);
-    } else {
-      lastTap.current = now;
-    }
-  };
+  const press = useDoubleTap(onDoubleTap && (() => onDoubleTap(message)));
 
   if (message.kind === 'wallpaper' || message.kind === 'system') {
     return <SystemRow message={message} name={name} hasWallpaper={palettes.hasWallpaper} />;
@@ -109,7 +71,7 @@ export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, on
       ref={container}
       collapsable={false}
       style={[styles.row, mine ? styles.rowMine : styles.rowTheirs, hidden && styles.hidden]}
-      {...(onReply ? swipeResponder.panHandlers : undefined)}
+      {...(onReply ? swipeHandlers : undefined)}
     >
       {onReply && (
         <Animated.View

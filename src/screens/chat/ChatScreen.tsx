@@ -6,25 +6,26 @@ import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
 import * as Sharing from 'expo-sharing';
-import { ArrowUp, Check, ChevronUp, Copy, Download, Flame, Lock, MessageCircle, Mic, Paperclip, Pencil, Reply, Trash2, X } from 'lucide-react-native';
+import { Copy, Download, MessageCircle, Pencil, Reply, Trash2 } from 'lucide-react-native';
 
-import { describeMessage, getContactProfile, getConversationSettings, getMessages, getStreak, Message } from '../../chat/database';
+import { getConversationSettings, getMessages, Message } from '../../chat/database';
 import { exportCopy, formatSize, MAX_FILE_BYTES, saveToGallery, videoThumbnail } from '../../chat/files';
-import { chat, MAX_TEXT_LENGTH, PickedFile } from '../../chat/manager';
+import { chat, PickedFile } from '../../chat/manager';
 import { showDialog } from '../../components/dialog';
 import { MediaPicker } from '../../components/MediaPicker';
-import { Avatar, Header, IconButton, Screen, useNavigationBarHeight } from '../../components/ui';
-import { bubblePalette, colors, radius, spacing } from '../../theme';
+import { Screen } from '../../components/ui';
+import { bubblePalette, colors, spacing } from '../../theme';
 
 import { AttachMenu } from './components/AttachMenu';
+import { ChatHeader } from './components/ChatHeader';
+import { Composer } from './components/Composer';
 import { ComposerFade } from './components/ComposerFade';
 import { MediaViewer, Viewing } from './components/MediaViewer';
 import { Bubble } from './components/MessageBubble';
 import { MessageSelection } from './components/MessageSelection';
-import { RecordingRow } from './components/RecordingRow';
 import { Toast } from './components/Toast';
-import { JUMP_PULSE_DELAY_MS, ROUTE, VOICE_CANCEL_DISTANCE, VOICE_LOCK_DISTANCE } from './constants';
-import { useVoiceRecorder } from './hooks/useVoiceRecorder';
+import { JUMP_PULSE_DELAY_MS } from './constants';
+import { useKeyboardOpen } from './hooks/useKeyboardOpen';
 import { sharedStyles } from './styles';
 import { Action, Palettes, Rect, ViewRef } from './types';
 
@@ -40,7 +41,6 @@ type Props = {
 
 export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, preview }: Props) {
   const [draft, setDraft] = useState('');
-  const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [attachOpen, setAttachOpen] = useState(false);
   const attachProgress = useRef(new Animated.Value(0)).current;
   const [galleryOpen, setGalleryOpen] = useState(false);
@@ -54,7 +54,7 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
   const input = useRef<ComponentRef<typeof TextInput>>(null);
   const list = useRef<FlatList<Message>>(null);
   const [pulsing, setPulsing] = useState<{ id: string; token: number } | null>(null);
-  const bottom = useNavigationBarHeight();
+  const keyboardOpen = useKeyboardOpen();
   useSyncExternalStore(chat.subscribe, chat.getVersion);
 
   const messages = getMessages(contactKey);
@@ -64,29 +64,12 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
     theirs: bubblePalette(settings.their_bubble ?? colors.surface),
     hasWallpaper: settings.wallpaper_uri !== null,
   };
-  const streak = getStreak(contactKey);
-  const photo = getContactProfile(contactKey).photo_uri;
-  const { status, route } = chat.getLink(contactKey);
-  const subtitle = !chat.isOnline()
-    ? 'Vous êtes hors ligne'
-    : status === 'connected'
-      ? route ? ROUTE[route] : 'Connecté'
-      : 'Votre contact est hors ligne';
 
   useEffect(() => {
     if (preview) return;
     chat.setOpenConversation(contactKey);
     return () => chat.setOpenConversation(null);
   }, [contactKey, preview]);
-
-  useEffect(() => {
-    const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardOpen(true));
-    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardOpen(false));
-    return () => {
-      show.remove();
-      hide.remove();
-    };
-  }, []);
 
   const closeSelection = useRef(() => setSelection(null)).current;
 
@@ -195,13 +178,6 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
     }
   };
 
-  const voice = useVoiceRecorder(
-    (uri, seconds) => sendPicked({ uri, name: `vocal-${seconds}s.m4a`, size: 0, mime: 'audio/mp4', kind: 'audio' }),
-    () => setToast({ text: 'Maintenez le micro pour enregistrer', token: Date.now() }),
-  );
-  // Le micro devient progressivement une poubelle, au fil du glissé vers la gauche.
-  const trashAmount = voice.dragX.interpolate({ inputRange: [-VOICE_CANCEL_DISTANCE, -VOICE_CANCEL_DISTANCE * 0.2], outputRange: [1, 0], extrapolate: 'clamp' });
-
   const sendFromGallery = async (files: PickedFile[]) => {
     setGalleryOpen(false);
     for (const file of files) await sendPicked(file);
@@ -249,29 +225,7 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
       <View ref={root} collapsable={false} pointerEvents="none" style={StyleSheet.absoluteFill} />
       <BlurTargetView ref={blurTarget} style={styles.flex}>
         {settings.wallpaper_uri && <Image source={{ uri: settings.wallpaper_uri }} style={styles.wallpaper} resizeMode="cover" />}
-        <View style={styles.headerBar}>
-          <Header
-            title={name}
-            subtitle={subtitle}
-            onBack={onBack}
-            avatar={<Avatar uri={photo} size={36} />}
-            onTitlePress={onInfo}
-            action={
-              <View style={styles.headerActions}>
-                {streak > 0 && (
-                  <View style={styles.streak} accessibilityLabel={`Série de ${streak} jours`}>
-                    <Flame size={18} color={colors.text} strokeWidth={1.75} />
-                    <Text style={styles.streakCount}>{streak}</Text>
-                  </View>
-                )}
-                <IconButton onPress={onCustomize} label="Personnaliser la conversation" style={styles.moreButton}>
-                  <View style={styles.moreDot} />
-                  <View style={styles.moreDot} />
-                </IconButton>
-              </View>
-            }
-          />
-        </View>
+        <ChatHeader contactKey={contactKey} name={name} onBack={onBack} onInfo={onInfo} onCustomize={onCustomize} />
         {/* Le décalage compense la barre d'état, placée au-dessus de la zone floutée. */}
         <KeyboardAvoidingView behavior="padding" keyboardVerticalOffset={StatusBar.currentHeight ?? 0} style={styles.flex}>
           <View style={styles.flex}>
@@ -323,85 +277,22 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
             onFile={pickDocument}
           />
           </View>
-          <View style={styles.composerArea}>
-          {(replyingTo || editing) && (
-            <View style={styles.composerMode}>
-              {editing ? <Pencil size={20} color={colors.text} strokeWidth={1.75} /> : <Reply size={20} color={colors.text} strokeWidth={1.75} />}
-              <View style={styles.flex}>
-                <Text style={styles.composerModeTitle} numberOfLines={1}>
-                  {editing ? 'Modifier le message' : `Répondre à ${replyingTo?.mine === 1 ? 'vous-même' : name}`}
-                </Text>
-                <Text style={styles.composerModeText} numberOfLines={1}>{describeMessage((editing ?? replyingTo)!)}</Text>
-              </View>
-              <IconButton onPress={cancelComposerMode} label="Annuler">
-                <X size={20} color={colors.text} strokeWidth={1.75} />
-              </IconButton>
-            </View>
-          )}
-          <View style={[styles.composer, { paddingBottom: keyboardOpen ? spacing.sm : bottom + spacing.sm }]}>
-            {voice.phase !== 'idle' ? (
-              <RecordingRow seconds={voice.seconds} locked={voice.phase === 'locked'} dragX={voice.dragX} onDiscard={voice.discard} />
-            ) : (
-              <>
-                <IconButton onPress={() => setAttachOpen(!attachOpen)} label="Joindre un fichier" hitSlop={0} style={styles.attach}>
-                  <Animated.View style={{ transform: [{ rotate: attachProgress.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-45deg'] }) }] }}>
-                    <Paperclip size={20} color={colors.text} strokeWidth={1.75} />
-                  </Animated.View>
-                </IconButton>
-                <TextInput
-                  ref={input}
-                  style={styles.input}
-                  value={draft}
-                  onChangeText={setDraft}
-                  placeholder="Message"
-                  placeholderTextColor={colors.textMuted}
-                  maxLength={MAX_TEXT_LENGTH}
-                  multiline
-                />
-              </>
-            )}
-            {voice.phase === 'holding' && (
-              <Animated.View
-                pointerEvents="none"
-                style={[
-                  styles.voiceLockHint,
-                  { transform: [{ scale: voice.dragY.interpolate({ inputRange: [-VOICE_LOCK_DISTANCE, 0], outputRange: [1.25, 1], extrapolate: 'clamp' }) }] },
-                ]}
-              >
-                <Lock size={18} color={colors.text} strokeWidth={1.75} />
-                <ChevronUp size={16} color={colors.textMuted} strokeWidth={1.75} />
-              </Animated.View>
-            )}
-            {(draft.trim() || editing) && voice.phase === 'idle' ? (
-              <IconButton
-                onPress={send}
-                disabled={!draft.trim()}
-                label={editing ? 'Enregistrer' : 'Envoyer'}
-                hitSlop={0}
-                style={[styles.send, !draft.trim() && styles.sendDisabled]}
-              >
-                {editing ? <Check size={20} color={colors.background} strokeWidth={2} /> : <ArrowUp size={20} color={colors.background} strokeWidth={2} />}
-              </IconButton>
-            ) : (
-              <Animated.View
-                {...voice.panHandlers}
-                accessibilityRole="button"
-                accessibilityLabel={voice.phase === 'locked' ? 'Envoyer le vocal' : 'Maintenir pour enregistrer un vocal'}
-                style={[styles.send, { transform: [{ translateX: voice.dragX }, { translateY: voice.dragY }, { scale: voice.scale }] }]}
-              >
-                <Animated.View style={[styles.micLayer, styles.micTrash, { opacity: trashAmount }]}>
-                  <Trash2 size={20} color={colors.background} strokeWidth={2} />
-                </Animated.View>
-                <Animated.View style={[styles.micLayer, { opacity: Animated.multiply(Animated.subtract(1, trashAmount), Animated.subtract(1, voice.lockProgress)) }]}>
-                  <Mic size={20} color={colors.background} strokeWidth={2} />
-                </Animated.View>
-                <Animated.View style={[styles.micLayer, { opacity: voice.lockProgress }]}>
-                  <ArrowUp size={20} color={colors.background} strokeWidth={2} />
-                </Animated.View>
-              </Animated.View>
-            )}
-          </View>
-          </View>
+          <Composer
+            name={name}
+            draft={draft}
+            onChangeDraft={setDraft}
+            replyingTo={replyingTo}
+            editing={editing}
+            onCancelMode={cancelComposerMode}
+            onSend={send}
+            input={input}
+            keyboardOpen={keyboardOpen}
+            attachOpen={attachOpen}
+            attachProgress={attachProgress}
+            onToggleAttach={() => setAttachOpen(!attachOpen)}
+            onVoiceRecorded={(uri, seconds) => sendPicked({ uri, name: `vocal-${seconds}s.m4a`, size: 0, mime: 'audio/mp4', kind: 'audio' })}
+            onVoiceTooShort={() => setToast({ text: 'Maintenez le micro pour enregistrer', token: Date.now() })}
+          />
         </KeyboardAvoidingView>
       </BlurTargetView>
       {selection && (
@@ -427,37 +318,6 @@ const localStyles = StyleSheet.create({
   wallpaper: {
     ...StyleSheet.absoluteFill,
   },
-  headerBar: {
-    backgroundColor: colors.background,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  streak: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
-  streakCount: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  moreButton: {
-    height: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 4,
-  },
-  moreDot: {
-    width: 4,
-    height: 4,
-    borderRadius: radius.full,
-    backgroundColor: colors.text,
-  },
   empty: {
     flex: 1,
     alignItems: 'center',
@@ -474,86 +334,6 @@ const localStyles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     gap: spacing.sm,
-  },
-  composerArea: {
-    backgroundColor: colors.background,
-  },
-  composerMode: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    backgroundColor: colors.background,
-  },
-  composerModeTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  composerModeText: {
-    fontSize: 13,
-    color: colors.textMuted,
-  },
-  composer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    backgroundColor: colors.background,
-  },
-  attach: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.full,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  input: {
-    flex: 1,
-    minHeight: 44,
-    maxHeight: 120,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 10,
-    fontSize: 16,
-    color: colors.text,
-  },
-  voiceLockHint: {
-    position: 'absolute',
-    right: spacing.md,
-    bottom: '100%',
-    marginBottom: spacing.sm,
-    width: 44,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.full,
-    backgroundColor: colors.background,
-    boxShadow: '0px 4px 16px rgba(0, 0, 0, 0.14)',
-    alignItems: 'center',
-    gap: 2,
-  },
-  send: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.full,
-    backgroundColor: colors.text,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sendDisabled: {
-    backgroundColor: colors.disabled,
-  },
-  micLayer: {
-    ...StyleSheet.absoluteFill,
-    borderRadius: radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  micTrash: {
-    backgroundColor: colors.danger,
   },
 });
 
