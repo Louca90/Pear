@@ -2,6 +2,7 @@ import { Directory, File, FileMode, Paths } from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library/legacy';
 import { getThumbnailAsync } from 'expo-video-thumbnails';
 import { log } from '../log';
+import { exportsDirectory } from './cleanup';
 import { CHUNK_BYTES, MAX_FILE_BYTES } from '../config';
 
 export { CHUNK_BYTES, MAX_FILE_BYTES };
@@ -64,10 +65,11 @@ export function deleteStoredFile(uri: string) {
   }
 }
 
-// Copie temporaire avec le vrai nom, pour l'ouvrir dans une autre app.
+// Copie temporaire avec le vrai nom, pour l'ouvrir dans une autre app. Rangée dans le dossier des
+// exports, vidé au lancement suivant.
 export async function exportCopy(uri: string, name: string): Promise<string> {
   const safeName = name.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').replace(/^\.+/, '') || 'fichier';
-  const copy = new File(Paths.cache, safeName);
+  const copy = new File(exportsDirectory(), safeName);
   await new File(uri).copy(copy, { overwrite: true });
   return copy.uri;
 }
