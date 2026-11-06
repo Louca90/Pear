@@ -6,6 +6,7 @@ import { Camera } from 'lucide-react-native';
 import { Button, Header, Screen } from '../components/ui';
 import { parsePairingLink } from '../crypto/pairing';
 import { createStyles, radius, spacing } from '../theme';
+import { t } from '../i18n';
 
 type Props = {
   onBack: () => void;
@@ -30,15 +31,15 @@ export function ScannerScreen({ onBack, onKeyReceived }: Props) {
     onKeyReceived(key);
   };
 
-  if (!permission) return <Screen><Header title="Scanner" onBack={onBack} /></Screen>;
+  if (!permission) return <Screen><Header title={t('scanner.titre')} onBack={onBack} /></Screen>;
 
   if (!permission.granted) {
     return (
       <Screen>
-        <Header title="Scanner" onBack={onBack} />
+        <Header title={t('scanner.titre')} onBack={onBack} />
         <View style={styles.permission}>
-          <Text style={styles.text}>La caméra sert uniquement à lire le QR code de votre contact.</Text>
-          <Button label="Autoriser la caméra" icon={Camera} onPress={requestPermission} />
+          <Text style={styles.text}>{t('scanner.cameraAide')}</Text>
+          <Button label={t('scanner.autoriserCamera')} icon={Camera} onPress={requestPermission} />
         </View>
       </Screen>
     );
@@ -46,7 +47,7 @@ export function ScannerScreen({ onBack, onKeyReceived }: Props) {
 
   return (
     <Screen>
-      <Header title="Scanner" onBack={onBack} />
+      <Header title={t('scanner.titre')} onBack={onBack} />
       <View style={styles.cameraBox}>
         <CameraView
           style={StyleSheet.absoluteFill}
@@ -55,7 +56,7 @@ export function ScannerScreen({ onBack, onKeyReceived }: Props) {
         />
       </View>
       <Text style={styles.text}>
-        {invalid ? "Ce QR code n'est pas un code Pear." : "Visez le QR code affiché sur l'autre téléphone."}
+        {invalid ? t('scanner.pasPear') : t('scanner.viser')}
       </Text>
     </Screen>
   );

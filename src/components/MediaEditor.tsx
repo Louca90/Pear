@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { ComponentRef, Ref, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Dimensions, Image, PanResponder, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { File, Paths } from 'expo-file-system';
@@ -15,10 +16,10 @@ import { log } from '../log';
 type Filter = 'none' | 'dark' | 'time' | 'date';
 
 const FILTERS: { filter: Filter; label: string }[] = [
-  { filter: 'none', label: 'Original' },
-  { filter: 'dark', label: 'Sombre' },
-  { filter: 'time', label: 'Heure' },
-  { filter: 'date', label: 'Date' },
+  { filter: 'none', label: t('editeur.filtreOriginal') },
+  { filter: 'dark', label: t('editeur.filtreSombre') },
+  { filter: 'time', label: t('editeur.filtreHeure') },
+  { filter: 'date', label: t('editeur.filtreDate') },
 ];
 
 const CAPTION_FONT = 20;
@@ -195,11 +196,11 @@ export function MediaEditor({ uri, kind, takenAt, bottomSpace, ref }: Props) {
             )}
           </Svg>
         )}
-        <View collapsable={false} style={StyleSheet.absoluteFill} accessibilityLabel="Toucher pour écrire, glisser pour changer de filtre" {...pan.panHandlers} />
+        <View collapsable={false} style={StyleSheet.absoluteFill} accessibilityLabel={t('editeur.aide')} {...pan.panHandlers} />
       </View>
 
       <View style={[styles.textButton, { top: topInset + spacing.md }]}>
-        <IconButton onPress={() => setDraft(caption)} label="Ajouter du texte" style={styles.round}>
+        <IconButton onPress={() => setDraft(caption)} label={t('editeur.ajouterTexte')} style={styles.round}>
           <Type size={24} color={colors.background} strokeWidth={1.75} />
         </IconButton>
       </View>
@@ -227,12 +228,12 @@ export function MediaEditor({ uri, kind, takenAt, bottomSpace, ref }: Props) {
             onSubmitEditing={commitDraft}
             submitBehavior="blurAndSubmit"
             maxLength={CAPTION_MAX_LENGTH}
-            placeholder="Écrivez quelque chose"
+            placeholder={t('editeur.ecrire')}
             placeholderTextColor={colors.onDarkMuted}
             multiline
             textAlign="center"
           />
-          <IconButton onPress={commitDraft} label="Valider le texte" style={styles.round}>
+          <IconButton onPress={commitDraft} label={t('editeur.valider')} style={styles.round}>
             <Check size={24} color={colors.background} strokeWidth={2} />
           </IconButton>
         </View>

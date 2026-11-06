@@ -5,6 +5,7 @@ import { decryptFileKey, encryptFileKey, isEncryptedFileKey } from './db/fileKey
 import { LATEST_VERSION, migrate, schemaVersion } from './db/migrations';
 import { deleteStoredFile, formatSize } from './files';
 import { DB_NAME } from '../config';
+import { t } from '../i18n';
 
 // Mes messages : sending (pas encore confirmé), delivered (reçu par l'autre), read (lu par l'autre),
 // refused (fichier refusé par l'autre : il ne repart plus).
@@ -298,17 +299,17 @@ export function getStreak(contact: string): number {
 }
 
 // Le texte montré sur l'accueil et dans les notifications.
-const KIND_LABELS: Partial<Record<MessageKind, string>> = { image: 'Photo', video: 'Vidéo', audio: 'Message vocal', file: 'Fichier' };
+const KIND_LABELS: Partial<Record<MessageKind, string>> = { image: t('apercu.photo'), video: t('apercu.video'), audio: t('apercu.vocal'), file: t('apercu.fichier') };
 
 export function describeMessage(message: Message): string {
-  if (message.status === 'offered') return `${KIND_LABELS[message.kind] ?? 'Fichier'} en attente (${formatSize(message.file_size ?? 0)})`;
-  if (message.kind === 'wallpaper') return 'Fond de discussion changé';
-  if (message.kind === 'system' && message.text.startsWith('saved:')) return message.text.includes(':video') ? 'Vidéo enregistrée' : 'Photo enregistrée';
-  if (message.kind === 'system') return 'Fond de discussion retiré';
-  if (message.kind === 'image') return 'Photo';
-  if (message.kind === 'video') return 'Vidéo';
-  if (message.kind === 'audio') return 'Message vocal';
-  if (message.kind === 'file') return `Fichier : ${message.text}`;
+  if (message.status === 'offered') return t('apercu.enAttente', { type: KIND_LABELS[message.kind] ?? t('apercu.fichier'), taille: formatSize(message.file_size ?? 0) });
+  if (message.kind === 'wallpaper') return t('apercu.fondChange');
+  if (message.kind === 'system' && message.text.startsWith('saved:')) return message.text.includes(':video') ? t('apercu.videoEnregistree') : t('apercu.photoEnregistree');
+  if (message.kind === 'system') return t('apercu.fondRetire');
+  if (message.kind === 'image') return t('apercu.photo');
+  if (message.kind === 'video') return t('apercu.video');
+  if (message.kind === 'audio') return t('apercu.vocal');
+  if (message.kind === 'file') return t('apercu.fichierNom', { nom: message.text });
   return message.text;
 }
 

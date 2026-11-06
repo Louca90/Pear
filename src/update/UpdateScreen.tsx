@@ -7,6 +7,7 @@ import { Button, Screen, useNavigationBarHeight } from '../components/ui';
 import { createStyles, radius, spacing, useColors } from '../theme';
 import { Release } from './release';
 import { getInstallPermission, previewUpdateScreen, requestInstallPermission, startUpdate, useUpdateState } from './updates';
+import { t } from '../i18n';
 
 // Plein écran et bloquant : ni le bouton retour ni le geste ne le ferment. On met à jour, ou on quitte.
 export function UpdateScreen({ release }: { release: Release }) {
@@ -31,15 +32,15 @@ export function UpdateScreen({ release }: { release: Release }) {
 
   const status =
     phase === 'downloading'
-      ? `Téléchargement… ${Math.round(progress * 100)} %`
+      ? t('maj.telechargement', { pourcent: Math.round(progress * 100) })
       : phase === 'verifying'
-        ? 'Vérification du fichier…'
+        ? t('maj.verification')
         : phase === 'installing'
-          ? "Confirmez l'installation dans la fenêtre d'Android."
+          ? t('maj.confirmer')
           : phase === 'permission'
-            ? "Autorisez Pear à installer des mises à jour, puis revenez ici : l'installation reprendra toute seule."
+            ? t('maj.autoriser')
             : phase === 'failed'
-              ? `La mise à jour a échoué. ${error ?? ''}`
+              ? t('maj.echec', { erreur: error ?? '' })
               : null;
 
   return (
@@ -48,15 +49,15 @@ export function UpdateScreen({ release }: { release: Release }) {
         <View style={styles.icon}>
           <Download size={32} color={colors.onAccent} strokeWidth={1.75} />
         </View>
-        <Text style={styles.title}>Mise à jour disponible</Text>
-        <Text style={styles.version}>Version {release.version} · {formatSize(release.apkSize)}</Text>
+        <Text style={styles.title}>{t('maj.disponible')}</Text>
+        <Text style={styles.version}>{t('commun.version')} {release.version} · {formatSize(release.apkSize)}</Text>
 
         <ScrollView style={styles.notes} contentContainerStyle={styles.notesContent}>
-          <Text style={styles.notesText}>{release.summary || 'Une nouvelle version de Pear est prête.'}</Text>
+          <Text style={styles.notesText}>{release.summary || t('maj.prete')}</Text>
         </ScrollView>
         <Pressable onPress={() => Linking.openURL(release.pageUrl)} hitSlop={8} style={styles.link}>
           <ExternalLink size={16} color={colors.text} strokeWidth={1.75} />
-          <Text style={styles.linkText}>Voir tout le détail</Text>
+          <Text style={styles.linkText}>{t('maj.toutLeDetail')}</Text>
         </Pressable>
 
         {status && <Text style={[styles.status, phase === 'failed' && styles.statusError]}>{status}</Text>}
@@ -68,16 +69,16 @@ export function UpdateScreen({ release }: { release: Release }) {
 
         <View style={styles.actions}>
           {phase === 'permission' ? (
-            <Button label="Ouvrir les réglages" icon={Settings} onPress={requestInstallPermission} />
+            <Button label={t('commun.ouvrirReglages')} icon={Settings} onPress={requestInstallPermission} />
           ) : phase === 'failed' ? (
-            <Button label="Réessayer" icon={RotateCw} onPress={startUpdate} />
+            <Button label={t('maj.reessayer')} icon={RotateCw} onPress={startUpdate} />
           ) : (
-            <Button label={busy ? 'Mise à jour en cours…' : phase === 'installing' ? 'Installer' : 'Mettre à jour'} icon={Download} onPress={startUpdate} />
+            <Button label={busy ? t('maj.enCours') : phase === 'installing' ? t('maj.installer') : t('maj.mettreAJour')} icon={Download} onPress={startUpdate} />
           )}
-          <Button label="Quitter" icon={LogOut} variant="secondary" onPress={() => BackHandler.exitApp()} />
+          <Button label={t('maj.quitter')} icon={LogOut} variant="secondary" onPress={() => BackHandler.exitApp()} />
           {preview && (
             <Pressable onPress={() => previewUpdateScreen(false)} style={styles.link}>
-              <Text style={styles.linkText}>Fermer l'aperçu (debug)</Text>
+              <Text style={styles.linkText}>{t('maj.fermerApercu')}</Text>
             </Pressable>
           )}
         </View>

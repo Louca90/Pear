@@ -4,6 +4,7 @@ import { getThumbnailAsync } from 'expo-video-thumbnails';
 import { log } from '../log';
 import { exportsDirectory } from './cleanup';
 import { CHUNK_BYTES, MAX_FILE_BYTES } from '../config';
+import { t } from '../i18n';
 
 export { CHUNK_BYTES, MAX_FILE_BYTES };
 
@@ -92,7 +93,7 @@ export async function videoThumbnail(id: string, uri: string): Promise<string> {
 
 export function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} o`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} Ko`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} Go`;
+  if (bytes < 1024 * 1024) return t('taille.ko', { n: Math.round(bytes / 1024) });
+  if (bytes < 1024 * 1024 * 1024) return t('taille.mo', { n: (bytes / (1024 * 1024)).toFixed(1) });
+  return t('taille.go', { n: (bytes / (1024 * 1024 * 1024)).toFixed(1) });
 }

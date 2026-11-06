@@ -12,11 +12,12 @@ import { Avatar, Button, Header, IconButton, Screen } from '../components/ui';
 import { createStyles, radius, setThemePreference, spacing, ThemePreference, useColors, useThemePreference } from '../theme';
 import { checkForUpdate, getInstallPermission, previewUpdateScreen, requestInstallPermission, useUpdateState } from '../update/updates';
 import { PROFILE_PHOTO_QUALITY } from '../config';
+import { t } from '../i18n';
 
 const THEMES: { value: ThemePreference; label: string }[] = [
-  { value: 'auto', label: 'Automatique' },
-  { value: 'light', label: 'Clair' },
-  { value: 'dark', label: 'Sombre' },
+  { value: 'auto', label: t('profil.themeAuto') },
+  { value: 'light', label: t('profil.themeClair') },
+  { value: 'dark', label: t('profil.themeSombre') },
 ];
 
 export function ProfileScreen({ onBack }: { onBack: () => void }) {
@@ -40,13 +41,13 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
 
   const updateStatus =
     update.status === 'checking'
-      ? 'Recherche en cours…'
+      ? t('profil.recherche')
       : update.status === 'available'
-        ? `Version ${update.release?.version} disponible`
+        ? t('profil.versionDispo', { version: update.release?.version ?? '' })
         : update.status === 'upToDate'
-          ? 'Pear est à jour'
+          ? t('profil.aJour')
           : update.status === 'offline'
-            ? 'Impossible de joindre GitHub'
+            ? t('profil.githubInjoignable')
             : null;
 
   const pickPhoto = async () => {
@@ -61,75 +62,75 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
       await chat.saveProfile(name.trim(), photo);
       onBack();
     } catch (e) {
-      showDialog('Enregistrement impossible', String(e));
+      showDialog(t('commun.enregistrementImpossible'), String(e));
       setSaving(false);
     }
   };
 
   return (
     <Screen>
-      <Header title="Profil" onBack={onBack} />
+      <Header title={t('profil.titre')} onBack={onBack} />
       <KeyboardAvoidingView behavior="padding" style={styles.flex}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <IconButton onPress={pickPhoto} label="Choisir une photo de profil" hitSlop={0} style={styles.photo}>
+          <IconButton onPress={pickPhoto} label={t('profil.choisirPhoto')} hitSlop={0} style={styles.photo}>
             <Avatar uri={photo} size={112} />
             <View style={styles.photoBadge}>
               <Camera size={18} color={colors.onAccent} strokeWidth={1.75} />
             </View>
           </IconButton>
           {photo && (
-            <IconButton onPress={() => setPhoto(null)} label="Retirer la photo" hitSlop={8} style={styles.removePhoto}>
+            <IconButton onPress={() => setPhoto(null)} label={t('profil.retirerPhoto')} hitSlop={8} style={styles.removePhoto}>
               <ImageMinus size={18} color={colors.textMuted} strokeWidth={1.75} />
-              <Text style={styles.removeLabel}>Retirer la photo</Text>
+              <Text style={styles.removeLabel}>{t('profil.retirerPhoto')}</Text>
             </IconButton>
           )}
 
-          <Text style={styles.label}>Votre nom</Text>
+          <Text style={styles.label}>{t('profil.votreNom')}</Text>
           <TextInput
             style={styles.input}
             value={name}
             onChangeText={setName}
-            placeholder="Comment vous présenter"
+            placeholder={t('profil.commentPresenter')}
             placeholderTextColor={colors.textMuted}
             maxLength={MAX_PROFILE_NAME_LENGTH}
           />
-          <Text style={styles.hint}>Votre photo et votre nom ne sont envoyés qu'à vos contacts, directement sur leur téléphone.</Text>
+          <Text style={styles.hint}>{t('profil.confidentialite')}</Text>
 
-          <Button label={saving ? 'Enregistrement...' : 'Enregistrer'} icon={Check} onPress={save} />
+          <Button label={saving ? 'Enregistrement...' : t('commun.enregistrer')} icon={Check} onPress={save} />
 
-          <Text style={[styles.label, styles.section]}>Paramètres</Text>
+          <Text style={[styles.label, styles.section]}>{t('profil.parametres')}</Text>
           <Pressable onPress={() => Linking.openSettings()} style={({ pressed }) => [styles.setting, pressed && styles.pressed]}>
             <Bell size={20} color={colors.text} strokeWidth={1.75} />
-            <Text style={styles.settingLabel}>Notifications et autorisations</Text>
+            <Text style={styles.settingLabel}>{t('commun.notifications')}</Text>
             <ChevronRight size={20} color={colors.textMuted} strokeWidth={1.75} />
           </Pressable>
 
-          <Text style={[styles.label, styles.section]}>Apparence</Text>
+          <Text style={[styles.label, styles.section]}>{t('profil.apparence')}</Text>
           <SegmentedControl options={THEMES} value={theme} onChange={setThemePreference} />
 
-          <Text style={[styles.label, styles.section]}>Mises à jour</Text>
+          <Text style={[styles.label, styles.section]}>{t('profil.misesAJour')}</Text>
           <View style={styles.rows}>
             <Pressable onPress={() => checkForUpdate(true)} style={({ pressed }) => [styles.setting, pressed && styles.pressed]}>
               <RefreshCw size={20} color={colors.text} strokeWidth={1.75} />
               <View style={styles.settingText}>
-                <Text style={styles.settingLabel}>Rechercher une mise à jour</Text>
+                <Text style={styles.settingLabel}>{t('profil.rechercherMaj')}</Text>
                 <Text style={styles.settingDetail}>
-                  Version {appVersionName() ?? '?'} ({appVersionCode() ?? '?'}){updateStatus ? ` · ${updateStatus}` : ''}
+                  {t('commun.version')} {appVersionName() ?? '?'} ({appVersionCode() ?? '?'}){updateStatus ? ` · ${updateStatus}` : ''}
                 </Text>
               </View>
             </Pressable>
             <Pressable onPress={requestInstallPermission} style={({ pressed }) => [styles.setting, pressed && styles.pressed]}>
               <ShieldCheck size={20} color={colors.text} strokeWidth={1.75} />
               <View style={styles.settingText}>
-                <Text style={styles.settingLabel}>Installation des mises à jour</Text>
-                <Text style={styles.settingDetail}>{canInstall ? 'Autorisée' : 'À autoriser dans les réglages'}</Text>
+                <Text style={styles.settingLabel}>{t('profil.installationMaj')}</Text>
+                <Text style={styles.settingDetail}>{canInstall ? t('profil.autorisee') : t('profil.aAutoriser')}</Text>
               </View>
               <ChevronRight size={20} color={colors.textMuted} strokeWidth={1.75} />
             </Pressable>
             {__DEV__ && update.status === 'available' && (
               <Pressable onPress={() => previewUpdateScreen(true)} style={({ pressed }) => [styles.setting, pressed && styles.pressed]}>
                 <Download size={20} color={colors.text} strokeWidth={1.75} />
-                <Text style={styles.settingLabel}>Voir l'écran de mise à jour (debug)</Text>
+                <Text style={styles.settingLabel}>{t('profil.apercuMaj')}</Text>
               </Pressable>
             )}
           </View>

@@ -8,6 +8,7 @@ import { showDialog } from '../components/dialog';
 import { Button, Header, Screen } from '../components/ui';
 import { buildPairingLink, parsePairingLink } from '../crypto/pairing';
 import { createStyles, radius, spacing } from '../theme';
+import { t } from '../i18n';
 
 type Props = {
   publicKey: string;
@@ -23,27 +24,27 @@ export function AddContactScreen({ publicKey, onScan, onKeyReceived }: Props) {
   const pasteLink = async () => {
     const key = parsePairingLink(await Clipboard.getStringAsync());
     if (key) onKeyReceived(key);
-    else showDialog('Lien non reconnu', "Copiez d'abord le lien Pear de votre contact.");
+    else showDialog(t('app.lienNonReconnu'), t('ajout.copierLien'));
   };
 
   return (
     <Screen>
-      <Header title="Ajouter un contact" />
+      <Header title={t('accueil.ajouterContact')} />
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: barSpace }]}>
-        <Text style={styles.text}>Chacun scanne le code de l'autre, une seule fois.</Text>
+        <Text style={styles.text}>{t('ajout.aide')}</Text>
         {/* Le QR code reste noir sur blanc et garde sa marge pour rester lisible. */}
         <View style={styles.qr}>
           <QRCode value={link} size={220} color="#000000" backgroundColor="#FFFFFF" />
         </View>
         <View style={styles.actions}>
-          <Button label="Scanner son code" icon={ScanLine} onPress={onScan} />
+          <Button label={t('ajout.scanner')} icon={ScanLine} onPress={onScan} />
           <Button
-            label="Partager mon lien"
+            label={t('ajout.partager')}
             icon={Share2}
             variant="secondary"
             onPress={() => Share.share({ message: link })}
           />
-          <Button label="Coller un lien" icon={ClipboardPaste} variant="secondary" onPress={pasteLink} />
+          <Button label={t('ajout.coller')} icon={ClipboardPaste} variant="secondary" onPress={pasteLink} />
         </View>
       </ScrollView>
     </Screen>

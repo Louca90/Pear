@@ -6,6 +6,7 @@ import { ContactProfile } from '../chat/database';
 import { showDialog } from '../components/dialog';
 import { Avatar, Button, Header, Screen } from '../components/ui';
 import { createStyles, radius, spacing, useColors } from '../theme';
+import { t } from '../i18n';
 
 type Props = {
   initialName: string;
@@ -25,15 +26,15 @@ export function ContactScreen({ initialName, profile, code, isNew, onBack, onSav
   const [name, setName] = useState(initialName);
 
   const confirmRemove = () => {
-    showDialog('Supprimer ce contact ?', 'Vos messages avec lui seront effacés de ce téléphone, et il faudra refaire le pairing.', [
-      { label: 'Supprimer', style: 'danger', onPress: onRemove },
-      { label: 'Annuler', style: 'cancel' },
+    showDialog(t('contact.supprimerQuestion'), t('contact.supprimerAide'), [
+      { label: t('commun.supprimer'), style: 'danger', onPress: onRemove },
+      { label: t('commun.annuler'), style: 'cancel' },
     ]);
   };
 
   return (
     <Screen>
-      <Header title={isNew ? 'Nouveau contact' : initialName} onBack={onBack} />
+      <Header title={isNew ? t('contact.nouveau') : initialName} onBack={onBack} />
       <KeyboardAvoidingView behavior="padding" style={styles.flex}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           {!isNew && (
@@ -42,35 +43,35 @@ export function ContactScreen({ initialName, profile, code, isNew, onBack, onSav
               {profile.name && <Text style={styles.profileName}>{profile.name}</Text>}
             </View>
           )}
-          <Text style={styles.label}>Code de vérification</Text>
+          <Text style={styles.label}>{t('contact.codeVerification')}</Text>
           <View style={styles.code}>
             {code.map((group, index) => (
               <Text key={index} style={styles.codeGroup}>{group}</Text>
             ))}
           </View>
           <Text style={styles.text}>
-            Ce code doit être identique sur les deux téléphones. S'il est différent, ne continuez pas.
+            {t('contact.codeVerificationAide')}
           </Text>
 
-          <Text style={styles.label}>Nom</Text>
+          <Text style={styles.label}>{t('contact.nom')}</Text>
           <TextInput
             style={styles.input}
             value={name}
             onChangeText={setName}
-            placeholder="Nom du contact"
+            placeholder={t('contact.nomContact')}
             placeholderTextColor={colors.textMuted}
             maxLength={40}
           />
 
           <View style={styles.actions}>
-            <Button label="Enregistrer" icon={Check} onPress={() => onSave(name.trim() || 'Contact')} />
-            <Button label="Montrer mon code" icon={QrCode} variant="secondary" onPress={onShowMyCode} />
+            <Button label={t('commun.enregistrer')} icon={Check} onPress={() => onSave(name.trim() || t('app.contact'))} />
+            <Button label={t('contact.montrerCode')} icon={QrCode} variant="secondary" onPress={onShowMyCode} />
           </View>
 
           {!isNew && (
             <Pressable onPress={confirmRemove} style={styles.remove} hitSlop={8}>
               <Trash2 size={18} color={colors.textMuted} strokeWidth={1.75} />
-              <Text style={styles.removeLabel}>Supprimer ce contact</Text>
+              <Text style={styles.removeLabel}>{t('contact.supprimer')}</Text>
             </Pressable>
           )}
         </ScrollView>

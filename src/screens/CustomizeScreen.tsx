@@ -8,6 +8,7 @@ import { chat } from '../chat/manager';
 import { showDialog } from '../components/dialog';
 import { Button, Header, IconButton, Screen } from '../components/ui';
 import { BUBBLE_COLORS, bubblePalette, createStyles, radius, spacing, useColors } from '../theme';
+import { t } from '../i18n';
 
 // Le fond voyage sur le réseau : une image moins lourde arrive plus vite, sans perte visible en plein écran.
 const WALLPAPER_QUALITY = 0.8;
@@ -20,7 +21,7 @@ function ColorChoices({ selected, onPick }: { selected: string; onPick: (color: 
         <IconButton
           key={color}
           onPress={() => onPick(color)}
-          label={`Couleur ${color}`}
+          label={t('perso.couleur', { couleur: color })}
           hitSlop={0}
           style={[styles.swatch, { backgroundColor: color }]}
         >
@@ -89,7 +90,7 @@ export function CustomizeScreen({ contactKey, name, onBack, onInfo }: Props) {
         kind: 'wallpaper',
       });
     } catch (e) {
-      showDialog('Fond non appliqué', String(e));
+      showDialog(t('perso.fondNonApplique'), String(e));
     } finally {
       setBusy(false);
     }
@@ -97,39 +98,39 @@ export function CustomizeScreen({ contactKey, name, onBack, onInfo }: Props) {
 
   return (
     <Screen>
-      <Header title="Personnaliser" subtitle={name} onBack={onBack} />
+      <Header title={t('perso.titre')} subtitle={name} onBack={onBack} />
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.preview}>
           {settings.wallpaper_uri && <Image source={{ uri: settings.wallpaper_uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />}
           <View style={[styles.previewBubble, styles.previewTheirs, { backgroundColor: theirs.background }]}>
-            <Text style={{ color: theirs.text }}>Le texte reste lisible</Text>
+            <Text style={{ color: theirs.text }}>{t('perso.lisible')}</Text>
           </View>
           <View style={[styles.previewBubble, styles.previewMine, { backgroundColor: mine.background }]}>
-            <Text style={{ color: mine.text }}>Sur toutes les couleurs</Text>
+            <Text style={{ color: mine.text }}>{t('perso.toutesCouleurs')}</Text>
           </View>
         </View>
 
-        <Section title="Bulles">
-          <Text style={styles.label}>Mes bulles</Text>
+        <Section title={t('perso.bulles')}>
+          <Text style={styles.label}>{t('perso.mesBulles')}</Text>
           <ColorChoices selected={mine.background} onPick={(color) => setColor('my_bubble', color)} />
-          <Text style={styles.label}>Ses bulles</Text>
+          <Text style={styles.label}>{t('perso.sesBulles')}</Text>
           <ColorChoices selected={theirs.background} onPick={(color) => setColor('their_bubble', color)} />
-          <Text style={styles.hint}>Ces couleurs restent propres à ce téléphone.</Text>
+          <Text style={styles.hint}>{t('perso.couleursLocales')}</Text>
         </Section>
 
-        <Section title="Fond de discussion">
-          <Text style={styles.hint}>Il change sur vos deux téléphones.</Text>
+        <Section title={t('perso.fond')}>
+          <Text style={styles.hint}>{t('perso.fondPartage')}</Text>
           <View style={styles.actions}>
-            <Button label={busy ? 'Préparation...' : 'Choisir une image'} icon={Images} onPress={pickWallpaper} />
+            <Button label={busy ? t('perso.preparation') : t('perso.choisirImage')} icon={Images} onPress={pickWallpaper} />
             {settings.wallpaper_uri && (
-              <Button label="Retirer le fond" icon={ImageMinus} variant="secondary" onPress={() => chat.clearWallpaper(contactKey)} />
+              <Button label={t('perso.retirerFond')} icon={ImageMinus} variant="secondary" onPress={() => chat.clearWallpaper(contactKey)} />
             )}
           </View>
         </Section>
 
-        <Section title="Conversation">
-          <SettingRow icon={User} label="Infos du contact" onPress={onInfo} />
-          <SettingRow icon={Bell} label="Notifications et autorisations" onPress={() => Linking.openSettings()} />
+        <Section title={t('perso.conversation')}>
+          <SettingRow icon={User} label={t('perso.infosContact')} onPress={onInfo} />
+          <SettingRow icon={Bell} label={t('commun.notifications')} onPress={() => Linking.openSettings()} />
         </Section>
       </ScrollView>
     </Screen>

@@ -5,6 +5,7 @@ import { Check, ExternalLink } from 'lucide-react-native';
 import { Button } from '../components/ui';
 import { createStyles, radius, spacing, useColors } from '../theme';
 import { fetchSummary, UpdatedInfo } from './updated';
+import { t } from '../i18n';
 
 // Courbe douce, sans rebond.
 const SMOOTH = Easing.bezier(0.2, 0.8, 0.2, 1);
@@ -34,10 +35,10 @@ export function UpdatedPopup({ info, onClose }: { info: UpdatedInfo; onClose: ()
           <Animated.View style={[styles.check, { transform: [{ scale: check }, { rotate: check.interpolate({ inputRange: [0, 1], outputRange: ['-45deg', '0deg'] }) }] }]}>
             <Check size={30} color={colors.onAccent} strokeWidth={2.5} />
           </Animated.View>
-          <Text style={styles.title}>Pear est à jour !</Text>
+          <Text style={styles.title}>{t('maj.aJour')}</Text>
 
           <View style={styles.box}>
-            <Text style={styles.version}>Version {info.version}</Text>
+            <Text style={styles.version}>{t('commun.version')} {info.version}</Text>
             {summary && (
               <ScrollView style={styles.summary}>
                 <Text style={styles.summaryText}>{summary}</Text>
@@ -47,7 +48,7 @@ export function UpdatedPopup({ info, onClose }: { info: UpdatedInfo; onClose: ()
 
           <Pressable onPress={() => Linking.openURL(info.pageUrl)} hitSlop={8} style={styles.link}>
             <ExternalLink size={16} color={colors.text} strokeWidth={1.75} />
-            <Text style={styles.linkText}>Voir le détail de la mise à jour sur GitHub</Text>
+            <Text style={styles.linkText}>{t('maj.detailGithub')}</Text>
           </Pressable>
 
           <Button label="OK" icon={Check} onPress={onClose} />

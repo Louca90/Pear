@@ -9,14 +9,15 @@ import { createStyles, radius, spacing, useColors } from '../theme';
 import { showDialog } from './dialog';
 import { Button, IconButton, useInsets, useNavigationBarHeight } from './ui';
 import { log } from '../log';
+import { t } from '../i18n';
 
 type Section = 'photos' | 'videos' | 'albums';
 type AlbumRow = { album: MediaLibrary.Album; cover: string | null };
 
 const SECTIONS: { section: Section; label: string }[] = [
-  { section: 'photos', label: 'Photos' },
-  { section: 'videos', label: 'Vidéos' },
-  { section: 'albums', label: 'Albums' },
+  { section: 'photos', label: t('chat.photos') },
+  { section: 'videos', label: t('galerie.videos') },
+  { section: 'albums', label: t('galerie.albums') },
 ];
 
 const COLUMNS = 3;
@@ -98,7 +99,7 @@ function AssetGrid({ section, album, selected, onToggle }: { section: Section; a
           onPress={() => onToggle(item)}
         />
       )}
-      ListEmptyComponent={<Text style={styles.emptyText}>Rien à afficher ici.</Text>}
+      ListEmptyComponent={<Text style={styles.emptyText}>{t('galerie.vide')}</Text>}
     />
   );
 }
@@ -168,7 +169,7 @@ export function MediaPicker({ onPick, onClose }: { onPick: (files: PickedFile[])
     try {
       onPick(selected.map(toPickedFile));
     } catch (e) {
-      showDialog('Envoi impossible', String(e));
+      showDialog(t('chat.envoiImpossible'), String(e));
     }
   };
 
@@ -178,17 +179,17 @@ export function MediaPicker({ onPick, onClose }: { onPick: (files: PickedFile[])
     <Modal visible animationType="slide" onRequestClose={back} statusBarTranslucent navigationBarTranslucent>
       <View style={[styles.screen, { paddingTop: topInset }]}>
         <View style={styles.header}>
-          <IconButton onPress={back} label={album ? 'Retour aux albums' : 'Fermer'}>
+          <IconButton onPress={back} label={album ? t('galerie.retourAlbums') : t('commun.fermer')}>
             {album ? <ArrowLeft size={24} color={colors.text} strokeWidth={1.75} /> : <X size={24} color={colors.text} strokeWidth={1.75} />}
           </IconButton>
-          <Text style={styles.title} numberOfLines={1}>{album ? album.title : 'Galerie'}</Text>
+          <Text style={styles.title} numberOfLines={1}>{album ? album.title : t('galerie.titre')}</Text>
         </View>
 
         {allowed === false ? (
           <View style={styles.denied}>
             <Images size={28} color={colors.textMuted} strokeWidth={1.75} />
-            <Text style={styles.emptyText}>Autorisez l'accès aux photos et vidéos pour les envoyer.</Text>
-            <Button label="Ouvrir les réglages" icon={Settings} onPress={() => Linking.openSettings()} />
+            <Text style={styles.emptyText}>{t('galerie.autoriser')}</Text>
+            <Button label={t('commun.ouvrirReglages')} icon={Settings} onPress={() => Linking.openSettings()} />
           </View>
         ) : allowed === null ? null : (
           <>
@@ -211,8 +212,8 @@ export function MediaPicker({ onPick, onClose }: { onPick: (files: PickedFile[])
 
         {selected.length > 0 && (
           <View style={[styles.sendWrapper, { bottom: bottom + spacing.md }]}>
-            <IconButton onPress={send} label={`Envoyer ${selected.length} éléments`} hitSlop={0} style={styles.send}>
-              <Text style={styles.sendLabel}>{`Envoyer (${selected.length})`}</Text>
+            <IconButton onPress={send} label={t('galerie.envoyerElements', { n: selected.length })} hitSlop={0} style={styles.send}>
+              <Text style={styles.sendLabel}>{t('galerie.envoyerN', { n: selected.length })}</Text>
               <ArrowUp size={20} color={colors.onAccent} strokeWidth={2} />
             </IconButton>
           </View>

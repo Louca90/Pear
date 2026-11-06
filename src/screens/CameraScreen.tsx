@@ -17,6 +17,7 @@ import { Contact } from '../storage';
 import { createMediaStyles, radius, spacing, useMediaColors } from '../theme';
 import { log } from '../log';
 import { VIDEO_BITRATE } from '../config';
+import { t } from '../i18n';
 
 // En dessous de ce temps, c'est une photo. Au-delà, le maintien filme.
 const HOLD_MS = 250;
@@ -91,7 +92,7 @@ function CaptureReview({ capture, contacts, onDiscard, onSent }: ReviewProps) {
       vibrate();
       setSaved(true);
     } catch (e) {
-      showDialog('Enregistrement impossible', String(e));
+      showDialog(t('commun.enregistrementImpossible'), String(e));
     }
   };
 
@@ -103,7 +104,7 @@ function CaptureReview({ capture, contacts, onDiscard, onSent }: ReviewProps) {
       await chat.sendFile(contact.publicKey, { uri, name: `${capture.kind === 'video' ? 'video' : 'photo'}${ending}`, size: 0, mime, kind: capture.kind });
       onSent(contact.publicKey);
     } catch (e) {
-      showDialog('Envoi impossible', String(e));
+      showDialog(t('chat.envoiImpossible'), String(e));
     }
   };
 
@@ -112,18 +113,18 @@ function CaptureReview({ capture, contacts, onDiscard, onSent }: ReviewProps) {
       <View style={styles.review}>
         <MediaEditor ref={editor} uri={capture.uri} kind={capture.kind} takenAt={capture.takenAt} bottomSpace={bottom + REVIEW_SEND_SPACE} />
         <View style={[styles.topControls, { top: topInset + spacing.md }]}>
-          <IconButton onPress={onDiscard} label="Jeter" style={styles.roundControl}>
+          <IconButton onPress={onDiscard} label={t('camera.jeter')} style={styles.roundControl}>
             <X size={24} color={colors.background} strokeWidth={1.75} />
           </IconButton>
-          <IconButton onPress={save} disabled={saved} label={saved ? 'Enregistré' : 'Enregistrer dans la galerie'} style={styles.roundControl}>
+          <IconButton onPress={save} disabled={saved} label={saved ? t('camera.enregistre') : t('camera.enregistrerGalerie')} style={styles.roundControl}>
             {saved ? <Check size={24} color={colors.background} strokeWidth={2} /> : <Download size={24} color={colors.background} strokeWidth={1.75} />}
           </IconButton>
         </View>
         <View style={[styles.reviewSend, { bottom: bottom + spacing.lg }]}>
-          <Button label="Envoyer à" icon={Send} variant="secondary" onPress={() => setPicking(true)} />
+          <Button label={t('camera.envoyerA')} icon={Send} variant="secondary" onPress={() => setPicking(true)} />
         </View>
 
-        {picking && <Pressable style={StyleSheet.absoluteFill} onPress={() => setPicking(false)} accessibilityLabel="Fermer" />}
+        {picking && <Pressable style={StyleSheet.absoluteFill} onPress={() => setPicking(false)} accessibilityLabel={t('commun.fermer')} />}
         <Animated.View
           pointerEvents={picking ? 'auto' : 'none'}
           onLayout={(event) => setSheetHeight(event.nativeEvent.layout.height)}
@@ -133,7 +134,7 @@ function CaptureReview({ capture, contacts, onDiscard, onSent }: ReviewProps) {
             { transform: [{ translateY: sheet.interpolate({ inputRange: [0, 1], outputRange: [sheetHeight, 0] }) }] },
           ]}
         >
-          <Text style={styles.sheetTitle}>Envoyer à</Text>
+          <Text style={styles.sheetTitle}>{t('camera.envoyerA')}</Text>
           <FlatList
             data={contacts}
             keyExtractor={(contact) => contact.publicKey}
@@ -143,13 +144,13 @@ function CaptureReview({ capture, contacts, onDiscard, onSent }: ReviewProps) {
                 <Text style={styles.contactName} numberOfLines={1}>{item.name}</Text>
               </RowPressable>
             )}
-            ListEmptyComponent={<Text style={styles.sheetEmpty}>Ajoutez d'abord un contact.</Text>}
+            ListEmptyComponent={<Text style={styles.sheetEmpty}>{t('camera.aucunContact')}</Text>}
           />
         </Animated.View>
         {preparing && (
           <View style={styles.preparing} accessibilityLiveRegion="polite">
             <ActivityIndicator color={colors.background} size="large" />
-            <Text style={styles.preparingText}>{capture.kind === 'video' ? 'Préparation de la vidéo...' : "Préparation de l'image..."}</Text>
+            <Text style={styles.preparingText}>{capture.kind === 'video' ? t('camera.preparationVideo') : t('camera.preparationImage')}</Text>
           </View>
         )}
       </View>
@@ -244,7 +245,7 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
       })
       .catch((e) => {
         log.warn('vidéo', e);
-        showDialog('Vidéo non enregistrée', "Maintenez le bouton un peu plus longtemps.");
+        showDialog(t('camera.videoNonEnregistree'), t('camera.maintenirPlus'));
       })
       .finally(resetFilming);
   };
@@ -271,7 +272,7 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
       const photo = await camera.current?.takePictureAsync({ quality: PHOTO_QUALITY });
       if (photo?.uri) setCapture({ uri: photo.uri, kind: 'image', takenAt: Date.now() });
     } catch (e) {
-      showDialog('Photo non prise', String(e));
+      showDialog(t('camera.photoNonPrise'), String(e));
     }
   };
 
@@ -369,9 +370,9 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
     return (
       <View style={styles.denied}>
         <Camera size={28} color={colors.text} strokeWidth={1.75} />
-        <Text style={styles.deniedText}>Autorisez la caméra pour prendre des photos et des vidéos.</Text>
+        <Text style={styles.deniedText}>{t('camera.autoriserAide')}</Text>
         <Button
-          label={cameraPermission.canAskAgain ? 'Autoriser la caméra' : 'Ouvrir les réglages'}
+          label={cameraPermission.canAskAgain ? t('scanner.autoriserCamera') : t('commun.ouvrirReglages')}
           icon={cameraPermission.canAskAgain ? Camera : Settings}
           onPress={() => (cameraPermission.canAskAgain ? requestCamera() : Linking.openSettings())}
         />
@@ -399,14 +400,14 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
       )}
 
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.flipFade, { opacity: flipFade }]} />
-      <View collapsable={false} style={StyleSheet.absoluteFill} accessibilityLabel="Double appui ou glissé pour changer de caméra" {...surface.panHandlers} />
+      <View collapsable={false} style={StyleSheet.absoluteFill} accessibilityLabel={t('camera.changerAide')} {...surface.panHandlers} />
 
       {!filming && (
         <View style={[styles.topControls, { top: topInset + spacing.md }]}>
-          <IconButton onPress={() => setFlashOn(!flashOn)} label={flashOn ? 'Couper le flash' : 'Activer le flash'} style={styles.roundControl}>
+          <IconButton onPress={() => setFlashOn(!flashOn)} label={flashOn ? t('camera.couperFlash') : t('camera.activerFlash')} style={styles.roundControl}>
             {flashOn ? <Zap size={24} color={colors.background} fill={colors.background} strokeWidth={1.75} /> : <ZapOff size={24} color={colors.background} strokeWidth={1.75} />}
           </IconButton>
-          <IconButton onPress={flipCamera} label="Changer de caméra" style={styles.roundControl}>
+          <IconButton onPress={flipCamera} label={t('camera.changerCamera')} style={styles.roundControl}>
             <SwitchCamera size={24} color={colors.background} strokeWidth={1.75} />
           </IconButton>
         </View>
@@ -424,7 +425,7 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
         <Animated.View
           {...shutter.panHandlers}
           accessibilityRole="button"
-          accessibilityLabel={locked ? 'Arrêter la vidéo' : 'Appuyer pour une photo, maintenir pour une vidéo'}
+          accessibilityLabel={locked ? t('camera.arreterVideo') : t('camera.declencheur')}
           style={[styles.shutter, filming && styles.shutterFilming, { transform: [{ translateX: shutterX }, { scale: shutterScale }] }]}
         >
           <Animated.View style={[styles.shutterInner, { opacity: lockProgress.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }]} />
@@ -442,7 +443,7 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
         {filming && (
           <Animated.View
             pointerEvents="none"
-            accessibilityLabel="Lâcher ici pour verrouiller"
+            accessibilityLabel={t('camera.verrouiller')}
             style={[
               styles.lock,
               {
