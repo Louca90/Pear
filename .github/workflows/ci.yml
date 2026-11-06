@@ -1,0 +1,22 @@
+# Vérifications à chaque push : types, règles de code, tests de l'app et du serveur de réveil.
+name: Vérifications
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      # Les patches (patch-package) s'appliquent ici : l'installation échoue s'ils ne passent plus.
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test -- --ci
+      - run: node server/test/wake.test.js
