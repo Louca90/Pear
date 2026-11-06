@@ -7,6 +7,7 @@ import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.util.Log
 import android.view.View
 import android.view.ViewTreeObserver
 import androidx.activity.BackEventCompat
@@ -105,12 +106,15 @@ class PearNativeModule : Module() {
   }
 
   // React Native garde son retour toujours actif, ce qui empêche l'aperçu d'Android. Il ne propose
-  // pas de réglage pour ça : on atteint donc ce champ privé. S'il change un jour, seul cet aperçu est perdu.
+  // pas de réglage pour ça (vérifié avec React Native 0.88) : on atteint donc ce champ privé. S'il
+  // change un jour, seul cet aperçu est perdu : le retour normal continue de marcher, et l'app le
+  // signale dans son journal (backHookAvailable). À revérifier à chaque mise à jour de React Native.
   private fun reactBackCallback(activity: ComponentActivity): OnBackPressedCallback? = try {
     val field = ReactActivity::class.java.getDeclaredField("mBackPressedCallback")
     field.isAccessible = true
     field.get(activity) as? OnBackPressedCallback
   } catch (e: Exception) {
+    Log.w("PearNative", "Champ mBackPressedCallback introuvable : aperçu du retour désactivé", e)
     null
   }
 
@@ -122,6 +126,12 @@ class PearNativeModule : Module() {
     // "system" : Android montre son propre aperçu pour quitter. "app" : l'app anime elle-même le geste.
     // "default" : retour normal, sans aperçu.
     AsyncFunction("setBackMode") { mode: String -> setBackMode(mode) }.runOnQueue(Queues.MAIN)
+
+    // Faux si la réflexion sur React Native ne marche plus (voir reactBackCallback).
+    Function("backHookAvailable") {
+      val activity = appContext.currentActivity as? ComponentActivity ?: return@Function true
+      reactBackCallback(activity) != null
+    }
 
     // Le geste est allé au bout : le retour repasse par le chemin normal, jusqu'au BackHandler de l'app.
     AsyncFunction("completeBack") { completeBack() }.runOnQueue(Queues.MAIN)

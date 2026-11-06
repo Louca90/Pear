@@ -13,6 +13,7 @@ declare class PearNativeModule extends NativeModule<{ onBack: (event: BackEvent)
   watchInsets(): Promise<void>;
   setBackMode(mode: 'system' | 'app' | 'default'): Promise<void>;
   completeBack(): Promise<void>;
+  backHookAvailable(): boolean;
   appVersionCode(): number | null;
   appVersionName(): string | null;
   canRequestPackageInstalls(): boolean;
@@ -26,6 +27,11 @@ const PearNative = requireNativeModule<PearNativeModule>('PearNative');
 
 export function setBackMode(mode: 'system' | 'app' | 'default') {
   return PearNative.setBackMode(mode);
+}
+
+// Faux si la lecture du retour de React Native par réflexion ne marche plus (après une mise à jour de RN).
+export function backHookAvailable() {
+  return PearNative.backHookAvailable();
 }
 
 export function completeBack() {

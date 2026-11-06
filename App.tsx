@@ -5,7 +5,7 @@ import * as Linking from 'expo-linking';
 import notifee, { EventType } from '@notifee/react-native';
 import { getMessaging, onMessage } from '@react-native-firebase/messaging';
 
-import { addBackListener, completeBack, setBackMode } from './modules/pear-native';
+import { addBackListener, backHookAvailable, completeBack, setBackMode } from './modules/pear-native';
 import { deleteMessages, getContactProfile, openDatabase } from './src/chat/database';
 import { clearNotificationTarget, setNotificationTarget, useNotificationTarget } from './src/chat/notificationTarget';
 import { chat } from './src/chat/manager';
@@ -88,6 +88,11 @@ function App() {
         setError(String(e));
       });
   }, [attempt]);
+
+  // Le retour prédictif dépend d'un champ privé de React Native : on le signale s'il a disparu.
+  useEffect(() => {
+    if (!backHookAvailable()) log.warn('retour prédictif indisponible : mBackPressedCallback introuvable');
+  }, []);
 
   // Au lancement et à chaque retour au premier plan, avec un délai minimum entre deux vérifications.
   useEffect(() => {
