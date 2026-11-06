@@ -56,6 +56,8 @@ export function Composer({
 
   return (
     <View style={styles.composerArea}>
+      {/* Comble l'espace qui peut rester entre la saisie et le clavier (ou le bas de l'écran) : le fond d'écran n'y transparaît plus. */}
+      <View pointerEvents="none" style={styles.composerUnderlay} />
       {(replyingTo || editing) && (
         <View style={styles.composerMode}>
           {editing ? <Pencil size={20} color={colors.text} strokeWidth={1.75} /> : <Reply size={20} color={colors.text} strokeWidth={1.75} />}
@@ -139,6 +141,14 @@ export function Composer({
 
 const useLocalStyles = createStyles((colors) => ({
   composerArea: {
+    backgroundColor: colors.background,
+  },
+  composerUnderlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: '100%',
+    height: 400,
     backgroundColor: colors.background,
   },
   composerMode: {

@@ -82,14 +82,24 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
 
   const closeSelection = useRef(() => setSelection(null)).current;
 
-  const selectMessage = (message: Message, rect: Rect) => {
-    Keyboard.dismiss();
+  const selectMessage = (message: Message, measure: (done: (rect: Rect) => void) => void) => {
     Haptics.performAndroidHapticsAsync(Haptics.AndroidHaptics.Long_Press).catch((e) => log.warn('vibration', e));
-    root.current?.measureInWindow((_x, y, _width, height) =>
-      listArea.current?.measureInWindow((_listX, listY, _listWidth, listHeight) =>
-        setSelection({ message, rect, origin: { y, height }, clip: { top: listY, bottom: listY + listHeight } }),
-      ),
-    );
+    const open = () =>
+      measure((rect) =>
+        root.current?.measureInWindow((_x, y, _width, height) =>
+          listArea.current?.measureInWindow((_listX, listY, _listWidth, listHeight) =>
+            setSelection({ message, rect, origin: { y, height }, clip: { top: listY, bottom: listY + listHeight } }),
+          ),
+        ),
+      );
+    if (!Keyboard.isVisible()) return open();
+    // Le clavier qui se ferme fait descendre toute la conversation : on attend qu'il soit fermé et que la
+    // liste soit posée, sinon l'animation partirait de l'ancienne position de la bulle.
+    const subscription = Keyboard.addListener('keyboardDidHide', () => {
+      subscription.remove();
+      requestAnimationFrame(() => requestAnimationFrame(open));
+    });
+    Keyboard.dismiss();
   };
 
   const send = () => {

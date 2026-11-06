@@ -32,7 +32,8 @@ type BubbleProps = {
   onPrepareFile?: (message: Message) => void;
   onAcceptFile?: (message: Message) => void;
   onRefuseFile?: (message: Message) => void;
-  onSelect?: (message: Message, rect: Rect) => void;
+  // measure relit la position de la bulle au moment voulu (après la fermeture du clavier, par exemple).
+  onSelect?: (message: Message, measure: (done: (rect: Rect) => void) => void) => void;
   onDoubleTap?: (message: Message) => void;
   onReply?: (message: Message) => void;
   onJump?: (id: string) => void;
@@ -63,7 +64,7 @@ export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, on
   const iconOutput = (hiddenValue: number, shownValue: number) => (mine ? [shownValue, hiddenValue] : [hiddenValue, shownValue]);
 
   const select = () => {
-    container.current?.measureInWindow((x, y, width, height) => onSelect?.(message, { x, y, width, height }));
+    onSelect?.(message, (done) => container.current?.measureInWindow((x, y, width, height) => done({ x, y, width, height })));
   };
 
   const press = useDoubleTap(onDoubleTap && (() => onDoubleTap(message)));
