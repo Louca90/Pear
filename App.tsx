@@ -516,6 +516,7 @@ function App() {
             if (!saved) chat.requestPairing(publicKey);
             setRoute({ name: 'chat', publicKey });
           }}
+          contactKey={publicKey}
           blocked={isBlocked(publicKey)}
           onToggleBlock={() => (isBlocked(publicKey) ? chat.unblockContact(publicKey) : chat.blockContact(publicKey))}
           onRemove={() => {

@@ -1,10 +1,12 @@
-import { useState } from 'react';
-import { KeyboardAvoidingView, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { Animated, Easing, KeyboardAvoidingView, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Ban, Check, Trash2 } from 'lucide-react-native';
 
 import { ContactProfile } from '../chat/database';
 import { showDialog } from '../components/dialog';
 import { Avatar, Button, Header, Screen } from '../components/ui';
+import { SegmentedControl } from '../components/SegmentedControl';
+import { ContactMedia } from './contact/ContactMedia';
 import { createStyles, radius, spacing, useColors } from '../theme';
 import { t } from '../i18n';
 
@@ -18,12 +20,23 @@ type Props = {
   onRemove: () => void;
   blocked: boolean;
   onToggleBlock: () => void;
+  contactKey: string;
 };
 
-export function ContactScreen({ initialName, profile, isNew, onBack, onSave, onRemove, blocked, onToggleBlock }: Props) {
+export function ContactScreen({ initialName, profile, isNew, onBack, onSave, onRemove, blocked, onToggleBlock, contactKey }: Props) {
   const colors = useColors();
   const styles = useStyles();
   const [name, setName] = useState(initialName);
+  const [tab, setTab] = useState<'profile' | 'media'>('profile');
+  const fade = useRef(new Animated.Value(1)).current;
+
+  // Changement d'onglet : le contenu s'efface puis revient, sans saut.
+  const chooseTab = (next: 'profile' | 'media') => {
+    if (next === tab) return;
+    fade.setValue(0);
+    setTab(next);
+    Animated.timing(fade, { toValue: 1, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+  };
 
   const confirmBlock = () => {
     showDialog(t('statut.bloquerQuestion'), t('statut.bloquerAide'), [
@@ -50,6 +63,23 @@ export function ContactScreen({ initialName, profile, isNew, onBack, onSave, onR
               {profile.name && <Text style={styles.profileName}>{profile.name}</Text>}
             </View>
           )}
+          {!isNew && (
+            <View style={styles.tabs}>
+              <SegmentedControl
+                options={[
+                  { value: 'profile', label: t('contact.ongletProfil') },
+                  { value: 'media', label: t('contact.ongletMedias') },
+                ]}
+                value={tab}
+                onChange={chooseTab}
+              />
+            </View>
+          )}
+          <Animated.View style={{ opacity: fade }}>
+          {tab === 'media' ? (
+            <ContactMedia contactKey={contactKey} />
+          ) : (
+          <>
           <Text style={styles.label}>{t('contact.nom')}</Text>
           <TextInput
             style={styles.input}
@@ -76,6 +106,9 @@ export function ContactScreen({ initialName, profile, isNew, onBack, onSave, onR
               <Text style={styles.removeLabel}>{t('contact.supprimer')}</Text>
             </Pressable>
           )}
+          </>
+          )}
+          </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
     </Screen>
@@ -93,6 +126,9 @@ const useStyles = createStyles((colors) => ({
   profile: {
     alignItems: 'center',
     gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  tabs: {
     marginBottom: spacing.lg,
   },
   profileName: {

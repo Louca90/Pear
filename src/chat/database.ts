@@ -306,6 +306,14 @@ export function replaceContactRows(contacts: ContactRow[]) {
 
 // Ce que montre la notification d'une conversation : à partir du plus ancien message reçu non lu,
 // les messages des deux côtés (nos réponses depuis la notification y apparaissent), au plus 8.
+// Photos, vidéos et fichiers échangés avec un contact (pas les vocaux), du plus récent au plus ancien.
+export function getMediaMessages(contact: string): Message[] {
+  return db().getAllSync<Message>(
+    "SELECT * FROM messages WHERE contact = ? AND kind IN ('image', 'video', 'file') AND file_uri IS NOT NULL ORDER BY created_at DESC",
+    contact,
+  );
+}
+
 export function getNotificationMessages(contact: string): Message[] {
   const firstUnread = db().getFirstSync<{ at: number | null }>(
     "SELECT MIN(created_at) AS at FROM messages WHERE contact = ? AND mine = 0 AND status = 'delivered' AND kind NOT IN ('system', 'avatar')",
