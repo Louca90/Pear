@@ -2,28 +2,31 @@ import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { Animated, Easing, Image, Pressable, StyleSheet, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Camera, LucideIcon, MessageCircle, User, Users } from 'lucide-react-native';
-import { Circle } from 'react-native-svg';
 
 import { chat } from '../chat/manager';
 import { createStyles, radius, spacing, useColors } from '../theme';
 import { useNavigationBarHeight } from './ui';
+import { CameraFilled, ContactsFilled, MessagesFilled, ProfileRing } from './TabIcons';
 import { log } from '../log';
 import { t } from '../i18n';
 
 export type Tab = 'home' | 'camera' | 'contacts' | 'profile';
 
-const TABS: { tab: Tab; icon: LucideIcon; label: string }[] = [
-  { tab: 'home', icon: MessageCircle, label: t('onglets.messages') },
-  { tab: 'camera', icon: Camera, label: t('onglets.appareilPhoto') },
-  { tab: 'contacts', icon: Users, label: t('contacts.titre') },
-  { tab: 'profile', icon: User, label: t('profil.titre') },
+type FilledIcon = typeof MessagesFilled;
+
+// Au repos, le contour ; choisi, l'icône pleine dont les éléments s'animent.
+const TABS: { tab: Tab; icon: LucideIcon; filled: FilledIcon | null; label: string }[] = [
+  { tab: 'home', icon: MessageCircle, filled: MessagesFilled, label: t('onglets.messages') },
+  { tab: 'camera', icon: Camera, filled: CameraFilled, label: t('onglets.appareilPhoto') },
+  { tab: 'contacts', icon: Users, filled: ContactsFilled, label: t('contacts.titre') },
+  { tab: 'profile', icon: User, filled: null, label: t('profil.titre') },
 ];
 
 const SLOT_WIDTH = 76;
 const SLOT_HEIGHT = 60;
 const BAR_PADDING = 6;
 const ICON_SIZE = 26;
-const KICK_MS = 520;
+const KICK_MS = 650;
 const SLIDE_MS = 300;
 // Glisse vite puis se pose doucement, sans dépasser l'onglet.
 const SLIDE_EASING = Easing.bezier(0.2, 0.8, 0.2, 1);
@@ -34,47 +37,8 @@ export function useBottomBarSpace() {
   return SLOT_HEIGHT + BAR_PADDING * 2 + spacing.md * 2 + useNavigationBarHeight();
 }
 
-// Chaque icône a son propre geste au toucher : le QR tremble, la bulle se balance, l'appareil se tasse.
-function kickTransform(tab: Tab, kick: Animated.Value) {
-  const range = (outputRange: number[]) => kick.interpolate({ inputRange: [0, 0.3, 0.65, 1], outputRange });
-  const turn = (outputRange: string[]) => kick.interpolate({ inputRange: [0, 0.3, 0.65, 1], outputRange });
-  if (tab === 'contacts') return [{ translateY: range([0, -5, 0, 0]) }];
-  if (tab === 'profile') return [{ scale: range([1, 0.86, 1, 1]) }];
-  if (tab === 'home') return [{ translateY: range([0, -7, 1, 0]) }, { rotate: turn(['0deg', '-14deg', '7deg', '0deg']) }];
-  return [{ scale: range([1, 0.72, 1.16, 1]) }];
-}
-
-// Le détail qui bouge dans l'icône remplie : la ligne de scan du QR, l'obturateur de l'appareil photo.
-function KickDetail({ tab, kick }: { tab: Tab; kick: Animated.Value }) {
-  const styles = useStyles();
-  if (tab === 'camera') {
-    return (
-      <Animated.View
-        style={[styles.shutter, { transform: [{ scale: kick.interpolate({ inputRange: [0, 0.35, 0.6, 1], outputRange: [0, 1, 1, 0] }) }] }]}
-      />
-    );
-  }
-  return null;
-}
-
-// Le contenu blanc de l'icône remplie : l'objectif de l'appareil, les trois points de la bulle.
-function FilledDetails({ tab }: { tab: Tab }) {
-  const colors = useColors();
-  if (tab === 'camera') return <Circle cx={12} cy={13} r={3.5} fill={colors.elevatedActive} stroke="none" />;
-  if (tab === 'home') {
-    return (
-      <>
-        {[8, 12, 16].map((cx) => (
-          <Circle key={cx} cx={cx} cy={12} r={1.3} fill={colors.elevatedActive} stroke="none" />
-        ))}
-      </>
-    );
-  }
-  return null;
-}
-
 // L'onglet Profil montre ma photo (ou une silhouette), cerclée quand l'onglet est choisi.
-function ProfileIcon({ fill }: { fill: Animated.Value }) {
+function ProfileIcon({ draw }: { draw: Animated.Value }) {
   const colors = useColors();
   const styles = useStyles();
   useSyncExternalStore(chat.subscribe, chat.getVersion);
@@ -86,25 +50,28 @@ function ProfileIcon({ fill }: { fill: Animated.Value }) {
       ) : (
         <User size={ICON_SIZE - 4} color={colors.text} strokeWidth={1.75} />
       )}
-      <Animated.View pointerEvents="none" style={[styles.photoRing, { opacity: fill }]} />
+      <ProfileRing size={PHOTO_SIZE + 6} draw={draw} />
     </View>
   );
 }
 
-function TabButton({ tab, icon: Icon, label, active, onPress }: { tab: Tab; icon: LucideIcon; label: string; active: boolean; onPress: () => void }) {
+function TabButton({ tab, icon: Icon, filled: Filled, label, active, onPress }: { tab: Tab; icon: LucideIcon; filled: FilledIcon | null; label: string; active: boolean; onPress: () => void }) {
   const colors = useColors();
   const styles = useStyles();
   const fill = useRef(new Animated.Value(active ? 1 : 0)).current;
+  // Pilotées en JS : elles animent des attributs SVG (rayon, position, tracé).
   const kick = useRef(new Animated.Value(0)).current;
+  const draw = useRef(new Animated.Value(active ? 1 : 0)).current;
   const mounted = useRef(false);
 
   const playKick = () => {
     kick.setValue(0);
-    Animated.timing(kick, { toValue: 1, duration: KICK_MS, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
+    Animated.timing(kick, { toValue: 1, duration: KICK_MS, easing: Easing.inOut(Easing.quad), useNativeDriver: false }).start();
   };
 
   useEffect(() => {
     Animated.timing(fill, { toValue: active ? 1 : 0, duration: 180, useNativeDriver: true }).start();
+    Animated.timing(draw, { toValue: active ? 1 : 0, duration: active ? 420 : 180, easing: SLIDE_EASING, useNativeDriver: false }).start();
     if (mounted.current && active) playKick();
     mounted.current = true;
   }, [active]);
@@ -117,23 +84,20 @@ function TabButton({ tab, icon: Icon, label, active, onPress }: { tab: Tab; icon
 
   return (
     <Pressable onPress={press} accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected: active }} style={styles.slot}>
-      <Animated.View style={[styles.icon, { transform: kickTransform(tab, kick) }]}>
-        {tab === 'profile' ? (
-          <ProfileIcon fill={fill} />
+      <View style={styles.icon}>
+        {!Filled ? (
+          <ProfileIcon draw={draw} />
         ) : (
           <>
             <Animated.View style={[StyleSheet.absoluteFill, { opacity: fill.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }]}>
               <Icon size={ICON_SIZE} color={colors.onDarkTrack} strokeWidth={1.75} />
             </Animated.View>
             <Animated.View style={[StyleSheet.absoluteFill, styles.filled, { opacity: fill }]}>
-              <Icon size={ICON_SIZE} color={colors.text} fill={colors.text} strokeWidth={1.75}>
-                <FilledDetails tab={tab} />
-              </Icon>
-              <KickDetail tab={tab} kick={kick} />
+              <Filled size={ICON_SIZE} kick={kick} />
             </Animated.View>
           </>
         )}
-      </Animated.View>
+      </View>
     </Pressable>
   );
 }
@@ -162,8 +126,8 @@ export function BottomBar({ active, onChange }: { active: Tab; onChange: (tab: T
             },
           ]}
         />
-        {TABS.map(({ tab, icon, label }) => (
-          <TabButton key={tab} tab={tab} icon={icon} label={label} active={tab === active} onPress={() => onChange(tab)} />
+        {TABS.map(({ tab, icon, filled, label }) => (
+          <TabButton key={tab} tab={tab} icon={icon} filled={filled} label={label} active={tab === active} onPress={() => onChange(tab)} />
         ))}
       </View>
     </View>
@@ -199,14 +163,6 @@ const useStyles = createStyles((colors) => ({
     height: PHOTO_SIZE,
     borderRadius: PHOTO_SIZE / 2,
   },
-  photoRing: {
-    position: 'absolute',
-    width: PHOTO_SIZE + 4,
-    height: PHOTO_SIZE + 4,
-    borderRadius: (PHOTO_SIZE + 4) / 2,
-    borderWidth: 2,
-    borderColor: colors.text,
-  },
   indicator: {
     position: 'absolute',
     top: BAR_PADDING,
@@ -229,14 +185,5 @@ const useStyles = createStyles((colors) => ({
   filled: {
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  shutter: {
-    position: 'absolute',
-    top: (13 / 24) * ICON_SIZE - 5,
-    left: ICON_SIZE / 2 - 5,
-    width: 10,
-    height: 10,
-    borderRadius: radius.full,
-    backgroundColor: colors.text,
   },
 }));
