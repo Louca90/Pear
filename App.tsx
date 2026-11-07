@@ -30,6 +30,7 @@ import { BlockedScreen } from './src/screens/BlockedScreen';
 import { DiagnosticScreen } from './src/screens/DiagnosticScreen';
 import { RequestsScreen } from './src/screens/RequestsScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
+import { runAutoCleanup, StorageScreen } from './src/screens/StorageScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { ScannerScreen } from './src/screens/ScannerScreen';
 import { Contact, hasIdentity, loadContacts, loadOrCreateIdentity, saveContacts } from './src/storage';
@@ -49,6 +50,7 @@ type Route =
   | { name: 'scan' }
   | { name: 'profile' }
   | { name: 'diagnostic' }
+  | { name: 'storage' }
   | { name: 'settings' }
   | { name: 'blocked' }
   | { name: 'requests' }
@@ -146,7 +148,10 @@ function App() {
     Promise.resolve()
       .then(openDatabase)
       .then(loadTheme)
-      .then(cleanupCache)
+      .then(() => {
+        cleanupCache();
+        runAutoCleanup();
+      })
       .then(() => {
         refreshRemoteConfig();
       })
@@ -236,7 +241,7 @@ function App() {
   const parentOf = (current: Route): Route | null => {
     if (current.name === 'home') return null;
     if (current.name === 'scan') return { name: 'contacts' };
-    if (current.name === 'diagnostic' || current.name === 'blocked') return { name: 'settings' };
+    if (current.name === 'diagnostic' || current.name === 'blocked' || current.name === 'storage') return { name: 'settings' };
     if (current.name === 'settings') return { name: 'profile' };
     if (current.name === 'customize') return { name: 'chat', publicKey: current.publicKey };
     if (current.name === 'notifications') return { name: 'customize', publicKey: current.publicKey };
@@ -447,9 +452,13 @@ function App() {
           onBack={() => setRoute({ name: 'profile' })}
           onDiagnostic={() => setRoute({ name: 'diagnostic' })}
           onBlocked={() => setRoute({ name: 'blocked' })}
+          onStorage={() => setRoute({ name: 'storage' })}
           onReplayOnboarding={() => setOnboarding({ mode: 'full', step: 0 })}
         />
       );
+    }
+    if (current.name === 'storage') {
+      return <StorageScreen contacts={contacts} onBack={() => setRoute({ name: 'settings' })} />;
     }
     if (current.name === 'diagnostic') {
       return <DiagnosticScreen onBack={() => setRoute({ name: 'settings' })} />;

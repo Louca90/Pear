@@ -2,7 +2,7 @@ import { describe, expect, it } from '@jest/globals';
 
 import type { Message } from '../../chat/database';
 
-import { formatClock, formatTime, isBareMedia, splitLinks, systemAction } from './format';
+import { formatClock, formatTime, isBareMedia, isMediaDeleted, splitLinks, systemAction } from './format';
 
 function message(fields: Partial<Message>): Message {
   return {
@@ -13,7 +13,7 @@ function message(fields: Partial<Message>): Message {
     status: 'delivered',
     created_at: 0,
     kind: 'text',
-    file_uri: null,
+    file_uri: 'file:///media',
     file_size: null,
     file_mime: null,
     file_key: null,
@@ -84,5 +84,16 @@ describe('splitLinks', () => {
   it('ajoute https:// aux liens www et laisse le texte simple intact', () => {
     expect(splitLinks('www.exemple.com')).toEqual([{ text: 'www.exemple.com', url: 'https://www.exemple.com' }]);
     expect(splitLinks('rien à voir')).toEqual([{ text: 'rien à voir' }]);
+  });
+});
+
+describe('isMediaDeleted', () => {
+  it('reconnaît un média dont le fichier a été supprimé, pas un texte ni un média en cours', () => {
+    expect(isMediaDeleted(message({ kind: 'image', file_uri: null }))).toBe(true);
+    expect(isMediaDeleted(message({ kind: 'audio', file_uri: null, status: 'read' }))).toBe(true);
+    expect(isMediaDeleted(message({ kind: 'image' }))).toBe(false);
+    expect(isMediaDeleted(message({ kind: 'text', file_uri: null }))).toBe(false);
+    expect(isMediaDeleted(message({ kind: 'video', file_uri: null, status: 'offered' }))).toBe(false);
+    expect(isBareMedia(message({ kind: 'image', file_uri: null }))).toBe(false);
   });
 });

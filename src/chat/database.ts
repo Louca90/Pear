@@ -624,6 +624,42 @@ export function setStatus(id: string, contact: string, status: 'delivered' | 're
   );
 }
 
+// --- Stockage (lot 8.6) ---
+
+// Les médias qu'on peut libérer : pas ceux en cours d'envoi ou de réception.
+const MEDIA_KINDS = "('image', 'video', 'audio', 'file')";
+const MEDIA_FREEABLE = `file_uri IS NOT NULL AND kind IN ${MEDIA_KINDS} AND status NOT IN ('sending', 'receiving', 'offered')`;
+
+export type MediaUsage = { contact: string; bytes: number; count: number };
+
+export function getMediaUsage(): MediaUsage[] {
+  return db().getAllSync<MediaUsage>(
+    `SELECT contact, COALESCE(SUM(file_size), 0) AS bytes, COUNT(*) AS count FROM messages WHERE ${MEDIA_FREEABLE} GROUP BY contact ORDER BY bytes DESC`,
+  );
+}
+
+// Supprime les fichiers des médias d'une conversation (tous, ou ceux d'avant `before`) : les messages
+// restent, affichés « Média supprimé ». Renvoie le nombre de médias supprimés.
+export function deleteConversationMedia(contact: string, before = Number.MAX_SAFE_INTEGER): number {
+  const rows = db().getAllSync<{ id: string; file_uri: string }>(
+    `SELECT id, file_uri FROM messages WHERE contact = ? AND created_at < ? AND ${MEDIA_FREEABLE}`,
+    contact,
+    before,
+  );
+  for (const row of rows) {
+    deleteStoredFile(row.file_uri);
+    db().runSync('UPDATE messages SET file_uri = NULL WHERE id = ? AND contact = ?', row.id, contact);
+  }
+  return rows.length;
+}
+
+// Nettoyage automatique : les médias de plus de `days` jours, dans toutes les conversations.
+export function deleteOldMedia(days: number): number {
+  const before = Date.now() - days * 24 * 3600 * 1000;
+  const contacts = db().getAllSync<{ contact: string }>(`SELECT DISTINCT contact FROM messages WHERE created_at < ? AND ${MEDIA_FREEABLE}`, before);
+  return contacts.reduce((total, { contact }) => total + deleteConversationMedia(contact, before), 0);
+}
+
 export function deleteMessages(contact: string) {
   db().getAllSync<{ file_uri: string }>('SELECT file_uri FROM messages WHERE contact = ? AND file_uri IS NOT NULL', contact).forEach(
     (row) => deleteStoredFile(row.file_uri),
@@ -634,4 +670,9 @@ export function deleteMessages(contact: string) {
   db().runSync('DELETE FROM conversation_settings WHERE contact = ?', contact);
   db().runSync('DELETE FROM settings WHERE key = ?', `notif_muted.${contact}`);
   db().runSync('DELETE FROM contact_profiles WHERE contact = ?', contact);
+  // Ses envois et téléchargements par le relais, ses demandes de pairing, son état.
+  db().runSync('DELETE FROM uploads WHERE contact = ?', contact);
+  db().runSync('DELETE FROM relay_incoming WHERE contact = ?', contact);
+  db().runSync('DELETE FROM pairing_requests WHERE from_key = ?', contact);
+  db().runSync('DELETE FROM settings WHERE key = ?', `peer_state.${contact}`);
 }

@@ -13,7 +13,7 @@ import { t } from '../../../i18n';
 import { SystemRow } from './SystemRow';
 import { VoiceContent } from './VoiceContent';
 import { LONG_PRESS_MS, SWIPE_REPLY, SWIPE_START, TEXT_LINE_HEIGHT } from '../constants';
-import { isBareMedia } from '../format';
+import { isBareMedia, isMediaDeleted } from '../format';
 import { useDoubleTap } from '../hooks/useDoubleTap';
 import { useSwipeReply } from '../hooks/useSwipeReply';
 import { useChatStyles } from '../styles';
@@ -145,7 +145,7 @@ export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, on
           <ReplyQuote message={message} name={name} palette={palette} onJump={onJump} />
           {message.kind === 'text' ? (
             <FittedText text={message.text} style={[styles.text, { color: palette.text }]} background={palette.background} fit={fit} />
-          ) : message.kind === 'audio' && message.status !== 'receiving' ? (
+          ) : message.kind === 'audio' && message.status !== 'receiving' && !isMediaDeleted(message) ? (
             <VoiceContent message={message} palette={palette} />
           ) : (
             <FileContent message={message} palette={palette} mediaHidden={mediaHidden} onOpen={(rect) => onOpenFile?.(message, rect)} onLongPress={select} onPrepare={onPrepareFile && (() => onPrepareFile(message))} onAccept={onAcceptFile && (() => onAcceptFile(message))} onRefuse={onRefuseFile && (() => onRefuseFile(message))} />

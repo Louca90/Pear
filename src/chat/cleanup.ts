@@ -10,6 +10,33 @@ const TEMPORARY_DIRECTORIES = ['Camera', 'ImagePicker', 'DocumentPicker', 'Audio
 // Fichiers de passage posés à la racine du cache : retouches (image et vidéo) et journaux exportés.
 const TEMPORARY_FILES = /^(edited-.*\.(png|mp4)|pear-journal-.*\.txt)$/;
 
+// Taille d'un dossier, sous-dossiers compris (0 si illisible).
+function directorySize(directory: Directory): number {
+  let total = 0;
+  try {
+    for (const entry of directory.list()) total += entry instanceof Directory ? directorySize(entry) : (entry.size ?? 0);
+  } catch (e) {
+    log.warn('taille du cache', e);
+  }
+  return total;
+}
+
+export function cacheSize() {
+  return directorySize(Paths.cache);
+}
+
+// « Vider le cache » : les fichiers de passage, et aussi les miniatures vidéo (elles se recréent).
+export function clearCache() {
+  cleanupCache();
+  try {
+    for (const entry of Paths.cache.list()) {
+      if (!(entry instanceof Directory) && /^thumbnail-.*\.jpg$/.test(entry.name)) entry.delete();
+    }
+  } catch (e) {
+    log.warn('vider le cache', e);
+  }
+}
+
 export function exportsDirectory() {
   const directory = new Directory(Paths.cache, 'exports');
   directory.create({ idempotent: true, intermediates: true });

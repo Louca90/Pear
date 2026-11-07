@@ -8,9 +8,16 @@ export function formatTime(timestamp: number) {
 }
 
 // Photo ou vidéo déjà disponible : affichée seule, sans bulle autour.
+// Média dont le fichier a été supprimé (page Stockage, nettoyage automatique) : le message reste.
+export function isMediaDeleted(message: Message) {
+  const media = message.kind === 'image' || message.kind === 'video' || message.kind === 'audio' || message.kind === 'file';
+  const settled = message.status !== 'receiving' && message.status !== 'offered' && message.status !== 'refused' && message.status !== 'sending';
+  return media && settled && !message.file_uri;
+}
+
 export function isBareMedia(message: Message) {
   const available = message.status !== 'receiving' && message.status !== 'offered' && message.status !== 'refused';
-  return (message.kind === 'image' || message.kind === 'video') && available;
+  return (message.kind === 'image' || message.kind === 'video') && available && !isMediaDeleted(message);
 }
 
 export function formatClock(seconds: number) {

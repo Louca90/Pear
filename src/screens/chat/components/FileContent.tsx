@@ -8,7 +8,7 @@ import { chat } from '../../../chat/manager';
 import { BubblePalette, createStyles, radius, spacing, useColors } from '../../../theme';
 
 import { LONG_PRESS_MS } from '../constants';
-import { isBareMedia } from '../format';
+import { isBareMedia, isMediaDeleted } from '../format';
 import { useChatStyles } from '../styles';
 import { Rect, ViewRef } from '../types';
 import { log } from '../../../log';
@@ -71,7 +71,7 @@ export function FileContent({ message, palette, mediaHidden, onOpen, onLongPress
       onPressIn={onPrepare}
       onLongPress={onLongPress}
       delayLongPress={LONG_PRESS_MS}
-      disabled={message.status === 'receiving' || message.status === 'offered' || message.status === 'refused'}
+      disabled={message.status === 'receiving' || message.status === 'offered' || message.status === 'refused' || isMediaDeleted(message)}
       style={mediaHidden && styles.hidden}
     >
       {bare && message.kind === 'image' ? (
@@ -94,7 +94,7 @@ export function FileContent({ message, palette, mediaHidden, onOpen, onLongPress
           <View style={styles.fileText}>
             <Text style={[styles.fileName, { color: foreground }]} numberOfLines={1}>{message.text}</Text>
             <Text style={[styles.time, { color: secondary }]}>
-              {formatSize(message.file_size ?? 0)}
+              {isMediaDeleted(message) ? t('stockage.mediaSupprime') : formatSize(message.file_size ?? 0)}
               {message.status === 'refused' ? (message.mine === 1 ? t('chat.refuseParContact') : t('chat.refuse')) : ''}
             </Text>
           </View>

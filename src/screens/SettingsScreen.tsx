@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AppState, Linking, Pressable, ScrollView, Text, View } from 'react-native';
-import { Ban, Bell, ChevronRight, Download, RefreshCw, ShieldCheck, Stethoscope } from 'lucide-react-native';
+import { Ban, Bell, ChevronRight, Download, HardDrive, RefreshCw, ShieldCheck, Stethoscope } from 'lucide-react-native';
 
 import { appVersionCode, appVersionName } from '../../modules/pear-native';
 
@@ -16,10 +16,10 @@ const THEMES: { value: ThemePreference; label: string }[] = [
   { value: 'dark', label: t('profil.themeSombre') },
 ];
 
-type Props = { onBack: () => void; onDiagnostic: () => void; onBlocked: () => void; onReplayOnboarding: () => void };
+type Props = { onBack: () => void; onDiagnostic: () => void; onBlocked: () => void; onStorage: () => void; onReplayOnboarding: () => void };
 
 // Les réglages de l'app, ouverts depuis le bouton en haut à droite du Profil.
-export function SettingsScreen({ onBack, onDiagnostic, onBlocked, onReplayOnboarding }: Props) {
+export function SettingsScreen({ onBack, onDiagnostic, onBlocked, onStorage, onReplayOnboarding }: Props) {
   const colors = useColors();
   const styles = useStyles();
   const theme = useThemePreference();
@@ -57,6 +57,11 @@ export function SettingsScreen({ onBack, onDiagnostic, onBlocked, onReplayOnboar
           <Pressable onPress={() => Linking.openSettings()} style={({ pressed }) => [styles.setting, pressed && styles.pressed]}>
             <Bell size={20} color={colors.text} strokeWidth={1.75} />
             <Text style={styles.settingLabel}>{t('commun.notifications')}</Text>
+            <ChevronRight size={20} color={colors.textMuted} strokeWidth={1.75} />
+          </Pressable>
+          <Pressable onPress={onStorage} style={({ pressed }) => [styles.setting, pressed && styles.pressed]}>
+            <HardDrive size={20} color={colors.text} strokeWidth={1.75} />
+            <Text style={styles.settingLabel}>{t('stockage.titre')}</Text>
             <ChevronRight size={20} color={colors.textMuted} strokeWidth={1.75} />
           </Pressable>
           <Pressable onPress={onDiagnostic} style={({ pressed }) => [styles.setting, pressed && styles.pressed]}>
