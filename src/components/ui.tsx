@@ -26,6 +26,8 @@ export function Screen({ children, edgeToEdgeBottom }: { children: ReactNode; ed
 type HeaderProps = {
   title: string;
   subtitle?: string;
+  // À côté du titre (la flamme de la série dans une conversation).
+  titleAccessory?: ReactNode;
   onBack?: () => void;
   action?: ReactNode;
   avatar?: ReactNode;
@@ -91,7 +93,7 @@ function FadingSubtitle({ text }: { text: string }) {
   );
 }
 
-export function Header({ title, subtitle, onBack, action, avatar, onTitlePress }: HeaderProps) {
+export function Header({ title, subtitle, onBack, action, avatar, onTitlePress, titleAccessory }: HeaderProps) {
   const colors = useColors();
   const styles = useStyles();
   return (
@@ -104,7 +106,10 @@ export function Header({ title, subtitle, onBack, action, avatar, onTitlePress }
       <Pressable onPress={onTitlePress} disabled={!onTitlePress} style={styles.headerTitleArea}>
         {avatar}
         <View style={styles.headerText}>
-          <Text style={subtitle ? styles.headerTitleSmall : styles.headerTitle} numberOfLines={1}>{title}</Text>
+          <View style={styles.headerTitleRow}>
+            <Text style={[subtitle ? styles.headerTitleSmall : styles.headerTitle, styles.headerTitleText]} numberOfLines={1}>{title}</Text>
+            {titleAccessory}
+          </View>
           {subtitle && <FadingSubtitle text={subtitle} />}
         </View>
       </Pressable>
@@ -200,6 +205,14 @@ const useStyles = createStyles((colors) => ({
     fontSize: 24,
     fontWeight: '600',
     color: colors.text,
+  },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  headerTitleText: {
+    flexShrink: 1,
   },
   headerTitleSmall: {
     fontSize: 18,

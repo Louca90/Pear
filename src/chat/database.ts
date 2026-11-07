@@ -533,6 +533,11 @@ export function deleteOldAvatars(contact: string, mine: number, keepId: string |
 
 // Jours d'affilée où les deux personnes ont écrit, comme sur Snapchat. La série tient encore si le dernier jour est hier.
 export function getStreak(contact: string): number {
+  return getStreakState(contact).count;
+}
+
+// La série et si la journée d'aujourd'hui est déjà validée (la flamme est alors allumée).
+export function getStreakState(contact: string): { count: number; today: boolean } {
   // Seules les photos et vidéos prises avec la caméra de Pear comptent ; avant cette règle, tous les
   // messages comptaient (les séries déjà en cours sont gardées).
   const since = Number(getSetting('camera_streak_since') ?? 0);
@@ -553,13 +558,14 @@ export function getStreak(contact: string): number {
   };
   const byDay = new Map(days.map((row) => [row.day, row.both === 1]));
   // Aujourd'hui peut ne pas être encore complet : on compte à partir d'hier si besoin.
-  let offset = byDay.get(dayKey(0)) ? 0 : 1;
+  const today = byDay.get(dayKey(0)) === true;
+  let offset = today ? 0 : 1;
   let streak = 0;
   while (byDay.get(dayKey(offset))) {
     streak += 1;
     offset += 1;
   }
-  return streak;
+  return { count: streak, today };
 }
 
 // Le texte montré sur l'accueil et dans les notifications.

@@ -1,7 +1,7 @@
 import { ComponentRef, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { Animated, Easing, FlatList, Pressable, ScrollView, Text, View } from 'react-native';
+import { Animated, Easing, Pressable, ScrollView, Text, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { CheckCheck, Flame, Pin, PinOff, Plus, Trash2, Users } from 'lucide-react-native';
+import { CheckCheck, Pin, PinOff, Plus, Trash2, Users } from 'lucide-react-native';
 
 import {
   deleteMessages,
@@ -10,7 +10,7 @@ import {
   getLastMessage,
   getPendingRequests,
   getPinnedOrder,
-  getStreak,
+  getStreakState,
   getUnreadCounts,
   markConversationRead,
   Message,
@@ -22,6 +22,7 @@ import { showDialog } from '../components/dialog';
 import { PermissionBanner } from '../components/PermissionBanner';
 import { RequestsBell } from '../components/RequestsBell';
 import { SearchField } from '../components/SearchField';
+import { StreakFlame } from '../components/StreakFlame';
 import { Avatar, Button, Header, RowPressable, Screen } from '../components/ui';
 import { t } from '../i18n';
 import { log } from '../log';
@@ -56,7 +57,7 @@ function ConversationRow({ item, now }: { item: Item; now: number }) {
   const styles = useStyles();
   const { contact, last, unread, pinned, online } = item;
   const preview = previewFor(last, unread);
-  const streak = getStreak(contact.publicKey);
+  const streak = getStreakState(contact.publicKey);
   const bold = unread > 0;
 
   let line: string;
@@ -79,6 +80,7 @@ function ConversationRow({ item, now }: { item: Item; now: number }) {
           <Text style={[styles.name, bold && styles.bold]} numberOfLines={1}>
             {contact.name}
           </Text>
+          <StreakFlame id={contact.publicKey} count={streak.count} lit={streak.today} size={15} />
         </View>
         <Text style={[styles.preview, bold && styles.previewUnread]} numberOfLines={1}>
           {line}
@@ -87,12 +89,6 @@ function ConversationRow({ item, now }: { item: Item; now: number }) {
       <View style={styles.side}>
         {last && <Text style={[styles.time, bold && styles.bold]}>{relativeTime(last.created_at, now)}</Text>}
         <View style={styles.badges}>
-          {streak > 0 && (
-            <View style={styles.streak} accessibilityLabel={t('accueil.serie', { n: streak })}>
-              <Flame size={14} color={colors.text} strokeWidth={1.75} />
-              <Text style={styles.streakCount}>{streak}</Text>
-            </View>
-          )}
           {/* 1 à 4 non lus : le nombre exact ; 5 ou plus : un point plein sans chiffre. */}
           {preview.kind === 'unread' && (
             <View style={styles.dot}>
