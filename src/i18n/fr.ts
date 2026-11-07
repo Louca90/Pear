@@ -413,4 +413,14 @@ export const fr = {
     telephone: 'Téléphone',
     reglagesTelephone: 'Autorisations du téléphone',
   },
+  transfert: {
+    transferer: 'Transférer',
+    titre: 'Transférer à',
+    aucun: 'Aucun contact.',
+    choisir: 'Choisissez un contact',
+    envoyerN: 'Envoyer ({n})',
+    envoye: 'Message transféré',
+    envoyesN: 'Transféré à {n} contacts',
+    mention: 'Transféré',
+  },
 };

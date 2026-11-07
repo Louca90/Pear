@@ -159,6 +159,11 @@ const MIGRATIONS: Migration[] = [
       );
     },
   },
+  {
+    // Lot 8.4 : message transféré (mention « Transféré » dans la bulle).
+    version: 8,
+    up: (db) => addColumn(db, 'messages', 'forwarded', 'INTEGER NOT NULL DEFAULT 0'),
+  },
 ];
 
 export const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

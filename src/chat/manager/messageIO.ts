@@ -158,6 +158,7 @@ function receiveText(core: ChatCore, contact: string, data: Payload) {
     status: foreground && core.isReading(contact) ? 'read-pending' : 'delivered',
     created_at: Date.now(),
     reply_to: typeof data.reply_to === 'string' ? data.reply_to : null,
+    forwarded: data.forwarded === true ? 1 : 0,
   });
   core.typingUntil.delete(contact);
   acknowledge(core, contact, { id: data.id });

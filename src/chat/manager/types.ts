@@ -44,6 +44,8 @@ export type PickedFile = {
   kind: MessageKind;
   // Pris avec la caméra de Pear : compte pour les séries.
   fromCamera?: boolean;
+  // Transféré depuis une autre conversation.
+  forwarded?: boolean;
 };
 
 // Après un envoi ou une réception, la connexion reste ouverte un moment : la réponse arrive souvent vite.

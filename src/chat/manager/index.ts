@@ -5,7 +5,7 @@ import { Identity } from '../../crypto/pairing';
 import { PeerStatus, RouteType } from '../../network/peer';
 import { Contact, loadContacts, loadOrCreateIdentity, saveContacts } from '../../storage';
 import { t } from '../../i18n';
-import { addMessage, blockKey, deleteMessage, deleteRelayIncoming, editMessage, getMessage, getPendingRequests, getRelayIncoming, unblockKey, markConversationRead, setConversationSetting, setMessagePinned, setIncomingStatus, setReaction } from '../database';
+import { addMessage, blockKey, deleteMessage, deleteRelayIncoming, editMessage, getMessage, getPendingRequests, getRelayIncoming, unblockKey, markConversationRead, Message, setConversationSetting, setMessagePinned, setIncomingStatus, setReaction } from '../database';
 import { clearMessageNotification } from '../notifications';
 
 import { deleteRelay } from '../../network/relay';
@@ -269,7 +269,7 @@ class ChatManager extends ChatCore {
     this.notify();
   }
 
-  send(contact: string, text: string, replyTo: string | null = null) {
+  send(contact: string, text: string, replyTo: string | null = null, forwarded = false) {
     addMessage({
       id: to_base64(randombytes_buf(16)),
       contact,
@@ -278,6 +278,7 @@ class ChatManager extends ChatCore {
       status: 'sending',
       created_at: Date.now(),
       reply_to: replyTo,
+      forwarded: forwarded ? 1 : 0,
     });
     this.afterSend(contact);
     flush(this, contact);
@@ -303,6 +304,24 @@ class ChatManager extends ChatCore {
     setReaction(id, contact, 'my_reaction', next);
     this.afterSend(contact);
     sendEvent(this, contact, { action: 'react', id, emoji: next });
+  }
+
+  // Transférer un message : mention « Transféré », sans la citation. Un fichier repart du fichier
+  // local, copié et chiffré avec une nouvelle clé pour chaque destinataire (chemin d'envoi normal).
+  async forward(message: Message, contacts: string[]) {
+    for (const contact of contacts) {
+      if (message.kind === 'text') this.send(contact, message.text, null, true);
+      else if (message.file_uri) {
+        await this.sendFile(contact, {
+          uri: message.file_uri,
+          name: message.text,
+          size: message.file_size ?? 0,
+          mime: message.file_mime,
+          kind: message.kind,
+          forwarded: true,
+        });
+      }
+    }
   }
 
   // Épingler ou désépingler un message, pour les deux.

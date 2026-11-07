@@ -6,9 +6,9 @@ import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
 import * as Sharing from 'expo-sharing';
-import { Copy, Download, MessageCircle, Pencil, Pin, PinOff, Reply, Trash2 } from 'lucide-react-native';
+import { Copy, Download, Forward, MessageCircle, Pencil, Pin, PinOff, Reply, Trash2 } from 'lucide-react-native';
 
-import { getConversationSettings, getMessages, getPeerState, getPinnedMessages, isBlocked, Message } from '../../chat/database';
+import { getContactRows, getConversationSettings, getMessages, getPeerState, getPinnedMessages, isBlocked, Message } from '../../chat/database';
 import { exportCopy, formatSize, MAX_FILE_BYTES, saveToGallery, videoThumbnail } from '../../chat/files';
 import { chat, PickedFile } from '../../chat/manager';
 import { showDialog } from '../../components/dialog';
@@ -23,6 +23,7 @@ import { ComposerFade } from './components/ComposerFade';
 import { MediaViewer, Viewing } from './components/MediaViewer';
 import { Bubble, markMessagesShown } from './components/MessageBubble';
 import { MessageSelection } from './components/MessageSelection';
+import { ForwardSheet } from './components/ForwardSheet';
 import { NewMessagesButton } from './components/NewMessagesButton';
 import { PinnedBanner } from './components/PinnedBanner';
 import { Toast } from './components/Toast';
@@ -54,6 +55,7 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
   const attachProgress = useRef(new Animated.Value(0)).current;
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [toast, setToast] = useState<{ text: string; token: number } | null>(null);
+  const [forwarding, setForwarding] = useState<Message | null>(null);
   const [viewing, setViewing] = useState<Viewing | null>(null);
   const [selection, setSelection] = useState<{ message: Message; rect: Rect; origin: { y: number; height: number }; clip: { top: number; bottom: number } } | null>(null);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
@@ -209,6 +211,9 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
     ...((message.kind === 'image' || message.kind === 'video') && message.file_uri
       ? [{ label: t('commun.enregistrer'), icon: Download, onPress: () => saveMedia(message) }]
       : []),
+    ...(message.kind !== 'text' && (!message.file_uri || message.status === 'offered' || message.status === 'receiving')
+      ? []
+      : [{ label: t('transfert.transferer'), icon: Forward, onPress: () => setForwarding(message) }]),
     message.pinned
       ? { label: t('chat.desepingler'), icon: PinOff, onPress: () => chat.pin(contactKey, message.id, false) }
       : { label: t('chat.epingler'), icon: Pin, onPress: () => chat.pin(contactKey, message.id, true) },
@@ -347,6 +352,20 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
           )}
           <NewMessagesButton count={scroll.newCount} onPress={scroll.scrollToBottom} />
           {toast && <Toast text={toast.text} token={toast.token} />}
+          {forwarding && (
+            <ForwardSheet
+              contacts={getContactRows()
+                .filter((row) => !isBlocked(row.public_key))
+                .map((row) => ({ publicKey: row.public_key, name: row.name, ...(row.state === 'pending' ? { pending: true } : {}) }))}
+              onClose={() => setForwarding(null)}
+              onSend={(keys) => {
+                chat
+                  .forward(forwarding, keys)
+                  .then(() => setToast({ text: keys.length > 1 ? t('transfert.envoyesN', { n: keys.length }) : t('transfert.envoye'), token: Date.now() }))
+                  .catch((e) => showDialog(t('chat.envoiImpossible'), String(e)));
+              }}
+            />
+          )}
           <AttachMenu
             open={attachOpen}
             progress={attachProgress}

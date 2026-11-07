@@ -82,7 +82,7 @@ async function pushPending(core: ChatCore, contact: string, token: string) {
       needsWake = true;
       continue;
     }
-    if (!(await send(message.id, { type: 'message', id: message.id, text: message.text, reply_to: message.reply_to }))) return;
+    if (!(await send(message.id, { type: 'message', id: message.id, text: message.text, reply_to: message.reply_to, ...(message.forwarded ? { forwarded: true } : {}) }))) return;
   }
   for (const event of getOutboxEvents(contact)) {
     if (!(await send(event.id, { type: 'event', eventId: event.id, ...JSON.parse(event.payload) }))) return;

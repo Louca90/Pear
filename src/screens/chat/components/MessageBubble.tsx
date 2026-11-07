@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, Pressable, Text, View } from 'react-native';
-import { Reply } from 'lucide-react-native';
+import { Forward, Reply } from 'lucide-react-native';
 
 import { Message } from '../../../chat/database';
 import { createStyles, radius, spacing, useColors } from '../../../theme';
@@ -9,6 +9,7 @@ import { FileContent } from './FileContent';
 import { FittedText, TextFit } from './FittedText';
 import { MessageMeta } from './MessageMeta';
 import { ReplyQuote } from './ReplyQuote';
+import { t } from '../../../i18n';
 import { SystemRow } from './SystemRow';
 import { VoiceContent } from './VoiceContent';
 import { LONG_PRESS_MS, SWIPE_REPLY, SWIPE_START, TEXT_LINE_HEIGHT } from '../constants';
@@ -135,6 +136,12 @@ export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, on
           delayLongPress={LONG_PRESS_MS}
           style={bare ? styles.bare : [styles.bubble, mine ? styles.mine : styles.theirs, { backgroundColor: palette.background }]}
         >
+          {message.forwarded === 1 && (
+            <View style={[styles.forwarded, bare && styles.forwardedBare]}>
+              <Forward size={13} color={bare ? colors.textMuted : palette.muted} strokeWidth={1.75} />
+              <Text style={[styles.forwardedLabel, { color: bare ? colors.textMuted : palette.muted }]}>{t('transfert.mention')}</Text>
+            </View>
+          )}
           <ReplyQuote message={message} name={name} palette={palette} onJump={onJump} />
           {message.kind === 'text' ? (
             <FittedText text={message.text} style={[styles.text, { color: palette.text }]} background={palette.background} fit={fit} />
@@ -164,6 +171,19 @@ export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, on
 const useLocalStyles = createStyles((colors) => ({
   row: {
     maxWidth: '80%',
+  },
+  forwarded: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 2,
+  },
+  forwardedBare: {
+    marginBottom: 4,
+  },
+  forwardedLabel: {
+    fontSize: 12,
+    fontStyle: 'italic',
   },
   rowMine: {
     alignSelf: 'flex-end',
