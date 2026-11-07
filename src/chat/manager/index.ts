@@ -5,7 +5,7 @@ import { Identity } from '../../crypto/pairing';
 import { PeerStatus, RouteType } from '../../network/peer';
 import { Contact, loadContacts, loadOrCreateIdentity, saveContacts } from '../../storage';
 import { t } from '../../i18n';
-import { addMessage, deleteMessage, deleteRelayIncoming, editMessage, getMessage, getPendingRequests, getRelayIncoming, markConversationRead, setConversationSetting, setIncomingStatus, setReaction } from '../database';
+import { addMessage, blockKey, deleteMessage, deleteRelayIncoming, editMessage, getMessage, getPendingRequests, getRelayIncoming, unblockKey, markConversationRead, setConversationSetting, setIncomingStatus, setReaction } from '../database';
 import { clearMessageNotification } from '../notifications';
 
 import { deleteRelay } from '../../network/relay';
@@ -22,7 +22,7 @@ import { contactForTag, receivePush } from './incoming';
 import { reconcile } from './strategy';
 import { downloadRelayFile, relayPending } from './relay';
 import { acceptPairing, blockPairing, declinePairing, requestPairing, startPairing, syncPairRequests } from './pairing';
-import { deliverNow, settlePushAcks, wakeIfNeeded } from './wake';
+import { deliverNow, sendStatusNow, settlePushAcks, wakeIfNeeded } from './wake';
 import { notifyMessage } from './notify';
 
 export { MAX_PROFILE_NAME_LENGTH, MAX_TEXT_LENGTH } from './types';
@@ -112,6 +112,25 @@ class ChatManager extends ChatCore {
     markConversationRead(contact);
     clearMessageNotification(contact);
     flush(this, contact);
+    this.notify();
+  }
+
+  // --- Suppression et blocage d'un contact ---
+
+  // Avant de retirer le contact : l'autre téléphone saura qu'il ne peut plus nous écrire.
+  notifyRemoved(contact: string) {
+    sendStatusNow(this, contact, 'removed').catch((e) => log.warn('statut', e));
+  }
+
+  blockContact(contact: string) {
+    blockKey(contact);
+    sendStatusNow(this, contact, 'blocked').catch((e) => log.warn('statut', e));
+    this.notify();
+  }
+
+  unblockContact(contact: string) {
+    unblockKey(contact);
+    sendStatusNow(this, contact, 'unblocked').catch((e) => log.warn('statut', e));
     this.notify();
   }
 

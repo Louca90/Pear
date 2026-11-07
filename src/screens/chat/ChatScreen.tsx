@@ -1,5 +1,5 @@
 import { ComponentRef, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { Animated, FlatList, Image, Keyboard, KeyboardAvoidingView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Animated, FlatList, Image, Keyboard, KeyboardAvoidingView, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { BlurTargetView } from 'expo-blur';
 import * as Clipboard from 'expo-clipboard';
 import * as DocumentPicker from 'expo-document-picker';
@@ -8,13 +8,13 @@ import * as Haptics from 'expo-haptics';
 import * as Sharing from 'expo-sharing';
 import { Copy, Download, MessageCircle, Pencil, Reply, Trash2 } from 'lucide-react-native';
 
-import { getConversationSettings, getMessages, Message } from '../../chat/database';
+import { getConversationSettings, getMessages, getPeerState, isBlocked, Message } from '../../chat/database';
 import { exportCopy, formatSize, MAX_FILE_BYTES, saveToGallery, videoThumbnail } from '../../chat/files';
 import { chat, PickedFile } from '../../chat/manager';
 import { showDialog } from '../../components/dialog';
 import { MediaPicker } from '../../components/MediaPicker';
 import { Screen, useInsets } from '../../components/ui';
-import { bubblePalette, createStyles, spacing, useColors } from '../../theme';
+import { bubblePalette, createStyles, radius, spacing, useColors } from '../../theme';
 
 import { AttachMenu } from './components/AttachMenu';
 import { ChatHeader } from './components/ChatHeader';
@@ -66,6 +66,17 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
   const keyboardOpen = useKeyboardOpen();
   const { top: topInset } = useInsets();
   useSyncExternalStore(chat.subscribe, chat.getVersion);
+  // Pas de saisie si l'on ne peut pas écrire : demande pas encore acceptée, contact qui nous a supprimé
+  // ou bloqué, ou contact que l'on a bloqué.
+  const blockedByMe = isBlocked(contactKey);
+  const peerState = getPeerState(contactKey);
+  const notice = pending
+    ? { title: t('demandes.enAttente'), text: t('demandes.enAttenteAide', { nom: name }) }
+    : peerState === 'removed'
+      ? { title: t('statut.supprimeTitre', { nom: name }), text: t('statut.supprimeTexte') }
+      : peerState === 'blocked'
+        ? { title: t('statut.bloqueTitre', { nom: name }), text: t('statut.bloqueTexte') }
+        : null;
 
   const messages = getMessages(contactKey);
   const scroll = useChatScroll(list, messages, preview);
@@ -332,10 +343,17 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
             onFile={pickDocument}
           />
           </View>
-          {pending ? (
+          {blockedByMe ? (
             <View style={styles.pendingBar}>
-              <Text style={styles.pendingTitle}>{t('demandes.enAttente')}</Text>
-              <Text style={styles.pendingText}>{t('demandes.enAttenteAide', { nom: name })}</Text>
+              <Text style={styles.pendingTitle}>{t('statut.vousAvezBloque')}</Text>
+              <Pressable onPress={() => chat.unblockContact(contactKey)} style={({ pressed }) => [styles.unblock, pressed && styles.pressed]}>
+                <Text style={styles.unblockLabel}>{t('reglages.debloquer')}</Text>
+              </Pressable>
+            </View>
+          ) : notice ? (
+            <View style={styles.pendingBar}>
+              <Text style={styles.pendingTitle}>{notice.title}</Text>
+              <Text style={styles.pendingText}>{notice.text}</Text>
             </View>
           ) : (
             <Composer
@@ -395,6 +413,23 @@ const useLocalStyles = createStyles((colors) => ({
     fontSize: 14,
     color: colors.textMuted,
     textAlign: 'center',
+  },
+  unblock: {
+    alignSelf: 'center',
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    height: 40,
+    borderRadius: radius.full,
+    backgroundColor: colors.accent,
+    justifyContent: 'center',
+  },
+  unblockLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.onAccent,
+  },
+  pressed: {
+    opacity: 0.6,
   },
   wallpaper: {
     ...StyleSheet.absoluteFill,

@@ -368,6 +368,18 @@ export function deleteRelayIncoming(messageId: string, contact: string) {
   db().runSync('DELETE FROM relay_incoming WHERE message_id = ? AND contact = ?', messageId, contact);
 }
 
+// Ce que ce contact a fait de son côté : il nous a supprimé ou bloqué. null : rien de particulier.
+export type PeerState = 'removed' | 'blocked';
+
+export function getPeerState(contact: string): PeerState | null {
+  const state = getSetting(`peer_state.${contact}`);
+  return state === 'removed' || state === 'blocked' ? state : null;
+}
+
+export function setPeerState(contact: string, state: PeerState | null) {
+  setSetting(`peer_state.${contact}`, state);
+}
+
 // Messages reçus pas encore lus, par contact (calculé depuis la base : exact après un redémarrage).
 export function getUnreadCounts(): Map<string, number> {
   const rows = db().getAllSync<{ contact: string; count: number }>(

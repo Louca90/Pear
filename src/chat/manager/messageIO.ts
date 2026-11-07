@@ -4,6 +4,9 @@ import {
   activateContact,
   addMessage,
   deleteUpload,
+  getPeerState,
+  isBlocked,
+  setPeerState,
   deleteMessage,
   deleteOldAvatars,
   editMessage,
@@ -19,6 +22,7 @@ import {
 import { CHUNK_BYTES, isValidFileId } from '../files';
 
 import { ChatCore } from './core';
+import { showStatusNotification } from '../notifications';
 import { notifyMessage } from './notify';
 import { addSystemMessage, flush } from './outbox';
 import { reshareProfile } from './profile';
@@ -33,6 +37,8 @@ import { log } from '../../log';
 // Appelée pour ce qui arrive en direct comme pour ce qui arrive dans un push.
 export function receiveRatchet(core: ChatCore, contact: string, envelope: unknown) {
   const text = decryptIncoming(core, contact, envelope);
+  // Un contact bloqué ne peut plus rien nous faire parvenir.
+  if (isBlocked(contact)) return;
   // Un message authentique de ce contact prouve qu'il nous a enregistré : la demande est acceptée.
   if (activateContact(contact)) {
     reshareProfile(core, contact);
@@ -50,8 +56,17 @@ export function receiveRatchet(core: ChatCore, contact: string, envelope: unknow
   else if (message?.type === 'message') receiveText(core, contact, message);
   else if (message?.type === 'event') receiveEvent(core, contact, message);
   else if (message?.type === 'acks') receiveAcks(core, contact, message);
+  else if (message?.type === 'status') receiveStatus(core, contact, message);
   else if (message?.type === 'rekey') receiveRekey(core, contact, message);
   else if (message?.type === 'rekey-ack') receiveRekeyAck(core, contact, message);
+}
+
+// L'autre nous a supprimé, bloqué ou débloqué : la conversation l'affiche, et on prévient par une notification.
+function receiveStatus(core: ChatCore, contact: string, data: Payload) {
+  if (data.state !== 'removed' && data.state !== 'blocked' && data.state !== 'unblocked') return;
+  setPeerState(contact, data.state === 'unblocked' ? null : data.state);
+  if (data.state !== 'unblocked') showStatusNotification(contact, core.names.get(contact) ?? 'Pear', data.state).catch((e) => log.warn('notification', e));
+  core.notify();
 }
 
 // Confirme la réception : en direct si la connexion est ouverte, sinon par push.
@@ -113,6 +128,8 @@ function receiveEvent(core: ChatCore, contact: string, data: Payload) {
 
 function receiveText(core: ChatCore, contact: string, data: Payload) {
   if (typeof data.id !== 'string' || typeof data.text !== 'string') return;
+  // Il nous écrit de nouveau : s'il nous avait supprimé, il nous a rajouté.
+  if (getPeerState(contact) === 'removed') setPeerState(contact, null);
   const foreground = AppState.currentState === 'active';
   const text = data.text.slice(0, MAX_TEXT_LENGTH);
   const isNew = addMessage({

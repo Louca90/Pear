@@ -77,6 +77,23 @@ export function clearPairNotification(contact: string) {
   notifee.cancelNotification(`pair:${contact}`).catch((e) => log.warn('notification', e));
 }
 
+// « X vous a supprimé » / « X vous a bloqué ».
+export async function showStatusNotification(contact: string, name: string, state: 'removed' | 'blocked') {
+  await ensureChannel();
+  await notifee.displayNotification({
+    id: `status:${contact}`,
+    title: t(state === 'removed' ? 'statut.supprimeTitre' : 'statut.bloqueTitre', { nom: name }),
+    body: t(state === 'removed' ? 'statut.supprimeTexte' : 'statut.bloqueTexte'),
+    data: { contact },
+    android: {
+      channelId: NOTIFICATION_CHANNEL_ID,
+      visibility: AndroidVisibility.PRIVATE,
+      smallIcon: NOTIFICATION_SMALL_ICON,
+      pressAction: { id: 'default' },
+    },
+  });
+}
+
 export function clearMessageNotification(contact: string) {
   notifee.cancelNotification(contact).catch((e) => log.warn('notification', e));
 }

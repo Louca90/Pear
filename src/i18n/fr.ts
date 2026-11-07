@@ -379,4 +379,15 @@ export const fr = {
     aucun: 'Aucun contact pour l’instant.',
     message: 'Écrire un message',
   },
+  statut: {
+    supprimeTitre: '{nom} vous a supprimé',
+    supprimeTexte: 'Vous ne pouvez plus envoyer de messages à ce contact.',
+    bloqueTitre: '{nom} vous a bloqué',
+    bloqueTexte: 'Vous ne pouvez pas envoyer de messages à ce contact tant qu’il ne vous a pas débloqué.',
+    vousAvezBloque: 'Vous avez bloqué ce contact',
+    bloquerContact: 'Bloquer ce contact',
+    debloquerContact: 'Débloquer ce contact',
+    bloquerQuestion: 'Bloquer ce contact ?',
+    bloquerAide: 'Il ne pourra plus vous envoyer de messages, et il le saura. Vous pourrez le débloquer quand vous voulez.',
+  },
 };

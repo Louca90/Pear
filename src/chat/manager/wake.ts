@@ -36,6 +36,22 @@ async function resolveToken(core: ChatCore, contact: string) {
   return fresh;
 }
 
+// Prévient le contact d'un changement (supprimé, bloqué, débloqué) : en direct s'il est connecté,
+// sinon par push. Fonctionne aussi pour un contact qu'on vient de retirer de la liste.
+export async function sendStatusNow(core: ChatCore, contact: string, state: 'removed' | 'blocked' | 'unblocked') {
+  const message = { type: 'status', state };
+  const peer = core.links.get(contact)?.peer;
+  if (peer?.isOpen()) {
+    peer.send({ type: 'ratchet', ...sealSecure(core, contact, message) });
+    return;
+  }
+  const token = await resolveToken(core, contact);
+  if (!token) return;
+  const keys = pushKeysFor(core, contact);
+  const payload = encodePushPayload(keys.tag, keys.key, sealSecure(core, contact, message));
+  if (payload) handleResult(core, contact, await sendPush(token, 'msg', payload));
+}
+
 // Envoie tout de suite ce qui attend, et attend la fin (réponse depuis une notification, app fermée :
 // Android peut arrêter l'app juste après).
 export async function deliverNow(core: ChatCore, contact: string) {

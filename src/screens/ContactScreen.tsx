@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { KeyboardAvoidingView, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { Check, QrCode, Trash2 } from 'lucide-react-native';
+import { Ban, Check, QrCode, Trash2 } from 'lucide-react-native';
 
 import { ContactProfile } from '../chat/database';
 import { showDialog } from '../components/dialog';
@@ -20,13 +20,22 @@ type Props = {
   // Notre clé, pour montrer notre QR code sans quitter l'écran.
   myPublicKey: string;
   onRemove: () => void;
+  blocked: boolean;
+  onToggleBlock: () => void;
 };
 
-export function ContactScreen({ initialName, profile, code, isNew, onBack, onSave, myPublicKey, onRemove }: Props) {
+export function ContactScreen({ initialName, profile, code, isNew, onBack, onSave, myPublicKey, onRemove, blocked, onToggleBlock }: Props) {
   const colors = useColors();
   const styles = useStyles();
   const [name, setName] = useState(initialName);
   const [showingCode, setShowingCode] = useState(false);
+
+  const confirmBlock = () => {
+    showDialog(t('statut.bloquerQuestion'), t('statut.bloquerAide'), [
+      { label: t('demandes.bloquer'), style: 'danger', onPress: onToggleBlock },
+      { label: t('commun.annuler'), style: 'cancel' },
+    ]);
+  };
 
   const confirmRemove = () => {
     showDialog(t('contact.supprimerQuestion'), t('contact.supprimerAide'), [
@@ -71,6 +80,12 @@ export function ContactScreen({ initialName, profile, code, isNew, onBack, onSav
             <Button label={t('contact.montrerCode')} icon={QrCode} variant="secondary" onPress={() => setShowingCode(true)} />
           </View>
 
+          {!isNew && (
+            <Pressable onPress={blocked ? onToggleBlock : confirmBlock} style={styles.remove} hitSlop={8}>
+              <Ban size={18} color={colors.textMuted} strokeWidth={1.75} />
+              <Text style={styles.removeLabel}>{blocked ? t('statut.debloquerContact') : t('statut.bloquerContact')}</Text>
+            </Pressable>
+          )}
           {!isNew && (
             <Pressable onPress={confirmRemove} style={styles.remove} hitSlop={8}>
               <Trash2 size={18} color={colors.textMuted} strokeWidth={1.75} />

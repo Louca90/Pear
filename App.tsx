@@ -9,7 +9,7 @@ import { addBackListener, backHookAvailable, completeBack, setBackMode } from '.
 import { cleanupCache } from './src/chat/cleanup';
 import { handleNotificationEvent } from './src/chat/notificationActions';
 import { refreshRemoteConfig } from './src/remoteConfig';
-import { deleteMessages, getContactProfile, openDatabase } from './src/chat/database';
+import { deleteMessages, getContactProfile, isBlocked, openDatabase } from './src/chat/database';
 import { clearNotificationTarget, REQUESTS_TARGET, setNotificationTarget, useNotificationTarget } from './src/chat/notificationTarget';
 import { chat } from './src/chat/manager';
 import { BottomBar, Tab } from './src/components/BottomBar';
@@ -496,7 +496,10 @@ function App() {
             setRoute({ name: 'chat', publicKey });
           }}
           myPublicKey={identity.publicKey}
+          blocked={isBlocked(publicKey)}
+          onToggleBlock={() => (isBlocked(publicKey) ? chat.unblockContact(publicKey) : chat.blockContact(publicKey))}
           onRemove={() => {
+            chat.notifyRemoved(publicKey);
             deleteMessages(publicKey);
             updateContacts(others);
             setRoute({ name: 'home' });
