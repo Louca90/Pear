@@ -1,5 +1,47 @@
 # Journal des versions
 
+## 1.5.0 (versionCode 7)
+
+### Résumé
+
+- Nouvel appareil photo : il s'ouvre plus vite, filtres en direct à faire défiler autour du déclencheur, zoom ×0,5 / ×1 / ×2, et on peut changer de caméra sans arrêter la vidéo.
+- Éditeur façon Snap : filtres, textes, stickers, dessin, recadrage, et pour les vidéos découpe, son et vitesse.
+- Sauvegarde chiffrée par mot de passe pour changer de téléphone, ou juste ton profil.
+- Partage tes photos et vidéos vers Pear depuis la galerie.
+- Pear parle maintenant 7 langues, et la liste des conversations est plus claire.
+
+### Détails
+
+#### Nouveautés
+
+- Appareil photo refait sur CameraX : préparé dès le lancement de l'app, gardé allumé 15 s après l'avoir quitté, photo et vidéo prêtes ensemble.
+- Filtres en direct dans l'appareil photo : bande de pastilles autour du déclencheur, aperçu filtré tout de suite ; Heure, Date et Pellicule visibles avant la prise.
+- Zoom réel : ×0,6 sur les téléphones à caméra multiple, objectif ultra grand-angle sinon ; zoom en glissant le déclencheur vers le haut en filmant.
+- Changer de caméra en filmant sans arrêter la vidéo (deux petits appuis d'un second doigt, ou double appui une fois verrouillée).
+- Éditeur : 13 filtres et réglages (luminosité, contraste, saturation, température), textes (5 polices, 10 couleurs, fonds, déplacer, pincer, tourner), stickers, dessin avec gomme et annuler, recadrage et rotation (Libre, 1:1, 4:5, 3:4, 9:16, 16:9).
+- Vidéo : découpe du début et de la fin sur une frise, son coupé, vitesse ×0,5 à ×2.
+- Sauvegarde : exporter et charger son profil, ou une sauvegarde complète (identité, contacts, conversations, médias en option), protégée par mot de passe ; restauration depuis la prise en main.
+- Partage vers Pear depuis la galerie ou une autre app, à un ou plusieurs contacts.
+- 7 langues : français, anglais, espagnol, allemand, italien, portugais, néerlandais.
+- Liste des conversations : non-lus, recherche, catégories, conversations épinglées, « Envoyé / Reçu il y a ».
+- Onglet Contacts (annuaire, mon QR code, scanner), glissement entre onglets.
+- Dans une conversation : messages épinglés, transfert, envoi programmé, liens cliquables, réponses et likes animés, bulles regroupées avec photo, chargement par pages et barre de défilement.
+- Page Stockage (vider le cache, supprimer les médias d'une conversation, nettoyage automatique), profil d'un contact avec ses médias, couleurs des bulles à la roue.
+- Notifications coupées par type (photos, vidéos, vocaux, fichiers) ; demandes acceptées ou refusées depuis la notification.
+
+#### Corrections
+
+- Retour en arrière plus fluide, sans image de l'ancien écran.
+- Photo de profil et fond d'écran choisis dans la galerie de Pear.
+- Réaction qui ne cache plus l'heure d'une photo, feuille de langue lisible en sombre, icônes de la barre du bas redessinées.
+
+#### Technique
+
+- Module natif PearCamera (CameraX 1.6) : zoom par rapport réel, choix de l'objectif, enregistrement persistant ; photo tournée et réduite en un seul passage.
+- Retouches vidéo Media3 (couleurs, calque, découpe, son, vitesse) et captureView pour l'export exact de l'éditeur.
+- Sauvegardes : Argon2id, morceaux XChaCha20-Poly1305 authentifiés et numérotés, restauration vérifiée puis appliquée au démarrage.
+- Migrations SQLite 7 à 11, sans perte.
+
 ## 1.4.0 (versionCode 6)
 
 ### Résumé
