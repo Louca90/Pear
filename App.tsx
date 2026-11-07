@@ -67,12 +67,10 @@ const BACK_EASING = Easing.bezier(0.2, 0.8, 0.2, 1);
 // Si le retour a seulement fermé quelque chose dans la page, celle-ci revient à sa place après ce délai.
 const BACK_SETTLE_MS = 250;
 const BACK_PAGE_SHIFT = 16;
-// Glissement entre onglets : la page suit le doigt (freinée), au-delà du seuil l'onglet voisin entre.
-const TAB_DRAG_FACTOR = 0.35;
-const TAB_SWIPE_RATIO = 0.22;
-const TAB_EXIT_MS = 120;
-const TAB_ENTER_MS = 240;
-const TAB_SHIFT_RATIO = 0.15;
+// Glissement entre onglets : la page et l'onglet voisin suivent le doigt ; au-delà du seuil (ou d'un
+// geste rapide), le voisin finit de prendre la place.
+const TAB_SWIPE_RATIO = 0.3;
+const TAB_SETTLE_MS = 180;
 // Les bords restent au retour par geste d'Android.
 const TAB_EDGE = 28;
 // Coins arrondis de la page pendant l'aperçu, comme une carte qu'on repose.
@@ -258,45 +256,47 @@ function App() {
   // Une fois sur le nouvel écran, on retire la copie posée dessous.
   useEffect(resetBackGesture, [route]);
 
-  // Changer d'onglet : la page sort du côté opposé à l'onglet visé, la nouvelle entre de l'autre côté.
-  const switchTab = (next: Tab) => {
-    const from = TAB_ROUTES.indexOf(route.name);
-    const to = TAB_ROUTES.indexOf(next);
-    if (from < 0 || to < 0 || from === to) {
-      setRoute({ name: next } as Route);
-      return;
-    }
-    const direction = to > from ? 1 : -1;
-    const shift = screenWidth * TAB_SHIFT_RATIO;
-    Animated.timing(tabDrag, { toValue: -direction * shift, duration: TAB_EXIT_MS, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(() => {
-      setRoute({ name: next } as Route);
-      tabDrag.setValue(direction * shift);
-      Animated.timing(tabDrag, { toValue: 0, duration: TAB_ENTER_MS, easing: BACK_EASING, useNativeDriver: true }).start();
-    });
-  };
-  const latestSwitch = useRef(switchTab);
-  latestSwitch.current = switchTab;
+  // L'onglet voisin affiché pendant le glissement : 1 à droite (suivant), -1 à gauche (précédent).
+  const [neighbor, setNeighbor] = useState<{ name: string; side: 1 | -1 } | null>(null);
   const latestRouteName = useRef(route.name);
   latestRouteName.current = route.name;
 
+  const neighborOf = (dx: number) => {
+    const index = TAB_ROUTES.indexOf(latestRouteName.current);
+    const side: 1 | -1 = dx < 0 ? 1 : -1;
+    const name = TAB_ROUTES[index + side];
+    return name ? { name, side } : null;
+  };
+
+  const isTabSwipe = ({ dx, dy, x0 }: { dx: number; dy: number; x0: number }) =>
+    TAB_ROUTES.includes(latestRouteName.current) && x0 > TAB_EDGE && x0 < screenWidth - TAB_EDGE && Math.abs(dx) > 24 && Math.abs(dx) > Math.abs(dy) * 2;
+
+  const settleTab = (toValue: number, then: () => void) =>
+    Animated.timing(tabDrag, { toValue, duration: TAB_SETTLE_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start(then);
+
   const tabSwipe = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (event, { dx, dy, x0 }) => {
-        const name = latestRouteName.current;
-        // La caméra utilise déjà le glissement (changer de caméra).
-        if (!TAB_ROUTES.includes(name) || name === 'camera') return false;
-        if (x0 < TAB_EDGE || x0 > screenWidth - TAB_EDGE) return false;
-        return Math.abs(dx) > 24 && Math.abs(dx) > Math.abs(dy) * 2;
+      // Sur la caméra, capturé avant l'image (le glissé vertical y change de caméra) ; ailleurs, les zones
+      // qui défilent horizontalement (catégories) gardent la main. Les bords restent au retour d'Android.
+      onMoveShouldSetPanResponderCapture: (event, gesture) => latestRouteName.current === 'camera' && isTabSwipe(gesture),
+      onMoveShouldSetPanResponder: (event, gesture) => isTabSwipe(gesture),
+      onPanResponderMove: (event, { dx }) => {
+        const next = neighborOf(dx);
+        // Pas d'onglet de ce côté : la page résiste un peu.
+        tabDrag.setValue(next ? dx : dx * 0.2);
+        setNeighbor((current) => (current?.name === next?.name ? current : next));
       },
-      onPanResponderMove: (event, { dx }) => tabDrag.setValue(dx * TAB_DRAG_FACTOR),
       onPanResponderRelease: (event, { dx, vx }) => {
-        const index = TAB_ROUTES.indexOf(latestRouteName.current);
-        const direction = dx < 0 ? 1 : -1;
-        const next = TAB_ROUTES[index + direction];
-        if (next && (Math.abs(dx) > screenWidth * TAB_SWIPE_RATIO || Math.abs(vx) > 0.6)) latestSwitch.current(next as Tab);
-        else Animated.timing(tabDrag, { toValue: 0, duration: TAB_ENTER_MS, easing: BACK_EASING, useNativeDriver: true }).start();
+        const next = neighborOf(dx);
+        if (next && (Math.abs(dx) > screenWidth * TAB_SWIPE_RATIO || Math.abs(vx) > 0.5)) {
+          settleTab(-next.side * screenWidth, () => {
+            setRoute({ name: next.name } as Route);
+            tabDrag.setValue(0);
+            setNeighbor(null);
+          });
+        } else settleTab(0, () => setNeighbor(null));
       },
-      onPanResponderTerminate: () => Animated.timing(tabDrag, { toValue: 0, duration: TAB_ENTER_MS, easing: BACK_EASING, useNativeDriver: true }).start(),
+      onPanResponderTerminate: () => settleTab(0, () => setNeighbor(null)),
     }),
   ).current;
 
@@ -596,8 +596,17 @@ function App() {
           {render(route)}
         </ErrorBoundary>
       </Animated.View>
+      {neighbor && (
+        <Animated.View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, { transform: [{ translateX: Animated.add(tabDrag, neighbor.side * screenWidth) }] }]}
+        >
+          {/* La caméra n'est pas allumée pour un simple glissement : un fond noir la représente. */}
+          {neighbor.name === 'camera' ? <View style={styles.cameraPlaceholder} /> : render({ name: neighbor.name } as Route, true)}
+        </Animated.View>
+      )}
       {identity && !error && !filming && TAB_ROUTES.includes(route.name) && (
-        <BottomBar active={route.name as Tab} onChange={switchTab} />
+        <BottomBar active={route.name as Tab} onChange={(tab) => setRoute({ name: tab } as Route)} />
       )}
       {updatedInfo && identity && route.name === 'home' && (
         <UpdatedPopup
@@ -637,6 +646,10 @@ function useThemeFade(colors: Palette) {
 const useStyles = createStyles((colors) => ({
   flex: {
     flex: 1,
+  },
+  cameraPlaceholder: {
+    flex: 1,
+    backgroundColor: '#000000',
   },
   pageDuringBack: {
     borderRadius: BACK_CORNER_RADIUS,

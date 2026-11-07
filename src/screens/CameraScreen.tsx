@@ -343,7 +343,8 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
 
   const surfaceRelease = (dx: number, dy: number) => {
     if (filming) return;
-    if (Math.max(Math.abs(dx), Math.abs(dy)) > FLIP_SWIPE_DISTANCE) {
+    // Glissé vertical seulement : un glissé horizontal change d'onglet.
+    if (Math.abs(dy) > FLIP_SWIPE_DISTANCE && Math.abs(dy) > Math.abs(dx)) {
       flipCamera();
     } else if (Math.max(Math.abs(dx), Math.abs(dy)) < FLIP_TAP_DISTANCE) {
       const now = Date.now();
@@ -358,7 +359,7 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
   const latestSurfaceRelease = useRef(surfaceRelease);
   latestSurfaceRelease.current = surfaceRelease;
 
-  // Sur l'image : un double appui ou un glissé change de caméra.
+  // Sur l'image : un double appui ou un glissé vertical change de caméra.
   const surface = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
