@@ -1,5 +1,40 @@
 # Journal des versions
 
+## 1.3.0 (versionCode 5)
+
+### Résumé
+
+- Les messages arrivent même quand Pear est fermé : ils voyagent chiffrés dans la notification.
+- Tu peux répondre ou marquer comme lu directement depuis la notification.
+- Nouveau thème sombre (ou automatique) dans ton profil.
+- Un écran « Diagnostic des notifications » aide à comprendre quand un message tarde.
+- Chiffrement renforcé : tes conversations passent sur des clés neuves, sans rien perdre.
+
+### Détails
+
+#### Nouveautés
+
+- Message chiffré dans le push : notification immédiate app fermée, accusés de réception par push, réveil ciblé sur la bonne conversation.
+- Notifications au style messagerie (photo du contact, derniers messages), réponse et « Marquer comme lu » depuis la notification, progression des fichiers reçus.
+- Thème clair, sombre ou automatique, avec fondu au changement ; pas d'éclair blanc au lancement en mode sombre.
+- Écran Diagnostic (notifications, batterie, réglage du constructeur, adresse de notification, dernier push, connexions, export du journal).
+- Sessions v2 à clés éphémères : les contacts existants y passent d'eux-mêmes, sans perte ; les téléphones en 1.2.0 restent en v1.
+- « Mets à jour Pear pour lire ce message » si un contact utilise une version plus récente.
+
+#### Corrections
+
+- Plus de bande de fond d'écran sous la zone de saisie ni sous la barre de navigation.
+- La sélection d'un message, clavier ouvert, part de la bonne position.
+- Messages système lisibles sur un fond d'écran en mode sombre.
+
+#### Technique
+
+- Contacts déplacés du coffre vers la base locale (migration 6, recopie vérifiée) ; état du ratchet dans la base chiffrée.
+- Token de notification chiffré publié dans Firebase pour chaque contact, relu après un token périmé.
+- Connexions directes limitées à 8, gardées 45 s après un envoi.
+- Boîtes et demandes de pairing côté serveur (préparation du lot 5), nettoyage quotidien, version du protocole dans chaque message.
+- Configuration distante signée, textes dans src/i18n/fr.ts, journal local, écran d'erreur, limites des fichiers reçus, ESLint et CI.
+
 ## 1.2.0 (versionCode 4)
 
 ### Résumé
