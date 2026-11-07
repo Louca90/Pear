@@ -13,15 +13,19 @@ import { t } from '../i18n';
 import { log } from '../log';
 import { createStyles, radius, setThemePreference, spacing, ThemePreference, useColors, useThemePreference } from '../theme';
 import { checkAllPermissions, PermissionId, PermissionState, requestPermission } from './permissions';
+import { Pear, PEAR_RATIO } from './Pear';
 import { saveOnboardingStep } from './progress';
 
 export type OnboardingStep = 0 | 1 | 2 | 3;
 
-const PEAR = require('../../assets/android-icon-foreground.png');
 const MOVE_MS = 560;
 const FADE_MS = 260;
 const CHECK_MS = 320;
 const INTRO_MS = 700;
+// Hauteur de la poire sur les étapes suivantes (en haut), et à la fin (au centre).
+const SMALL_PEAR = 104;
+const FINAL_PEAR = 220;
+const PEAR_TOP_MARGIN = 12;
 // Démarre vite et se pose doucement, sans dépasser : jamais de rebond.
 const EASING = Easing.bezier(0.2, 0.8, 0.2, 1);
 
@@ -184,17 +188,26 @@ export function OnboardingScreen({ mode, initialStep, onDone }: Props) {
 
   const afterPermissions = () => (mode === 'full' ? goTo(2) : finish());
 
-  // La poire : une image de `width` de côté, dont le dessin occupe à peu près le centre.
-  // Bienvenue : énorme, dans l'angle en haut à gauche, elle déborde de l'écran, un peu tournée.
+  // La poire est dessinée une fois, à sa plus grande taille (l'accueil), puis seulement réduite : le
+  // vectoriel reste net. Accueil : énorme, dans l'angle en haut à gauche, elle déborde et penche.
   // Ensuite : petite en haut au centre, puis au centre de l'écran pour ouvrir l'app.
-  const pearTranslateX = position.interpolate({ inputRange: [0, 1, 2, 3], outputRange: [-width * 0.46, 0, 0, 0] });
-  const pearTranslateY = position.interpolate({
+  const pearHeight = height * 0.62;
+  const pearWidth = pearHeight * PEAR_RATIO;
+  const pearLeft = -pearWidth * 0.38;
+  const pearTop = -pearHeight * 0.2;
+  const centerX = pearLeft + pearWidth / 2;
+  const centerY = pearTop + pearHeight / 2;
+  const smallCenterY = top + PEAR_TOP_MARGIN + SMALL_PEAR / 2;
+  const pearTranslateX = position.interpolate({ inputRange: [0, 1, 2, 3], outputRange: [0, width / 2 - centerX, width / 2 - centerX, width / 2 - centerX] });
+  const pearTranslateY = position.interpolate({ inputRange: [0, 1, 2, 3], outputRange: [0, smallCenterY - centerY, smallCenterY - centerY, height / 2 - centerY] });
+  const pearScale = position.interpolate({
     inputRange: [0, 1, 2, 3],
-    outputRange: [height * 0.17 - width / 2, top - width * 0.33, top - width * 0.33, height / 2 - width / 2 - top],
+    outputRange: [1, SMALL_PEAR / pearHeight, SMALL_PEAR / pearHeight, FINAL_PEAR / pearHeight],
   });
-  const scrolled = Animated.multiply(scrollY, -1);
-  const pearScale = position.interpolate({ inputRange: [0, 1, 2, 3], outputRange: [3, 0.36, 0.36, 0.7] });
   const pearRotate = position.interpolate({ inputRange: [0, 1, 2, 3], outputRange: ['-16deg', '0deg', '-10deg', '0deg'] });
+  // Le texte de l'accueil commence sous la poire (bas du dessin, plus la marge due à l'inclinaison).
+  const welcomeTextTop = pearTop + pearHeight + pearWidth * Math.sin((16 * Math.PI) / 180) + spacing.md;
+  const scrolled = Animated.multiply(scrollY, -1);
   const introX = intro.interpolate({ inputRange: [0, 1], outputRange: [-width * 0.35, 0] });
   const introRotate = intro.interpolate({ inputRange: [0, 1], outputRange: ['-12deg', '0deg'] });
   const finishScale = finishing.interpolate({ inputRange: [0, 1], outputRange: [1, 1.5] });
@@ -205,14 +218,11 @@ export function OnboardingScreen({ mode, initialStep, onDone }: Props) {
 
   return (
     <Animated.View style={[styles.screen, { opacity: finishing.interpolate({ inputRange: [0, 0.7, 1], outputRange: [1, 1, 0] }) }]}>
-      <Animated.Image
-        source={PEAR}
-        resizeMode="contain"
-        // Android fait apparaître chaque image en fondu (300 ms) : la poire doit être là tout de suite.
-        fadeDuration={0}
+      <Animated.View
+        pointerEvents="none"
         style={[
           styles.pear,
-          { width, height: width, tintColor: colors.text },
+          { left: pearLeft, top: pearTop },
           {
             opacity: intro,
             transform: [
@@ -227,13 +237,15 @@ export function OnboardingScreen({ mode, initialStep, onDone }: Props) {
             ],
           },
         ]}
-      />
+      >
+        <Pear height={pearHeight} color={colors.text} />
+      </Animated.View>
       <KeyboardAvoidingView behavior="padding" style={styles.flex}>
         <Animated.ScrollView
           ref={scroll}
           onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
           scrollEventThrottle={16}
-          contentContainerStyle={[styles.content, { paddingTop: step === 0 ? height * 0.52 : top + width * 0.36, paddingBottom: bottom + spacing.lg }]}
+          contentContainerStyle={[styles.content, { paddingTop: step === 0 ? welcomeTextTop : top + PEAR_TOP_MARGIN + SMALL_PEAR + spacing.md, paddingBottom: bottom + spacing.lg }]}
           keyboardShouldPersistTaps="handled"
         >
           <Animated.View style={[styles.flex, contentStyle]}>
@@ -321,8 +333,6 @@ const useStyles = createStyles((colors) => ({
   },
   pear: {
     position: 'absolute',
-    top: 0,
-    left: 0,
   },
   content: {
     flexGrow: 1,
