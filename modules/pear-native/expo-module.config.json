@@ -1,6 +1,11 @@
 {
-  "platforms": ["android"],
+  "platforms": [
+    "android"
+  ],
   "android": {
-    "modules": ["expo.modules.pearnative.PearNativeModule"]
+    "modules": [
+      "expo.modules.pearnative.PearNativeModule",
+      "expo.modules.pearnative.PearCameraModule"
+    ]
   }
 }

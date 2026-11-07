@@ -211,6 +211,7 @@ export const en: Dictionary = {
     detailGithub: 'See the update details on GitHub',
   },
   camera: {
+    zoom: 'Zoom ×{valeur}',
     jeter: 'Discard',
     enregistre: 'Saved',
     enregistrerGalerie: 'Save to gallery',

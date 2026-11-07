@@ -23,4 +23,11 @@ dependencies {
   implementation "androidx.media3:media3-common:${androidxMedia3Version}"
   implementation "androidx.media3:media3-effect:${androidxMedia3Version}"
   implementation "androidx.media3:media3-transformer:${androidxMedia3Version}"
+  // La caméra de Pear (lot 11) : même version de CameraX qu'expo-camera (scanner de QR code), pour n'en embarquer qu'une.
+  def cameraxVersion = "1.6.0"
+  implementation "androidx.camera:camera-core:${cameraxVersion}"
+  implementation "androidx.camera:camera-camera2:${cameraxVersion}"
+  implementation "androidx.camera:camera-lifecycle:${cameraxVersion}"
+  implementation "androidx.camera:camera-video:${cameraxVersion}"
+  implementation "androidx.camera:camera-view:${cameraxVersion}"
 }

@@ -210,6 +210,7 @@ export const fr = {
     detailGithub: 'Voir le détail de la mise à jour sur GitHub',
   },
   camera: {
+    zoom: 'Zoom ×{valeur}',
     jeter: 'Jeter',
     enregistre: 'Enregistré',
     enregistrerGalerie: 'Enregistrer dans la galerie',

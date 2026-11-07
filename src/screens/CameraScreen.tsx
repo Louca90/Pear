@@ -1,13 +1,12 @@
-import { ComponentRef, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, Linking, useWindowDimensions, Modal, PanResponder, StyleSheet, Text, View } from 'react-native';
-import { CameraType, CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
-import { File, Paths } from 'expo-file-system';
+import { useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
 import { NavigationBar } from 'expo-navigation-bar';
 import { StatusBar } from 'expo-status-bar';
 import { Camera, Check, Download, Lock, Send, Settings, Square, SwitchCamera, X, Zap, ZapOff } from 'lucide-react-native';
 
-import { resizeImage } from '../../modules/pear-native';
+import { PearCameraHandle, PearCameraView, wideLens } from '../../modules/pear-native/camera';
 
 import { saveToGallery } from '../chat/files';
 import { chat } from '../chat/manager';
@@ -28,6 +27,7 @@ import { log } from '../log';
 import { VIDEO_BITRATE } from '../config';
 import { t } from '../i18n';
 import { logCameraStep } from './cameraTiming';
+import { activeLevel, ZoomBar, zoomLevels } from './camera/ZoomBar';
 
 // En dessous de ce temps, c'est une photo. Au-delà, le maintien filme.
 const HOLD_MS = 250;
@@ -35,13 +35,19 @@ const HOLD_MS = 250;
 const LOCK_DISTANCE = 112;
 const LOCK_REACH = 28;
 const SHUTTER_SIZE = 84;
-const PHOTO_QUALITY = 0.9;
 const PHOTO_MAX_SIZE = 2048;
 const PHOTO_JPEG_QUALITY = 82;
 const DOUBLE_TAP_MS = 300;
 const FLIP_SWIPE_DISTANCE = 70;
 const FLIP_TAP_DISTANCE = 10;
 const REVIEW_CONTROLS_MS = 180;
+// Glisser le déclencheur vers le haut en filmant zoome : ×2 tous les ZOOM_SLIDE points.
+const ZOOM_SLIDE = 140;
+const ZOOM_SLIDE_MAX = 8;
+// Deux petits appuis d'un second doigt pendant qu'on tient le déclencheur : la caméra se retourne.
+const SECOND_TAP_MS = 250;
+// La rangée de zoom, au-dessus du déclencheur et du nom du filtre qui s'affiche un instant.
+const ZOOM_BAR_SPACE = 64;
 
 // filter : le filtre choisi avant la prise, repris par l'éditeur (il ne touche pas encore au fichier).
 // Une fois la caméra autorisée, inutile d'attendre la relecture de la permission (asynchrone) pour
@@ -180,7 +186,15 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
     logCameraStep('première image');
     Animated.timing(previewOpacity, { toValue: 1, duration: PREVIEW_FADE_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
   };
-  const [facing, setFacing] = useState<CameraType>('back');
+  const [facing, setFacing] = useState<'back' | 'front'>('back');
+  // Le zoom : réel (×0,6 sur une caméra multiple), ou un autre objectif (ultra grand-angle séparé).
+  const [wide] = useState(() => wideLens());
+  const [zoom, setZoom] = useState(1);
+  const [lensId, setLensId] = useState<string | null>(null);
+  const [zoomRange, setZoomRange] = useState({ min: 1, max: 1 });
+  const zoomRef = useRef(1);
+  zoomRef.current = zoom;
+  const zoomStart = useRef(1);
   const [flashOn, setFlashOn] = useState(false);
   const [filming, setFilming] = useState(false);
   const [recording, setRecording] = useState(false);
@@ -201,7 +215,7 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
     return () => clearInterval(timer);
   }, [liveStamp]);
   const window = useWindowDimensions();
-  const camera = useRef<ComponentRef<typeof CameraView>>(null);
+  const camera = useRef<PearCameraHandle>(null);
   const barSpace = useBottomBarSpace();
 
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -262,9 +276,9 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
     isRecording.current = true;
     setRecording(true);
     camera.current
-      .recordAsync()
-      .then((video) => {
-        if (video?.uri) setCapture({ uri: video.uri, kind: 'video', takenAt: Date.now(), filter: liveFilterRef.current });
+      .startRecording()
+      .then((uri) => {
+        if (uri) setCapture({ uri, kind: 'video', takenAt: Date.now(), filter: liveFilterRef.current });
       })
       .catch((e) => {
         log.warn('vidéo', e);
@@ -273,7 +287,7 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
       .finally(resetFilming);
   };
 
-  // Le mode vidéo garde aussi la photo active (patches/expo-camera) : le maintien filme tout de suite.
+  // Photo et vidéo sont branchées ensemble (PearCameraView) : le maintien filme tout de suite.
   const beginHold = () => {
     holdTimer.current = null;
     wantsVideo.current = true;
@@ -292,15 +306,10 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
     animateShutter(1);
     vibrate();
     try {
-      const photo = await camera.current?.takePictureAsync({ quality: PHOTO_QUALITY });
+      // Déjà tournée et réduite à 2048 px par la caméra : une image légère part plus vite (et passe le relais).
+      const photo = await camera.current?.takePicture(PHOTO_MAX_SIZE, PHOTO_JPEG_QUALITY);
       if (!photo?.uri) return;
-      // Réduite à 2048 px : Pear n'est pas une app photo, une image légère part plus vite (et passe le relais).
-      const small = new File(Paths.cache, `photo-${Date.now()}.jpg`).uri;
-      const uri = await resizeImage(photo.uri, small, PHOTO_MAX_SIZE, PHOTO_JPEG_QUALITY).catch((e) => {
-        log.warn('réduction de la photo', e);
-        return photo.uri;
-      });
-      setCapture({ uri, kind: 'image', takenAt: Date.now(), filter: liveFilterRef.current });
+      setCapture({ uri: photo.uri, kind: 'image', takenAt: Date.now(), filter: liveFilterRef.current });
     } catch (e) {
       showDialog(t('camera.photoNonPrise'), String(e));
     }
@@ -315,10 +324,17 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
         return;
       }
       animateShutter(0.88);
+      zoomStart.current = zoomRef.current;
       holdTimer.current = setTimeout(beginHold, HOLD_MS);
     },
-    move: (dx: number) => {
-      if (!wantsVideo.current || isLocked.current) return;
+    move: (dx: number, dy: number, fingers: number) => {
+      // Un second doigt posé déplace le centre du geste : on l'ignore pour le cadenas et le zoom.
+      if (!wantsVideo.current || isLocked.current || fingers > 1) return;
+      // Vers le haut, le zoom monte (×2 tous les ZOOM_SLIDE points) ; en redescendant, il revient.
+      if (dy < 0 || zoomRef.current !== zoomStart.current) {
+        const next = Math.max(zoomRange.min, Math.min(Math.min(zoomRange.max, ZOOM_SLIDE_MAX), zoomStart.current * Math.pow(2, -Math.min(0, dy) / ZOOM_SLIDE)));
+        if (Math.abs(next - zoomRef.current) > 0.01) setZoom(next);
+      }
       const distance = Math.min(0, Math.max(-LOCK_DISTANCE, dx));
       shutterX.setValue(distance);
       const reached = distance <= -(LOCK_DISTANCE - LOCK_REACH);
@@ -348,15 +364,38 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
       }
     },
   };
-  const latestGesture = useRef(gesture);
-  latestGesture.current = gesture;
+  const secondTaps = useRef({ downAt: 0, lastTap: 0 });
+  const gestureWithTaps = {
+    ...gesture,
+    secondFinger: (fingers: number, down: boolean) => {
+      const taps = secondTaps.current;
+      const now = Date.now();
+      if (down && fingers >= 2) {
+        taps.downAt = now;
+        return;
+      }
+      if (down || fingers < 1 || !taps.downAt || now - taps.downAt > SECOND_TAP_MS) return;
+      taps.downAt = 0;
+      if (now - taps.lastTap < DOUBLE_TAP_MS) {
+        taps.lastTap = 0;
+        flipCamera();
+      } else {
+        taps.lastTap = now;
+      }
+    },
+  };
+  const latestGesture = useRef(gestureWithTaps);
+  latestGesture.current = gestureWithTaps;
 
   const shutter = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onPanResponderTerminationRequest: () => false,
       onPanResponderGrant: () => latestGesture.current.down(),
-      onPanResponderMove: (_event, { dx }) => latestGesture.current.move(dx),
+      onPanResponderMove: (_event, { dx, dy, numberActiveTouches }) => latestGesture.current.move(dx, dy, numberActiveTouches),
+      // Les doigts en plus, pendant qu'on tient le déclencheur : deux petits appuis retournent la caméra.
+      onPanResponderStart: (_event, { numberActiveTouches }) => latestGesture.current.secondFinger(numberActiveTouches, true),
+      onPanResponderEnd: (_event, { numberActiveTouches }) => latestGesture.current.secondFinger(numberActiveTouches, false),
       onPanResponderRelease: () => latestGesture.current.up(),
       onPanResponderTerminate: () => latestGesture.current.up(),
     }),
@@ -365,14 +404,17 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
   const flipCamera = () => {
     vibrate();
     setFacing((current) => (current === 'back' ? 'front' : 'back'));
+    // L'autre caméra repart à ×1 ; une vidéo en cours continue dessus.
+    setZoom(1);
+    setLensId(null);
     Animated.sequence([
       Animated.timing(flipFade, { toValue: 1, duration: 110, useNativeDriver: true }),
       Animated.timing(flipFade, { toValue: 0, duration: 260, useNativeDriver: true }),
     ]).start();
   };
 
+  // Pendant une vidéo verrouillée aussi : elle continue sur l'autre caméra.
   const surfaceRelease = (dx: number, dy: number) => {
-    if (filming) return;
     // Glissé vertical seulement : un glissé horizontal change d'onglet.
     if (Math.abs(dy) > FLIP_SWIPE_DISTANCE && Math.abs(dy) > Math.abs(dx)) {
       flipCamera();
@@ -419,17 +461,21 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
       {cameraAllowed && (
         <Animated.View style={[StyleSheet.absoluteFill, { opacity: previewOpacity }]}>
         <FilteredView steps={stepsOf(liveFilter, NO_ADJUSTMENTS)} style={StyleSheet.absoluteFill}>
-        <CameraView
-          onCameraReady={onCameraReady}
+        <PearCameraView
           ref={camera}
           style={StyleSheet.absoluteFill}
           facing={facing}
-          mode="video"
-          videoQuality="720p"
+          cameraId={facing === 'back' ? lensId : null}
+          zoom={zoom}
           videoBitrate={VIDEO_BITRATE}
-          flash={flashOn ? 'on' : 'off'}
-          enableTorch={flashOn && filming}
+          flash={flashOn}
+          torch={flashOn && filming}
           mute={!microphonePermission?.granted}
+          onReady={({ nativeEvent }) => {
+            setZoomRange({ min: nativeEvent.minZoom, max: nativeEvent.maxZoom });
+            onCameraReady();
+          }}
+          onCameraError={({ nativeEvent }) => log.warn('caméra', nativeEvent.message)}
         />
         </FilteredView>
         </Animated.View>
@@ -460,6 +506,20 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
           <View style={styles.timerDot} />
           <Text style={styles.timerText}>{formatElapsed(elapsed)}</Text>
         </View>
+      )}
+
+      {facing === 'back' && (
+        <ZoomBar
+          levels={zoomLevels(wide, lensId ? Math.max(2, zoomRange.max) : zoomRange.max)}
+          active={activeLevel(zoomLevels(wide, Math.max(2, zoomRange.max)), wide, zoom, lensId)}
+          zoom={zoom}
+          lens={lensId}
+          bottom={barSpace + SHUTTER_SIZE + ZOOM_BAR_SPACE}
+          onChoose={(level) => {
+            setLensId(level.lens);
+            setZoom(level.zoom);
+          }}
+        />
       )}
 
       {/* La hauteur ne change jamais : le bouton reste sous le doigt quand la barre du bas s'efface. */}

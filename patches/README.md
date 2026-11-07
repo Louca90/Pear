@@ -6,6 +6,7 @@ Appliqués automatiquement par `patch-package` au `postinstall` (`npm install`).
 
 Fichier : `android/src/main/java/expo/modules/camera/ExpoCameraView.kt`.
 
+- Depuis le lot 11, l'appareil photo de Pear est `PearCameraView` (CameraX, dans `modules/pear-native`) : ce patch ne concerne plus que le scanner de QR code.
 - **Pourquoi** : en mode vidéo, expo-camera n'attache pas la capture photo. Pear prend aussi des photos depuis ce mode (appareil photo unique, appui court = photo, appui long = vidéo) : le patch ajoute la capture photo à la session vidéo.
 - Certains téléphones refusent photo et vidéo en même temps (`IllegalArgumentException` de CameraX) : le patch se replie alors sur la vidéo seule au lieu de planter.
 - L'aperçu passe en `TextureView` (`PreviewView.ImplementationMode.COMPATIBLE`) au lieu d'une `SurfaceView` : Android ne sait pas appliquer un filtre de vue à une `SurfaceView`, et les filtres de couleur en direct de l'appareil photo (lot 10) en ont besoin.
