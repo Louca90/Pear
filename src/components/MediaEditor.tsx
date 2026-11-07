@@ -3,9 +3,9 @@ import { ComponentRef, memo, Ref, useCallback, useEffect, useImperativeHandle, u
 import { Animated, Dimensions, Easing, findNodeHandle, Image, StyleSheet, Text, View } from 'react-native';
 import { File, Paths } from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
-import { useVideoPlayer, VideoView } from 'expo-video';
+import { useVideoPlayer, VideoPlayer, VideoView } from 'expo-video';
 import { getThumbnailAsync } from 'expo-video-thumbnails';
-import { Crop as CropIcon, Pencil, SlidersHorizontal, Smile, Trash2, Type } from 'lucide-react-native';
+import { Crop as CropIcon, Gauge, Pencil, Scissors, SlidersHorizontal, Smile, Trash2, Type, Volume2, VolumeX } from 'lucide-react-native';
 import { GestureDetector, usePanGesture, usePinchGesture, useRotationGesture, useSimultaneousGestures, useTapGesture } from 'react-native-gesture-handler';
 import Svg, { Defs, FeColorMatrix, Filter, G, Image as SvgImage } from 'react-native-svg';
 
@@ -29,6 +29,7 @@ import { DrawPanel, StrokesView } from './editor/DrawPanel';
 import { BRUSH_DEFAULT, Stroke } from './editor/drawing';
 import { Crop, cropGeometry, ImagePlacement, isCropped, NO_CROP } from './editor/crop';
 import { CropPanel } from './editor/CropPanel';
+import { Trim, TrimPanel } from './editor/TrimPanel';
 
 // Un glissé horizontal devient un changement de filtre au-delà de cette distance.
 const SWIPE_START = 12;
@@ -40,6 +41,8 @@ const VIDEO_SWIPE_DISTANCE = 50;
 const SWIPE_MS = 220;
 const EASING = Easing.bezier(0.2, 0.8, 0.2, 1);
 const TRASH_SIZE = 56;
+// Les vitesses proposées, dans l'ordre où le bouton les fait défiler.
+const SPEEDS = [1, 1.5, 2, 0.5];
 const TRASH_REACH = 56;
 // Les calques sont enregistrés plus grands que l'aperçu (jusqu'à la taille de la photo) : textes nets.
 const EXPORT_SCALE_MAX = 2.5;
@@ -55,11 +58,7 @@ function vibrate() {
   Haptics.selectionAsync().catch((e) => log.warn('vibration', e));
 }
 
-function EditorVideo({ uri }: { uri: string }) {
-  const player = useVideoPlayer(uri, (created) => {
-    created.loop = true;
-    created.play();
-  });
+function EditorVideo({ player }: { player: VideoPlayer }) {
   return <VideoView player={player} style={StyleSheet.absoluteFill} contentFit="contain" nativeControls={false} surfaceType="textureView" />;
 }
 
@@ -141,26 +140,83 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
     measured.then(({ width: measuredWidth, height: measuredHeight }) => setSize({ width: measuredWidth, height: measuredHeight })).catch((e) => log.warn('média', e));
   }, [uri, kind]);
 
-  const busy = adjusting || picking || drawing || cropping || editing !== null || dragging !== null;
+  // Vidéo : découpe, son et vitesse, appliqués à l'aperçu par le lecteur puis au fichier par Media3.
+  const [trimming, setTrimming] = useState(false);
+  const [trim, setTrim] = useState<Trim>({ start: 0, end: null });
+  const [muted, setMuted] = useState(false);
+  const [speed, setSpeed] = useState(1);
+  const [duration, setDuration] = useState(0);
+  const playhead = useRef(new Animated.Value(0)).current;
+  const scrubbing = useRef(false);
+  const player = useVideoPlayer(kind === 'video' ? uri : null, (created) => {
+    created.loop = true;
+    created.timeUpdateEventInterval = 0.05;
+    created.play();
+  });
+  useEffect(() => {
+    if (kind !== 'video') return;
+    if (player.duration > 0) setDuration(player.duration);
+    const loaded = player.addListener('sourceLoad', (event) => setDuration(event.duration));
+    return () => loaded.remove();
+  }, [kind, player]);
+  // La lecture tourne en boucle dans la partie gardée.
+  useEffect(() => {
+    if (kind !== 'video') return;
+    const ticking = player.addListener('timeUpdate', ({ currentTime }) => {
+      playhead.setValue(currentTime);
+      if (scrubbing.current) return;
+      const last = trim.end ?? duration;
+      if ((last > 0 && currentTime >= last - 0.03) || currentTime < trim.start - 0.15) player.currentTime = trim.start;
+    });
+    return () => ticking.remove();
+  }, [kind, player, trim, duration, playhead]);
+  useEffect(() => {
+    if (kind === 'video') player.muted = muted;
+  }, [kind, player, muted]);
+  useEffect(() => {
+    if (kind === 'video') player.playbackRate = speed;
+  }, [kind, player, speed]);
+
+  const scrub = (time: number | null) => {
+    if (time === null) {
+      scrubbing.current = false;
+      player.currentTime = trim.start;
+      player.play();
+      return;
+    }
+    scrubbing.current = true;
+    player.pause();
+    player.currentTime = time;
+  };
+
+  const busy = adjusting || picking || drawing || cropping || trimming || editing !== null || dragging !== null;
   useEffect(() => {
     onToolChange?.(busy);
   }, [busy, onToolChange]);
 
-  // Le nom du filtre apparaît un instant au milieu, puis s'efface.
+  // Un message apparaît un instant au milieu, puis s'efface : le nom du filtre, la vitesse, le son.
   const toast = useRef(new Animated.Value(0)).current;
+  const [toastText, setToastText] = useState('');
+  const showToast = useCallback(
+    (text: string) => {
+      setToastText(text);
+      toast.stopAnimation();
+      Animated.sequence([
+        Animated.timing(toast, { toValue: 1, duration: 150, easing: EASING, useNativeDriver: true }),
+        Animated.delay(700),
+        Animated.timing(toast, { toValue: 0, duration: 300, easing: EASING, useNativeDriver: true }),
+      ]).start();
+    },
+    [toast],
+  );
   const firstFilter = useRef(true);
   useEffect(() => {
     if (firstFilter.current) {
       firstFilter.current = false;
       return;
     }
-    toast.stopAnimation();
-    Animated.sequence([
-      Animated.timing(toast, { toValue: 1, duration: 150, easing: EASING, useNativeDriver: true }),
-      Animated.delay(700),
-      Animated.timing(toast, { toValue: 0, duration: 300, easing: EASING, useNativeDriver: true }),
-    ]).start();
-  }, [filter, toast]);
+    showToast(t(presetOf(filter).label));
+  }, [filter, showToast]);
 
   // La corbeille monte du bas pendant qu'on déplace un calque, et grossit quand il est dessus.
   const trash = useRef(new Animated.Value(0)).current;
@@ -224,11 +280,19 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
       const matrix = matrixOf(steps);
       const colored = !isIdentity(matrix);
       const marked = !!presetOf(filter).stamp || layers.length > 0 || strokes.length > 0;
-      if (!colored && !marked && !isCropped(crop)) return uri;
+      const last = trim.end ?? duration;
+      const timing = {
+        startMs: trim.start > 0.05 ? Math.round(trim.start * 1000) : undefined,
+        endMs: trim.end !== null && duration > 0 && trim.end < duration - 0.05 ? Math.round(last * 1000) : undefined,
+        mute: muted || undefined,
+        speed: speed !== 1 ? speed : undefined,
+      };
+      const timed = kind === 'video' && (timing.startMs !== undefined || timing.endMs !== undefined || muted || speed !== 1);
+      if (!colored && !marked && !timed && !isCropped(crop)) return uri;
       if (kind === 'image') return snapshot(colored ? matrix : null);
       // Vidéo : le calque seulement s'il y a quelque chose à poser dessus.
       const overlayUri = marked ? await snapshot(null) : undefined;
-      return editVideo(uri, { overlayUri, matrix: colored ? toMedia3(matrix) : undefined, bitrate: VIDEO_BITRATE });
+      return editVideo(uri, { overlayUri, matrix: colored ? toMedia3(matrix) : undefined, ...timing, bitrate: VIDEO_BITRATE });
     },
   }));
 
@@ -479,7 +543,7 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
         {size && kind === 'video' && (
           <>
             <FilteredView steps={steps} style={StyleSheet.absoluteFill}>
-              <EditorVideo uri={uri} />
+              <EditorVideo player={player} />
             </FilteredView>
             {currentStamp && (
               <Svg pointerEvents="none" style={StyleSheet.absoluteFill} width={width} height={height}>
@@ -513,7 +577,7 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
       </View>
 
       <Animated.View pointerEvents="none" style={[styles.toast, { opacity: toast, transform: [{ scale: toast.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) }] }]}>
-        <Text style={styles.toastLabel}>{t(presetOf(filter).label)}</Text>
+        <Text style={styles.toastLabel}>{toastText}</Text>
       </Animated.View>
 
       <Animated.View
@@ -541,6 +605,34 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
         tools={[
           { id: 'text', icon: Type, label: t('editeur.texte'), onPress: startNewText },
           ...(kind === 'image' ? [{ id: 'crop', icon: CropIcon, label: t('editeur.recadrer'), onPress: () => setCropping(true) }] : []),
+          ...(kind === 'video'
+            ? [
+                { id: 'trim', icon: Scissors, label: t('editeur.decouper'), active: trim.start > 0 || trim.end !== null, onPress: () => duration > 0 && setTrimming(true) },
+                {
+                  id: 'sound',
+                  icon: muted ? VolumeX : Volume2,
+                  label: muted ? t('editeur.sonCoupe') : t('editeur.son'),
+                  active: muted,
+                  onPress: () => {
+                    vibrate();
+                    setMuted((current) => !current);
+                    showToast(muted ? t('editeur.son') : t('editeur.sonCoupe'));
+                  },
+                },
+                {
+                  id: 'speed',
+                  icon: Gauge,
+                  label: t('editeur.vitesse'),
+                  active: speed !== 1,
+                  onPress: () => {
+                    vibrate();
+                    const next = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length];
+                    setSpeed(next);
+                    showToast(t('editeur.vitesseValeur', { vitesse: String(next).replace('.', ',') }));
+                  },
+                },
+              ]
+            : []),
           { id: 'draw', icon: Pencil, label: t('editeur.dessin'), onPress: () => setDrawing(true) },
           { id: 'stickers', icon: Smile, label: t('editeur.stickers'), onPress: () => setPicking(true) },
           { id: 'adjust', icon: SlidersHorizontal, label: t('editeur.reglages'), active: adjusting, onPress: () => setAdjusting(true) },
@@ -559,6 +651,9 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
           onBrush={setBrush}
           onClose={() => setDrawing(false)}
         />
+      )}
+      {trimming && duration > 0 && (
+        <TrimPanel uri={uri} duration={duration} trim={trim} playhead={playhead} bottom={navigationBar} onChange={setTrim} onScrub={scrub} onClose={() => setTrimming(false)} />
       )}
       {cropping && size && (
         <CropPanel
