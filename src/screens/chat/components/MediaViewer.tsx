@@ -13,6 +13,7 @@ import { VIEWER_CANCEL_MS, VIEWER_CLOSE_DISTANCE, VIEWER_CLOSE_MS, VIEWER_CLOSE_
 import { useChatStyles } from '../styles';
 import { Rect } from '../types';
 import { t } from '../../../i18n';
+import { log } from '../../../log';
 
 // Plein écran : juste lecture ou pause et une barre pour se déplacer.
 function VideoControls({ player }: { player: VideoPlayer }) {
@@ -73,7 +74,7 @@ function VideoControls({ player }: { player: VideoPlayer }) {
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 5;
 const DOUBLE_TAP_ZOOM = 2.5;
-const DOUBLE_TAP_MS = 280;
+const DOUBLE_TAP_MS = 350;
 const TAP_SLOP = 8;
 const ZOOM_MS = 240;
 // Élan au relâché : la distance parcourue pendant ce temps à la vitesse du doigt.
@@ -193,9 +194,14 @@ export function MediaViewer({ viewing: { message, rect, poster, size }, onClose 
       onMoveShouldSetPanResponderCapture: (event, gesture) =>
         event.nativeEvent.touches.length >= 2 || (gestures.current.zoomed() && Math.hypot(gesture.dx, gesture.dy) > TAP_SLOP / 2),
       onMoveShouldSetPanResponder: (_event, gesture) => gestures.current.zoomed() || (gesture.dy > VIEWER_DRAG_START && gesture.dy > Math.abs(gesture.dx)),
-      onPanResponderGrant: () => {
+      onPanResponderGrant: (event) => {
         pinch.current = null;
         panStart.current = { ...panNow.current };
+        log.info('visionneuse', `appui ${event.nativeEvent.touches.length} zoom ${zoomNow.current}`);
+      },
+      // Un deuxième doigt posé : le pincement commence.
+      onPanResponderStart: (event) => {
+        log.info('visionneuse', `doigts ${event.nativeEvent.touches.length}`);
       },
       onPanResponderMove: (event, gesture) => {
         const { touches } = event.nativeEvent;
@@ -216,6 +222,7 @@ export function MediaViewer({ viewing: { message, rect, poster, size }, onClose 
       },
       onPanResponderRelease: (event, gesture) => {
         const g = gestures.current;
+        log.info('visionneuse', `relâché dx ${Math.round(gesture.dx)} dy ${Math.round(gesture.dy)} pincement ${pinch.current !== null} écart ${Date.now() - lastTap.current}`);
         const wasPinch = pinch.current !== null;
         pinch.current = null;
         if (g.zoomed() || wasPinch) {

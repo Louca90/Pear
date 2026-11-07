@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, FlatList, Modal, Pressable, Text, View, useWindowDimensions } from 'react-native';
-import { ArrowUp, Check } from 'lucide-react-native';
+import { ArrowUp } from 'lucide-react-native';
+import Svg, { Path } from 'react-native-svg';
 
 import { getContactProfile } from '../../../chat/database';
 import { SearchField } from '../../../components/SearchField';
@@ -12,22 +13,43 @@ import { createStyles, radius, spacing, useColors } from '../../../theme';
 const OPEN_MS = 260;
 const CLOSE_MS = 200;
 const EASING = Easing.bezier(0.2, 0.8, 0.2, 1);
-const CHECK_MS = 160;
+const CHECK_MS = 220;
+// Longueur du tracé de la coche (dans une grille de 24) : il se dessine de 0 à cette longueur.
+const CHECK_LENGTH = 16;
+const AnimatedPath = Animated.createAnimatedComponent(Path);
 
-// La case d'un contact : elle se remplit en fondu quand on le choisit.
+// La case d'un contact : le cercle se remplit de la couleur d'accent en fondu et la coche se dessine
+// d'un trait, sans changement de taille. Décocher fait l'inverse.
 function CheckBox({ checked }: { checked: boolean }) {
   const colors = useColors();
   const styles = useStyles();
   const on = useRef(new Animated.Value(checked ? 1 : 0)).current;
   useEffect(() => {
-    Animated.timing(on, { toValue: checked ? 1 : 0, duration: CHECK_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    Animated.timing(on, { toValue: checked ? 1 : 0, duration: CHECK_MS, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
   }, [checked, on]);
   return (
-    <View style={styles.box}>
-      <Animated.View style={[styles.boxOn, { opacity: on, transform: [{ scale: on.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) }] }]}>
-        <Check size={16} color={colors.onAccent} strokeWidth={2.5} />
-      </Animated.View>
-    </View>
+    <Animated.View
+      style={[
+        styles.box,
+        {
+          backgroundColor: on.interpolate({ inputRange: [0, 1], outputRange: [colors.background, colors.accent] }),
+          borderColor: on.interpolate({ inputRange: [0, 1], outputRange: [colors.border, colors.accent] }),
+        },
+      ]}
+    >
+      <Svg width={16} height={16} viewBox="0 0 24 24">
+        <AnimatedPath
+          d="M5 12.5l4.5 4.5L19 7.5"
+          fill="none"
+          stroke={colors.onAccent}
+          strokeWidth={3}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeDasharray={`${CHECK_LENGTH * 1.5} ${CHECK_LENGTH * 1.5}`}
+          strokeDashoffset={on.interpolate({ inputRange: [0.25, 1], outputRange: [CHECK_LENGTH * 1.5, 0], extrapolate: 'clamp' })}
+        />
+      </Svg>
+    </Animated.View>
   );
 }
 
@@ -169,12 +191,6 @@ const useStyles = createStyles((colors) => ({
     height: 24,
     borderRadius: radius.full,
     borderWidth: 1.5,
-    borderColor: colors.border,
-    overflow: 'hidden',
-  },
-  boxOn: {
-    flex: 1,
-    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
