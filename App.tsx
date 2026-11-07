@@ -71,6 +71,8 @@ const BACK_CANCEL_MS = 200;
 // Démarre vite et se pose doucement, sans dépasser : jamais de rebond.
 const BACK_EASING = Easing.bezier(0.2, 0.8, 0.2, 1);
 const BACK_PAGE_SHIFT = 24;
+// La page rejoint chaque nouvelle position du doigt en douceur, au lieu de sauter d'une valeur à l'autre.
+const BACK_FOLLOW_MS = 50;
 // Arrivée d'un nouvel écran : fondu et léger zoom, l'écran d'avant s'efface dessous.
 const ENTER_MS = 200;
 // Glissement entre onglets : la page et l'onglet voisin suivent le doigt ; au-delà du seuil (ou d'un
@@ -403,7 +405,7 @@ function App() {
           clearTimeout(holdTimer.current);
           motion.g.stopAnimation();
         }
-        motion.g.setValue(progress);
+        Animated.timing(motion.g, { toValue: progress, duration: BACK_FOLLOW_MS, easing: Easing.linear, useNativeDriver: true }).start();
       } else if (type === 'cancelled') {
         clearTimeout(holdTimer.current);
         gestureStarted.current = false;
@@ -693,10 +695,10 @@ function App() {
                 isParent
                   ? {
                       opacity: Animated.add(
-                        top.g.interpolate({ inputRange: [0, 0.01, 1, 2], outputRange: [0, 0.4, 0.85, 1] }),
+                        top.g.interpolate({ inputRange: [0, 1, 2], outputRange: [0.4, 0.85, 1] }),
                         top.enter.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
                       ),
-                      transform: [{ scale: top.g.interpolate({ inputRange: [0, 0.01, 1, 2], outputRange: [1, 0.94, 0.97, 1] }) }],
+                      transform: [{ scale: top.g.interpolate({ inputRange: [0, 1, 2], outputRange: [0.94, 0.97, 1] }) }],
                     }
                   : styles.hidden,
               ]}
