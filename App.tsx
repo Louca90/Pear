@@ -118,13 +118,9 @@ function App() {
       .then(hasIdentity)
       .then(async (existed) => {
         const [savedIdentity, savedContacts] = await Promise.all([loadOrCreateIdentity(), loadContacts()]);
-        // Prise en main : en entier sur un nouveau téléphone ; pour un utilisateur existant, seulement
-        // les autorisations s'il en manque une.
-        if (!isOnboardingDone()) {
-          if (!existed) setOnboarding({ mode: 'full', step: loadOnboardingStep() });
-          else if (Object.values(await checkAllPermissions()).some((state) => state !== 'granted')) setOnboarding({ mode: 'permissions', step: 1 });
-          else markOnboardingDone();
-        }
+        // Prise en main en entier pour tout le monde, une fois (nouveau téléphone, ou mise à jour depuis une
+        // version qui ne l'avait pas) : nom et photo déjà enregistrés sont préremplis.
+        if (!isOnboardingDone()) setOnboarding({ mode: 'full', step: loadOnboardingStep() });
         setContacts(savedContacts);
         setIdentity(savedIdentity);
         setUpdatedInfo(pendingUpdatedInfo(existed));
