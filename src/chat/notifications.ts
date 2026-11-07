@@ -5,6 +5,8 @@ import { t } from '../i18n';
 
 // Les notifications sont créées ici, après déchiffrement : ni Google ni Vercel n'en voient le contenu.
 
+const FILE_PROGRESS_TIMEOUT_MS = 60 * 1000;
+
 export type NotificationLine = { text: string; at: number; mine: boolean };
 
 async function ensureChannel() {
@@ -84,7 +86,8 @@ export async function showFileProgress(id: string, name: string, progress: numbe
       channelId: NOTIFICATION_CHANNEL_ID,
       smallIcon: NOTIFICATION_SMALL_ICON,
       onlyAlertOnce: true,
-      ongoing: true,
+      // Disparaît seule si le transfert s'interrompt (plus de nouvelles pendant une minute).
+      timeoutAfter: FILE_PROGRESS_TIMEOUT_MS,
       progress: { max: 100, current: Math.round(progress * 100) },
     },
   });

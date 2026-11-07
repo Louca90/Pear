@@ -84,8 +84,11 @@ export function setProgress(core: ChatCore, id: string, value: number) {
     core.lastProgressNotify = Date.now();
     core.notify();
     // App en arrière-plan : un fichier reçu montre sa progression dans une notification.
+    // Seulement les fichiers qu'on a vraiment demandé à voir : pas la photo de profil ni le fond d'écran,
+    // qui arrivent tout seuls.
     const incoming = core.incomingFiles.get(id);
-    if (incoming && AppState.currentState !== 'active') {
+    const kind = incoming ? getMessage(id, incoming.contact)?.kind : undefined;
+    if (incoming && kind !== 'avatar' && kind !== 'wallpaper' && AppState.currentState !== 'active') {
       showFileProgress(id, core.names.get(incoming.contact) ?? 'Pear', value).catch((e) => log.warn('notification', e));
     }
   }
