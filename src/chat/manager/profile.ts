@@ -1,4 +1,7 @@
+import { File, Paths } from 'expo-file-system';
 import { randombytes_buf, to_base64 } from 'react-native-libsodium';
+
+import { resizeImage } from '../../../modules/pear-native';
 
 import { deleteOldAvatars, getContactProfile, getSetting, setContactProfileField, setSetting } from '../database';
 import { deleteStoredFile, exportCopy, storeOutgoingFile } from '../files';
@@ -9,6 +12,9 @@ import { sendFile } from './transfers';
 import { FILE_ID_BYTES, PROFILE_NAME, PROFILE_PHOTO, PROFILE_VERSION } from './types';
 import { log } from '../../log';
 
+const AVATAR_MAX_SIZE = 512;
+const AVATAR_QUALITY = 82;
+
 export function getMyProfile() {
   return { name: getSetting(PROFILE_NAME), photo: getSetting(PROFILE_PHOTO) };
 }
@@ -17,7 +23,14 @@ export async function saveProfile(core: ChatCore, name: string, photoUri: string
   const current = getMyProfile();
   let photo = photoUri;
   if (photoUri && photoUri !== current.photo) {
-    photo = await storeOutgoingFile(photoUri, to_base64(randombytes_buf(FILE_ID_BYTES)));
+    // Réduite avant d'être gardée et envoyée : une photo trop lourde serait refusée par les contacts
+    // (photo de profil limitée à 2 Mo), et elle passe plus vite.
+    const small = new File(Paths.cache, `avatar-${to_base64(randombytes_buf(8))}.jpg`).uri;
+    const source = await resizeImage(photoUri, small, AVATAR_MAX_SIZE, AVATAR_QUALITY).catch((e) => {
+      log.warn('réduction de la photo de profil', e);
+      return photoUri;
+    });
+    photo = await storeOutgoingFile(source, to_base64(randombytes_buf(FILE_ID_BYTES)));
   }
   if (current.photo && current.photo !== photo) deleteStoredFile(current.photo);
   setSetting(PROFILE_NAME, name || null);
@@ -25,6 +38,13 @@ export async function saveProfile(core: ChatCore, name: string, photoUri: string
   setSetting(PROFILE_VERSION, to_base64(randombytes_buf(16)));
   core.names.forEach((_, contact) => shareProfile(core, contact));
   core.notify();
+}
+
+// Un contact qui vient d'accepter notre demande : notre profil lui est renvoyé (le premier envoi a pu
+// partir avant qu'il nous ait enregistré).
+export function reshareProfile(core: ChatCore, contact: string) {
+  setContactProfileField(contact, 'sent_version', null);
+  shareProfile(core, contact);
 }
 
 export function shareProfile(core: ChatCore, contact: string) {

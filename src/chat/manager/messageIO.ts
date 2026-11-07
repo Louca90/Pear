@@ -21,6 +21,7 @@ import { CHUNK_BYTES, isValidFileId } from '../files';
 import { ChatCore } from './core';
 import { notifyMessage } from './notify';
 import { addSystemMessage, flush } from './outbox';
+import { reshareProfile } from './profile';
 import { receiveRelayOffer } from './relay';
 import { decryptIncoming, receiveRekey, receiveRekeyAck } from './sessions';
 import { queuePushAck } from './wake';
@@ -33,7 +34,10 @@ import { log } from '../../log';
 export function receiveRatchet(core: ChatCore, contact: string, envelope: unknown) {
   const text = decryptIncoming(core, contact, envelope);
   // Un message authentique de ce contact prouve qu'il nous a enregistré : la demande est acceptée.
-  if (activateContact(contact)) core.contactsChanged();
+  if (activateContact(contact)) {
+    reshareProfile(core, contact);
+    core.contactsChanged();
+  }
   const message = asPayload(JSON.parse(text));
   if (message && !isSupportedVersion(message)) {
     // L'id du message (s'il existe) évite d'afficher l'avertissement deux fois pour un même envoi.
@@ -92,7 +96,10 @@ function receiveEvent(core: ChatCore, contact: string, data: Payload) {
     receiveRelayOffer(core, contact, data);
   } else if (data.action === 'accepted') {
     // Notre demande de pairing est acceptée : le contact passe d'« en attente » à actif.
-    if (activateContact(contact)) core.contactsChanged();
+    if (activateContact(contact)) {
+      reshareProfile(core, contact);
+      core.contactsChanged();
+    }
   } else if (data.action === 'profile') {
     setContactProfileField(contact, 'name', typeof data.name === 'string' ? data.name.slice(0, MAX_PROFILE_NAME_LENGTH) : null);
     if (data.hasPhoto === false) {

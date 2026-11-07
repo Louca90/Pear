@@ -211,6 +211,9 @@ class PearNativeModule : Module() {
 
     AsyncFunction("sha256File") { fileUri: String -> sha256File(fileUri) }
 
+    // Réduit une image (photo de profil) : plus grand côté maxSize, recompressée en JPEG.
+    AsyncFunction("resizeImage") { inputUri: String, outputUri: String, maxSize: Int, quality: Int -> resizeImage(inputUri, outputUri, maxSize, quality) }
+
     Function("installApk") { fileUri: String -> installApk(fileUri) }
 
     // Media3 doit être lancé depuis un fil qui a une boucle de messages : ici, le fil principal.
@@ -281,6 +284,25 @@ class PearNativeModule : Module() {
     } finally {
       connection.disconnect()
     }
+  }
+
+  private fun resizeImage(inputUri: String, outputUri: String, maxSize: Int, quality: Int): String {
+    val context = appContext.reactContext ?: throw IllegalStateException("Contexte indisponible.")
+    val uri = Uri.parse(inputUri)
+    // On lit d'abord la taille seule, pour décoder directement une version réduite (mémoire).
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    context.contentResolver.openInputStream(uri).use { BitmapFactory.decodeStream(it, null, bounds) }
+    var sample = 1
+    while (bounds.outWidth / (sample * 2) >= maxSize && bounds.outHeight / (sample * 2) >= maxSize) sample *= 2
+    val decoded = context.contentResolver.openInputStream(uri).use {
+      BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample })
+    } ?: throw IllegalArgumentException("Image illisible.")
+    val scale = minOf(1f, maxSize.toFloat() / maxOf(decoded.width, decoded.height))
+    val bitmap = if (scale < 1f) Bitmap.createScaledBitmap(decoded, (decoded.width * scale).toInt(), (decoded.height * scale).toInt(), true) else decoded
+    val file = File(pathOf(outputUri))
+    file.parentFile?.mkdirs()
+    FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.JPEG, quality, it) }
+    return outputUri
   }
 
   private fun sha256File(fileUri: String): String {

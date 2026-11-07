@@ -22,6 +22,7 @@ declare class PearNativeModule extends NativeModule<{ onBack: (event: BackEvent)
   openUnknownAppSourcesSettings(): boolean;
   downloadFile(url: string, fileUri: string): Promise<void>;
   sha256File(fileUri: string): Promise<string>;
+  resizeImage(inputUri: string, outputUri: string, maxSize: number, quality: number): Promise<string>;
   installApk(fileUri: string): void;
 }
 
@@ -78,6 +79,11 @@ export function downloadFile(url: string, fileUri: string) {
 
 export function addDownloadListener(listener: (event: DownloadProgress) => void) {
   return PearNative.addListener('onDownloadProgress', listener);
+}
+
+// Réduit une image : plus grand côté maxSize pixels, JPEG de qualité quality (0 à 100).
+export function resizeImage(inputUri: string, outputUri: string, maxSize: number, quality: number) {
+  return PearNative.resizeImage(inputUri, outputUri, maxSize, quality);
 }
 
 export function sha256File(fileUri: string) {
