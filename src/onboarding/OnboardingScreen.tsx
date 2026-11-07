@@ -1,6 +1,5 @@
 import { ComponentRef, useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, AppState, BackHandler, Easing, KeyboardAvoidingView, Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 import { BatteryCharging, Bell, Camera, Check, ChevronRight, Download, LucideIcon, FileUp } from 'lucide-react-native';
 
 import { chat } from '../chat/manager';
@@ -8,13 +7,13 @@ import { LINK_NAME_LENGTH } from '../crypto/pairing';
 import { collectDiagnostics, needsManufacturerAdvice, openPowerManagerSettings } from '../diagnostics';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { Avatar, Button, IconButton, useInsets, useNavigationBarHeight } from '../components/ui';
-import { PROFILE_PHOTO_QUALITY } from '../config';
 import { t } from '../i18n';
 import { log } from '../log';
 import { createStyles, radius, setThemePreference, spacing, ThemePreference, useColors, useThemePreference } from '../theme';
 import { checkAllPermissions, PermissionId, PermissionState, requestPermission } from './permissions';
 import { Pear, PEAR_RATIO } from './Pear';
 import { BackupSheet } from '../components/BackupSheet';
+import { MediaPicker } from '../components/MediaPicker';
 import { saveOnboardingStep } from './progress';
 
 export type OnboardingStep = 0 | 1 | 2 | 3;
@@ -165,11 +164,9 @@ export function OnboardingScreen({ mode, initialStep, onDone }: Props) {
     setStates({ ...states, [id]: next });
   };
 
-  const pickPhoto = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: PROFILE_PHOTO_QUALITY, allowsEditing: true, aspect: [1, 1] });
-    const asset = result.assets?.[0];
-    if (!result.canceled && asset) setPhoto(asset.uri);
-  };
+  // La galerie de Pear, une seule photo : elle est réduite à l'enregistrement (saveProfile).
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const pickPhoto = () => setGalleryOpen(true);
 
   const saveProfile = async () => {
     try {
@@ -322,6 +319,16 @@ export function OnboardingScreen({ mode, initialStep, onDone }: Props) {
         </Animated.ScrollView>
       </KeyboardAvoidingView>
       {restoring && <BackupSheet mode="import" onClose={() => setRestoring(false)} />}
+      {galleryOpen && (
+        <MediaPicker
+          single
+          onPick={([picked]) => {
+            setGalleryOpen(false);
+            if (picked) setPhoto(picked.uri);
+          }}
+          onClose={() => setGalleryOpen(false)}
+        />
+      )}
     </Animated.View>
   );
 }

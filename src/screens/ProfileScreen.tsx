@@ -1,15 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, ScrollView, Text, TextInput, View } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 import { Camera, Check, FileDown, FileUp, ImageMinus, Settings } from 'lucide-react-native';
 
 import { chat, MAX_PROFILE_NAME_LENGTH } from '../chat/manager';
 import { BackupSheet } from '../components/BackupSheet';
+import { MediaPicker } from '../components/MediaPicker';
 import { useBottomBarSpace } from '../components/BottomBar';
 import { showDialog } from '../components/dialog';
 import { Avatar, Button, Header, IconButton, Screen } from '../components/ui';
 import { createStyles, radius, spacing, useColors } from '../theme';
-import { PROFILE_PHOTO_QUALITY } from '../config';
 import { t } from '../i18n';
 
 // Le libellé « Enregistré » reste affiché un instant après l'enregistrement.
@@ -29,11 +28,9 @@ export function ProfileScreen({ onSettings }: { onSettings: () => void }) {
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(timer.current), []);
 
-  const pickPhoto = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: PROFILE_PHOTO_QUALITY, allowsEditing: true, aspect: [1, 1] });
-    const asset = result.assets?.[0];
-    if (!result.canceled && asset) setPhoto(asset.uri);
-  };
+  // La galerie de Pear, une seule photo : elle est réduite à l'enregistrement (saveProfile).
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const pickPhoto = () => setGalleryOpen(true);
 
   const save = async () => {
     setState('saving');
@@ -101,6 +98,16 @@ export function ProfileScreen({ onSettings }: { onSettings: () => void }) {
         </ScrollView>
       </KeyboardAvoidingView>
       {backup && <BackupSheet mode={backup} onClose={() => setBackup(null)} />}
+      {galleryOpen && (
+        <MediaPicker
+          single
+          onPick={([picked]) => {
+            setGalleryOpen(false);
+            if (picked) setPhoto(picked.uri);
+          }}
+          onClose={() => setGalleryOpen(false)}
+        />
+      )}
     </Screen>
   );
 }
