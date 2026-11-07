@@ -65,9 +65,7 @@ const BACK_CANCEL_MS = 220;
 // Démarre vite et se pose doucement, sans dépasser : jamais de rebond.
 const BACK_EASING = Easing.bezier(0.2, 0.8, 0.2, 1);
 // Si le retour a seulement fermé quelque chose dans la page, celle-ci revient à sa place après ce délai.
-// Filet de sécurité seulement : normalement la page est remise en place au changement d'écran (sinon
-// l'ancien écran réapparaît une image si le retour natif tarde).
-const BACK_SETTLE_MS = 1500;
+const BACK_SETTLE_MS = 250;
 const BACK_PAGE_SHIFT = 16;
 // Glissement entre onglets : la page et l'onglet voisin suivent le doigt ; au-delà du seuil (ou d'un
 // geste rapide), le voisin finit de prendre la place.
@@ -224,6 +222,7 @@ function App() {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
       const parent = parentOf(route);
       if (!parent) return false;
+      navigatedBack.current = true;
       setRoute(parent);
       return true;
     });
@@ -246,6 +245,9 @@ function App() {
   }, [active, onboarding, identity]);
 
   const sawProgress = useRef(false);
+  // Le retour a changé d'écran : la page est remise en place au changement d'écran, pas par le délai
+  // (sinon l'ancien écran réapparaît une image quand le nouveau tarde à s'afficher).
+  const navigatedBack = useRef(false);
   const holdTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const resetBackGesture = useRef(() => {
@@ -312,6 +314,7 @@ function App() {
         if (!parent) return;
         gestureStarted.current = true;
         sawProgress.current = false;
+        navigatedBack.current = false;
         backGesture.setValue(0);
         setPeek({ route: parent, direction: fromRight ? -1 : 1 });
         holdTimer.current = setTimeout(() => {
@@ -336,7 +339,9 @@ function App() {
         backGesture.stopAnimation();
         Animated.timing(backGesture, { toValue: 2, duration: BACK_EXIT_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start(() => {
           completeBack().catch((e) => log.warn('retour', e));
-          setTimeout(resetBackGesture, BACK_SETTLE_MS);
+          setTimeout(() => {
+            if (!navigatedBack.current) resetBackGesture();
+          }, BACK_SETTLE_MS);
         });
       } else {
         completeBack().catch((e) => log.warn('retour', e));
