@@ -1,7 +1,8 @@
 import { RefObject, useEffect, useRef, useState } from 'react';
-import { Animated, BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { SmilePlus } from 'lucide-react-native';
+import { useBackInterceptor } from '../../../navigation/backInterceptors';
 
 import { Message } from '../../../chat/database';
 import { QUICK_REACTIONS } from '../../../chat/emojis';
@@ -54,12 +55,10 @@ export function MessageSelection({ message, name, palettes, rect, origin, clip, 
 
   useEffect(() => {
     Animated.timing(progress, { toValue: 1, duration: SELECTION_OPEN_MS, easing: SELECTION_EASING, useNativeDriver: false }).start();
-    const back = BackHandler.addEventListener('hardwareBackPress', () => {
-      dismiss();
-      return true;
-    });
-    return () => back.remove();
-  }, [progress, dismiss]);
+  }, [progress]);
+
+  // Le retour ferme la sélection sans quitter la conversation.
+  useBackInterceptor(true, () => dismiss());
 
   const react = (emoji: string) => {
     setPickerOpen(false);

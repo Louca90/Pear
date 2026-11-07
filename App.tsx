@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, AppState, Easing, BackHandler, PanResponder, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { NavigationBar } from 'expo-navigation-bar';
 import { StatusBar } from 'expo-status-bar';
 import * as Linking from 'expo-linking';
 import notifee from '@notifee/react-native';
 
-import { addBackListener, backHookAvailable, completeBack, setBackMode } from './modules/pear-native';
+import { addBackListener, backHookAvailable, setBackMode } from './modules/pear-native';
 import { cleanupCache } from './src/chat/cleanup';
 import { handleNotificationEvent } from './src/chat/notificationActions';
 import { refreshRemoteConfig } from './src/remoteConfig';
@@ -39,6 +39,7 @@ import { UpdatedPopup } from './src/update/UpdatedPopup';
 import { checkForUpdate, isBlocking, useUpdateState } from './src/update/updates';
 import { UpdateScreen } from './src/update/UpdateScreen';
 import { log } from './src/log';
+import { interceptBack, hasBackInterceptor } from './src/navigation/backInterceptors';
 import { t } from './src/i18n';
 
 type Route =
@@ -57,32 +58,41 @@ type Route =
   | { name: 'contact'; publicKey: string; suggestedName?: string | null }
   | { name: 'chat'; publicKey: string };
 
-const BACK_EXIT_MS = 220;
+// --- Retour en arrière ---
+// Chaque écran a sa valeur de geste g : 0 au repos, 1 au bout du glissé, 2 parti. La page qui part garde
+// la sienne (effacée) jusqu'à disparaître : rien n'est remis en place au changement d'écran.
+const BACK_EXIT_MS = 200;
 // Bouton retour maintenu (barre à 3 boutons) : Android n'envoie presque aucune progression. Si rien
 // n'arrive après ce délai, la page glisse seule vers un aperçu stable, puis attend le relâchement.
 const BACK_HOLD_DELAY_MS = 80;
 const BACK_PREVIEW = 0.7;
 const BACK_PREVIEW_MS = 240;
-const BACK_CANCEL_MS = 220;
+const BACK_CANCEL_MS = 200;
 // Démarre vite et se pose doucement, sans dépasser : jamais de rebond.
 const BACK_EASING = Easing.bezier(0.2, 0.8, 0.2, 1);
-// Si le retour a seulement fermé quelque chose dans la page, celle-ci revient à sa place après ce délai.
-const BACK_SETTLE_MS = 250;
-const BACK_PAGE_SHIFT = 16;
+const BACK_PAGE_SHIFT = 24;
+// Arrivée d'un nouvel écran : fondu et léger zoom, l'écran d'avant s'efface dessous.
+const ENTER_MS = 200;
 // Glissement entre onglets : la page et l'onglet voisin suivent le doigt ; au-delà du seuil (ou d'un
 // geste rapide), le voisin finit de prendre la place.
 const TAB_SWIPE_RATIO = 0.3;
 const TAB_SETTLE_MS = 180;
 // Les bords restent au retour par geste d'Android.
 const TAB_EDGE = 28;
-// Coins arrondis de la page pendant l'aperçu, comme une carte qu'on repose.
-const BACK_CORNER_RADIUS = 28;
+// Coins arrondis des pages, comme ceux de l'écran : invisibles au repos, visibles quand la page se réduit.
+const PAGE_CORNER_RADIUS = 28;
 // Dans l'ordre de la barre du bas : le glissement horizontal passe de l'un à l'autre.
 const TAB_ROUTES: string[] = ['home', 'camera', 'contacts', 'profile'];
 // L'écran parent reste monté sous la page (prêt pour le retour) ; pas la caméra, qui allumerait le capteur.
 const NOT_KEPT_UNDER = ['camera', 'scan'];
 // Délai avant de monter un parent qui ne l'était pas : la page qui vient d'arriver passe d'abord.
-const PARENT_MOUNT_DELAY_MS = 450;
+const PARENT_MOUNT_DELAY_MS = 600;
+
+type PageMotion = { g: Animated.Value; edge: Animated.Value; enter: Animated.Value };
+
+function sameDeps(a: unknown[], b: unknown[]) {
+  return a.length === b.length && a.every((value, index) => value === b[index]);
+}
 
 function routeKey(route: Route) {
   return route.name + ('publicKey' in route ? `:${route.publicKey}` : '');
@@ -104,36 +114,31 @@ function App() {
   const themeFade = useThemeFade(colors);
   const [identity, setIdentity] = useState<Identity | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [route, setRoute] = useState<Route>({ name: 'home' });
+  const [route, setRouteState] = useState<Route>({ name: 'home' });
   const [active, setActive] = useState(AppState.currentState === 'active');
   const [error, setError] = useState<string | null>(null);
   // « Relancer » sur l'écran d'erreur du démarrage refait tout le chargement.
   const [attempt, setAttempt] = useState(0);
   const [filming, setFilming] = useState(false);
-  // L'écran précédent, montré sous la page pendant le geste de retour.
-  // from : la page qui part (l'aperçu ne vaut que pour elle).
-  const [peek, setPeek] = useState<{ route: Route; direction: number; from: string } | null>(null);
-  // Une valeur de geste par écran : la page qui part garde la sienne (effacée) jusqu'à sa disparition,
-  // il n'y a donc rien à remettre en place au changement d'écran, et plus d'image de l'ancien écran.
-  const gestures = useRef(new Map<string, Animated.Value>()).current;
+  // Les mouvements de chaque page (par clé d'écran), et les écrans montés à l'image précédente.
+  const motions = useRef(new Map<string, PageMotion>()).current;
+  const motionFor = (key: string, entering = false) => {
+    let motion = motions.get(key);
+    if (!motion) {
+      motion = { g: new Animated.Value(0), edge: new Animated.Value(1), enter: new Animated.Value(entering ? 0 : 1) };
+      motions.set(key, motion);
+    }
+    return motion;
+  };
   const currentKey = routeKey(route);
-  if (!gestures.has(currentKey)) gestures.set(currentKey, new Animated.Value(0));
-  const backGesture = gestures.get(currentKey)!;
-  const latestGesture = useRef(backGesture);
-  latestGesture.current = backGesture;
-  const latestKey = useRef(currentKey);
-  latestKey.current = currentKey;
-  // D'où l'on vient : en avançant (conversation → personnalisation), la page quittée reste montée dessous.
-  const lastRendered = useRef(currentKey);
-  const cameFrom = useRef<string | null>(null);
-  if (lastRendered.current !== currentKey) {
-    cameFrom.current = lastRendered.current;
-    lastRendered.current = currentKey;
-  }
+  const mountedKeys = useRef(new Set<string>([currentKey]));
   const [parentReady, setParentReady] = useState(false);
+  const exiting = useRef(false);
+  const gestureStarted = useRef(false);
+  // Les valeurs à jour pour les fonctions créées une seule fois (écouteurs, navigation).
+  const nav = useRef<{ route: Route; parent: Route | null }>({ route, parent: null });
   const tabDrag = useRef(new Animated.Value(0)).current;
   const { width: screenWidth } = useWindowDimensions();
-  const gestureStarted = useRef(false);
   const url = Linking.useURL();
   const update = useUpdateState();
   const blocked = isBlocking(update);
@@ -246,12 +251,13 @@ function App() {
     return { name: 'home' };
   };
 
+  nav.current = { route, parent: identity ? parentOf(route) : null };
+
   // Le bouton retour d'Android revient à l'écran précédent au lieu de quitter l'app.
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
       const parent = parentOf(route);
       if (!parent) return false;
-      navigatedBack.current = true;
       setRoute(parent);
       return true;
     });
@@ -272,32 +278,6 @@ function App() {
       .then((states) => setPermissionMissing(Object.values(states).some((state) => state !== 'granted')))
       .catch((e) => log.warn('autorisations', e));
   }, [active, onboarding, identity]);
-
-  const sawProgress = useRef(false);
-  // Le retour a changé d'écran : la page est remise en place au changement d'écran, pas par le délai
-  // (sinon l'ancien écran réapparaît une image quand le nouveau tarde à s'afficher).
-  const navigatedBack = useRef(false);
-  const holdTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-
-  // Le retour n'a pas changé d'écran (il a fermé quelque chose dans la page) : la page revient.
-  const resetBackGesture = useRef(() => {
-    clearTimeout(holdTimer.current);
-    gestureStarted.current = false;
-    latestGesture.current.setValue(0);
-    setPeek(null);
-  }).current;
-
-  // Nouvel écran : l'aperçu se retire, les valeurs des pages parties sont oubliées (une page rouverte
-  // plus tard repart de zéro), et le parent sera monté dessous après un court délai.
-  useEffect(() => {
-    clearTimeout(holdTimer.current);
-    gestureStarted.current = false;
-    setPeek(null);
-    for (const key of [...gestures.keys()]) if (key !== currentKey) gestures.delete(key);
-    setParentReady(false);
-    const timer = setTimeout(() => setParentReady(true), PARENT_MOUNT_DELAY_MS);
-    return () => clearTimeout(timer);
-  }, [currentKey, gestures]);
 
   // L'onglet voisin affiché pendant le glissement : 1 à droite (suivant), -1 à gauche (précédent).
   const [neighbor, setNeighbor] = useState<{ name: string; side: 1 | -1 } | null>(null);
@@ -343,51 +323,104 @@ function App() {
     }),
   ).current;
 
-  const latestParent = useRef(() => parentOf(route));
-  latestParent.current = () => parentOf(route);
+  const sawProgress = useRef(false);
+  const holdTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
+  // Retour animé vers le parent : la page se réduit et s'efface, le parent (déjà monté) prend la place.
+  const animateBack = useRef(() => {
+    const parent = nav.current.parent;
+    if (!parent || exiting.current) return;
+    exiting.current = true;
+    clearTimeout(holdTimer.current);
+    const { g } = motionFor(routeKey(nav.current.route));
+    g.stopAnimation();
+    Animated.timing(g, { toValue: 2, duration: BACK_EXIT_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start(() => {
+      exiting.current = false;
+      gestureStarted.current = false;
+      setRouteState(parent);
+    });
+  }).current;
+
+  // Toute la navigation passe par ici : revenir au parent déjà monté est animé, aller ailleurs fait
+  // entrer la nouvelle page en fondu. Entre deux onglets, rien (la barre du bas a son animation).
+  const setRoute = useRef((next: Route) => {
+    if (exiting.current) return;
+    const current = nav.current.route;
+    const nextKey = routeKey(next);
+    if (nextKey === routeKey(current)) {
+      setRouteState(next);
+      return;
+    }
+    const betweenTabs = TAB_ROUTES.includes(current.name) && TAB_ROUTES.includes(next.name);
+    const parent = nav.current.parent;
+    if (!betweenTabs && parent && routeKey(parent) === nextKey && mountedKeys.current.has(nextKey)) {
+      motionFor(routeKey(current)).edge.setValue(1);
+      animateBack();
+      return;
+    }
+    if (!betweenTabs && !mountedKeys.current.has(nextKey)) {
+      motions.delete(nextKey);
+      motionFor(nextKey, true);
+    }
+    setRouteState(next);
+  }).current;
+
+  // Nouvel écran : l'écran qui arrive fait son entrée, les mouvements des pages parties sont oubliés,
+  // et le parent sera monté dessous (prêt pour le retour) après un court délai.
+  useEffect(() => {
+    const { enter } = motionFor(currentKey);
+    Animated.timing(enter, { toValue: 1, duration: ENTER_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    for (const key of [...motions.keys()]) if (!mountedKeys.current.has(key)) motions.delete(key);
+    setParentReady(false);
+    const timer = setTimeout(() => setParentReady(true), PARENT_MOUNT_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [currentKey]);
+
+  // Le geste de retour d'Android : aucun changement d'état React pendant le glissé, tout est animé
+  // en natif (pas de saccade). Un élément ouvert dans la page (sélection…) se ferme d'abord.
   useEffect(() => {
     const subscription = addBackListener(({ type, progress, fromRight }) => {
+      const { parent } = nav.current;
+      const motion = motionFor(routeKey(nav.current.route));
       if (type === 'started') {
-        const parent = latestParent.current();
-        if (!parent) return;
+        if (!parent || exiting.current || hasBackInterceptor()) return;
         gestureStarted.current = true;
         sawProgress.current = false;
-        navigatedBack.current = false;
-        latestGesture.current.setValue(0);
-        setPeek({ route: parent, direction: fromRight ? -1 : 1, from: latestKey.current });
+        motion.g.stopAnimation();
+        motion.g.setValue(0);
+        // Le côté du geste, fixé avant la première image : la page part tout de suite du bon côté.
+        motion.edge.setValue(fromRight ? -1 : 1);
+        if (!mountedKeys.current.has(routeKey(parent))) setParentReady(true);
         holdTimer.current = setTimeout(() => {
           if (!sawProgress.current) {
-            Animated.timing(latestGesture.current, { toValue: BACK_PREVIEW, duration: BACK_PREVIEW_MS, easing: BACK_EASING, useNativeDriver: true }).start();
+            Animated.timing(motion.g, { toValue: BACK_PREVIEW, duration: BACK_PREVIEW_MS, easing: BACK_EASING, useNativeDriver: true }).start();
           }
         }, BACK_HOLD_DELAY_MS);
       } else if (type === 'progress') {
-        // Geste de balayage : la page suit le doigt. L'aperçu automatique s'arrête s'il avait commencé.
+        if (!gestureStarted.current) return;
         if (!sawProgress.current) {
           sawProgress.current = true;
           clearTimeout(holdTimer.current);
-          latestGesture.current.stopAnimation();
+          motion.g.stopAnimation();
         }
-        latestGesture.current.setValue(progress);
+        motion.g.setValue(progress);
       } else if (type === 'cancelled') {
         clearTimeout(holdTimer.current);
-        latestGesture.current.stopAnimation();
-        Animated.timing(latestGesture.current, { toValue: 0, duration: BACK_CANCEL_MS, easing: BACK_EASING, useNativeDriver: true }).start(resetBackGesture);
-      } else if (gestureStarted.current) {
+        gestureStarted.current = false;
+        motion.g.stopAnimation();
+        Animated.timing(motion.g, { toValue: 0, duration: BACK_CANCEL_MS, easing: BACK_EASING, useNativeDriver: true }).start();
+      } else if (interceptBack()) {
+        // Le retour a fermé quelque chose dans la page : elle revient à sa place.
         clearTimeout(holdTimer.current);
-        latestGesture.current.stopAnimation();
-        Animated.timing(latestGesture.current, { toValue: 2, duration: BACK_EXIT_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start(() => {
-          completeBack().catch((e) => log.warn('retour', e));
-          setTimeout(() => {
-            if (!navigatedBack.current) resetBackGesture();
-          }, BACK_SETTLE_MS);
-        });
-      } else {
-        completeBack().catch((e) => log.warn('retour', e));
+        gestureStarted.current = false;
+        Animated.timing(motion.g, { toValue: 0, duration: BACK_CANCEL_MS, easing: BACK_EASING, useNativeDriver: true }).start();
+      } else if (parent) {
+        if (!gestureStarted.current) motion.edge.setValue(1);
+        animateBack();
       }
     });
     return () => subscription.remove();
-  }, [resetBackGesture]);
+  }, []);
 
   const contactKey = route.name === 'contact' ? route.publicKey : null;
 
@@ -576,15 +609,37 @@ function App() {
     );
   };
 
-  // L'aperçu concerne la page actuelle (pas celle qui vient de partir).
-  const peeking = peek !== null && peek.from === currentKey;
-  const direction = peeking ? peek.direction : 1;
-  const parentRoute = identity ? parentOf(route) : null;
-  const underRoute = peeking
-    ? peek.route
-    : parentRoute && !NOT_KEPT_UNDER.includes(parentRoute.name) && (parentReady || routeKey(parentRoute) === cameFrom.current)
-      ? parentRoute
-      : null;
+  // Les écrans montés : la page, son parent (et au-dessus les ancêtres déjà montés), chacun gardé par
+  // sa clé pour ne jamais être remonté. Sous un onglet, rien : les onglets glissent entre eux.
+  const layers: Route[] = [route];
+  if (identity && !TAB_ROUTES.includes(route.name)) {
+    let ancestor = parentOf(route);
+    while (ancestor && layers.length < 4) {
+      const key = routeKey(ancestor);
+      const isParent = layers.length === 1;
+      if (NOT_KEPT_UNDER.includes(ancestor.name) || !(mountedKeys.current.has(key) || (isParent && parentReady))) break;
+      layers.unshift(ancestor);
+      if (TAB_ROUTES.includes(ancestor.name)) break;
+      ancestor = parentOf(ancestor);
+    }
+  }
+  mountedKeys.current = new Set(layers.map(routeKey));
+
+  // Le contenu des écrans du dessous n'est recalculé que si ses données changent : la conversation sous
+  // la personnalisation ne se redessine pas quand on navigue au-dessus.
+  const renderDeps = [contacts, identity, error, code, permissionMissing];
+  const pageCache = useRef(new Map<string, { deps: unknown[]; preview: boolean; element: ReactNode }>()).current;
+  for (const key of [...pageCache.keys()]) if (!mountedKeys.current.has(key)) pageCache.delete(key);
+  const renderPage = (layer: Route, isTop: boolean) => {
+    const key = routeKey(layer);
+    const cached = pageCache.get(key);
+    if (!isTop && cached && sameDeps(cached.deps, renderDeps)) return cached.element;
+    const preview = isTop ? false : (cached?.preview ?? true);
+    const element = <ErrorBoundary name={layer.name}>{render(layer, preview)}</ErrorBoundary>;
+    pageCache.set(key, { deps: renderDeps, preview, element });
+    return element;
+  };
+  const top = motionFor(currentKey);
 
   if (onboarding && identity && !blocked) {
     return (
@@ -622,28 +677,31 @@ function App() {
     <>
       <StatusBar style={barStyle} />
       <NavigationBar style={barStyle} />
-      {/* Retour en arrière, en fondu : la page d'avant, déjà montée dessous, apparaît un peu en retrait et se
-          rapproche à mesure que la page actuelle se réduit ; à la validation, elle prend toute la place sans
-          être rechargée. Chaque couche garde sa clé : le parent qui devient la page n'est pas remonté. */}
-      {[underRoute, route].map((layer, index) => {
-        if (!layer) return null;
+      {/* Retour en arrière, en fondu : la page se réduit, s'écarte du côté du geste et s'efface ; le parent,
+          déjà monté dessous, se rapproche. À l'arrivée d'un écran, il entre en fondu sur l'ancien. */}
+      {layers.map((layer, index) => {
         const key = routeKey(layer);
-        if (index === 0) {
+        const isTop = index === layers.length - 1;
+        if (!isTop) {
+          const isParent = index === layers.length - 2;
           return (
             <Animated.View
               key={key}
               pointerEvents="none"
               style={[
                 StyleSheet.absoluteFill,
-                peeking
+                isParent
                   ? {
-                      opacity: backGesture.interpolate({ inputRange: [0, 1, 2], outputRange: [0.4, 0.85, 1] }),
-                      transform: [{ scale: backGesture.interpolate({ inputRange: [0, 1, 2], outputRange: [0.94, 0.97, 1] }) }],
+                      opacity: Animated.add(
+                        top.g.interpolate({ inputRange: [0, 0.01, 1, 2], outputRange: [0, 0.4, 0.85, 1] }),
+                        top.enter.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
+                      ),
+                      transform: [{ scale: top.g.interpolate({ inputRange: [0, 0.01, 1, 2], outputRange: [1, 0.94, 0.97, 1] }) }],
                     }
                   : styles.hidden,
               ]}
             >
-              <ErrorBoundary name={layer.name}>{render(layer, true)}</ErrorBoundary>
+              {renderPage(layer, false)}
               {!TAB_ROUTES.includes(route.name) && TAB_ROUTES.includes(layer.name) && <BottomBar active={layer.name as Tab} onChange={() => {}} />}
             </Animated.View>
           );
@@ -653,20 +711,21 @@ function App() {
             key={key}
             {...tabSwipe.panHandlers}
             style={[
-              styles.flex,
-              peeking && styles.pageDuringBack,
+              StyleSheet.absoluteFill,
+              !TAB_ROUTES.includes(layer.name) && styles.page,
               {
-                // La page actuelle se réduit et s'écarte un peu vers le bord du geste, puis s'efface sur place.
-                opacity: backGesture.interpolate({ inputRange: [0, 1, 2], outputRange: [1, 1, 0] }),
+                opacity: Animated.multiply(
+                  top.g.interpolate({ inputRange: [0, 1, 2], outputRange: [1, 1, 0] }),
+                  top.enter,
+                ),
                 transform: [
-                  { translateX: backGesture.interpolate({ inputRange: [0, 1, 2], outputRange: [0, BACK_PAGE_SHIFT * direction, BACK_PAGE_SHIFT * direction] }) },
-                  { scale: backGesture.interpolate({ inputRange: [0, 1, 2], outputRange: [1, 0.92, 0.88] }) },
-                  { translateX: tabDrag },
+                  { translateX: Animated.add(Animated.multiply(top.g.interpolate({ inputRange: [0, 1, 2], outputRange: [0, BACK_PAGE_SHIFT, BACK_PAGE_SHIFT] }), top.edge), tabDrag) },
+                  { scale: Animated.multiply(top.g.interpolate({ inputRange: [0, 1, 2], outputRange: [1, 0.92, 0.88] }), top.enter.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1] })) },
                 ],
               },
             ]}
           >
-            <ErrorBoundary name={layer.name}>{render(layer)}</ErrorBoundary>
+            {renderPage(layer, true)}
           </Animated.View>
         );
       })}
@@ -728,8 +787,8 @@ const useStyles = createStyles((colors) => ({
   hidden: {
     opacity: 0,
   },
-  pageDuringBack: {
-    borderRadius: BACK_CORNER_RADIUS,
+  page: {
+    borderRadius: PAGE_CORNER_RADIUS,
     overflow: 'hidden',
   },
   center: {

@@ -22,7 +22,7 @@ export function MessagesFilled({ size, kick }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path
-        d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"
+        d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719Z"
         fill={colors.text}
         stroke={colors.text}
         strokeWidth={1.75}
@@ -32,8 +32,9 @@ export function MessagesFilled({ size, kick }: IconProps) {
         <AnimatedCircle
           key={cx}
           cx={cx}
-          cy={bump(kick, index * 0.18, index * 0.18 + 0.45, 12, 10.4)}
-          r={bump(kick, index * 0.18, index * 0.18 + 0.45, 1.3, 1.7)}
+          // Apparition l'un après l'autre (0 → 1,3), puis une petite vague qui monte et redescend.
+          r={kick.interpolate({ inputRange: [0, 0.01, index * 0.12 + 0.02, index * 0.12 + 0.3, 1], outputRange: [1.3, 0, 0, 1.3, 1.3], extrapolate: 'clamp' })}
+          cy={bump(kick, 0.45 + index * 0.1, 0.8 + index * 0.1, 12, 10.6)}
           fill={colors.elevatedActive}
         />
       ))}
