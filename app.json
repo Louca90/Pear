@@ -60,6 +60,7 @@
       "./plugins/with-release-signing",
       "./plugins/with-dark-launch",
       "./plugins/with-short-native-build",
+      "./plugins/with-share-intent",
       [
         "expo-navigation-bar",
         {

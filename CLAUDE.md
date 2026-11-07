@@ -10,7 +10,7 @@ Messagerie Android privée, chiffrée de bout en bout, en pair à pair. Expo 58,
 - `src/chat/database.ts` : SQLite (messages, file d'envoi, réglages). `src/storage.ts` : SecureStore (identité, contacts, ratchet).
 - `src/crypto/` : pairing X25519, double ratchet, chiffrement des fichiers. `src/network/` : WebRTC (`peer.ts`), signalisation Firebase, réveil (`wake.ts`).
 - `src/screens/chat/` : conversation. `ChatScreen.tsx` assemble ; `components/` (bulle, saisie, sélection, visionneuse…) ; `hooks/` (gestes, vocal, clavier) ; `constants.ts`, `format.ts`, `types.ts`, `styles.ts` (styles partagés).
-- `modules/pear-native` : module Kotlin maison (retour prédictif, barre de navigation, retouches vidéo Media3, `captureView` pour l'export de l'éditeur) et `PearCamera`, l'appareil photo sur CameraX (`camera.ts`, `PearCameraView.kt` : zoom réel, objectif ultra grand-angle, vidéo qui continue en changeant de caméra). expo-camera ne sert plus qu'au scanner de QR code et aux autorisations. `plugins/` : plugins Expo (signature de release). `server/api/` : fonctions Vercel.
+- `modules/pear-native` : module Kotlin maison (retour prédictif, barre de navigation, retouches vidéo Media3, `captureView` pour l'export de l'éditeur) et `PearCamera`, l'appareil photo sur CameraX (`camera.ts`, `PearCameraView.kt` : zoom réel, objectif ultra grand-angle, vidéo qui continue en changeant de caméra). expo-camera ne sert plus qu'au scanner de QR code et aux autorisations. `plugins/` : plugins Expo (signature de release, menu Partager d'Android). `src/backup/` : sauvegardes chiffrées (format testé, restauration appliquée au démarrage par `index.ts`). `server/api/` : fonctions Vercel.
 
 ## Commandes
 

@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.util.Log
+import android.webkit.MimeTypeMap
 import android.view.View
 import android.view.ViewTreeObserver
 import androidx.activity.BackEventCompat
@@ -142,7 +143,27 @@ class PearNativeModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("PearNative")
 
-    Events("onBack", "onDownloadProgress", "onInsetsChange")
+    Events("onBack", "onDownloadProgress", "onInsetsChange", "onShare")
+
+    // Photos et vidéos partagées depuis une autre app (menu « Partager », lot 12) : Pear déjà ouvert
+    // reçoit l'intention ici ; au lancement, elle est lue dans celle de l'activité.
+    OnNewIntent { intent ->
+      if (isShare(intent)) {
+        pendingShare = intent
+        sendEvent("onShare", emptyMap<String, Any>())
+      }
+    }
+
+    // Copiées dans le cache de Pear (l'autre app peut retirer son autorisation de lecture), puis
+    // l'intention est oubliée pour ne pas être relue au prochain retour dans l'app.
+    AsyncFunction("takeSharedMedia") {
+      val activity = appContext.currentActivity
+      val intent = pendingShare ?: activity?.intent?.takeIf { isShare(it) }
+      pendingShare = null
+      if (intent == null) return@AsyncFunction emptyList<Map<String, Any>>()
+      activity?.intent = Intent(Intent.ACTION_MAIN)
+      sharedMedia(intent)
+    }
 
     // "system" : Android montre son propre aperçu pour quitter. "app" : l'app anime elle-même le geste.
     // "default" : retour normal, sans aperçu.
@@ -370,6 +391,33 @@ class PearNativeModule : Module() {
       .setDataAndType(uri, APK_MIME)
       .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
     activity.startActivity(intent)
+  }
+
+  private var pendingShare: Intent? = null
+
+  private fun isShare(intent: Intent?) = intent?.action == Intent.ACTION_SEND || intent?.action == Intent.ACTION_SEND_MULTIPLE
+
+  @Suppress("DEPRECATION")
+  private fun sharedMedia(intent: Intent): List<Map<String, Any>> {
+    val context = appContext.reactContext ?: return emptyList()
+    val uris: List<Uri> = if (intent.action == Intent.ACTION_SEND_MULTIPLE) {
+      intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM) ?: arrayListOf()
+    } else {
+      listOfNotNull(intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM))
+    }
+    return uris.mapIndexedNotNull { index, uri ->
+      try {
+        val mime = context.contentResolver.getType(uri) ?: intent.type ?: return@mapIndexedNotNull null
+        if (!mime.startsWith("image/") && !mime.startsWith("video/")) return@mapIndexedNotNull null
+        val extension = MimeTypeMap.getSingleton().getExtensionFromMimeType(mime) ?: if (mime.startsWith("video/")) "mp4" else "jpg"
+        val target = File(context.cacheDir, "partage-${System.currentTimeMillis()}-$index.$extension")
+        context.contentResolver.openInputStream(uri)?.use { input -> FileOutputStream(target).use { input.copyTo(it) } } ?: return@mapIndexedNotNull null
+        mapOf("uri" to Uri.fromFile(target).toString(), "mime" to mime, "size" to target.length().toDouble())
+      } catch (e: Exception) {
+        Log.w("PearNative", "média partagé illisible", e)
+        null
+      }
+    }
   }
 
   private fun captureView(tag: Int, outputUri: String, scale: Double): String {

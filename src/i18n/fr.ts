@@ -262,6 +262,10 @@ export const fr = {
     pasUneSauvegarde: 'Ce fichier n’est pas une sauvegarde de Pear.',
     abimee: 'Sauvegarde abîmée ou incomplète.',
   },
+  partage: {
+    envoyer: 'Envoyer à',
+    envoyerPlusieurs: 'Envoyer {n} fichiers à',
+  },
   editeur: {
     filtreOriginal: 'Original',
     filtreSombre: 'Sombre',

@@ -43,6 +43,7 @@ import { log } from './src/log';
 import { interceptBack } from './src/navigation/backInterceptors';
 import { isTabSwipeLocked } from './src/components/tabSwipeLock';
 import { markCameraRequested } from './src/screens/cameraTiming';
+import { ShareReceiver } from './src/components/ShareReceiver';
 import { t } from './src/i18n';
 
 type Route =
@@ -736,6 +737,7 @@ function App() {
           }}
         />
       )}
+      {identity && !error && <ShareReceiver contacts={contacts} ready={!blocked} onSent={(publicKey) => setRoute({ name: 'chat', publicKey })} />}
       <DialogHost />
       {themeFade}
     </>

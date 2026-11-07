@@ -263,6 +263,10 @@ export const pt: Dictionary = {
     pasUneSauvegarde: 'Este ficheiro não é uma cópia do Pear.',
     abimee: 'Cópia danificada ou incompleta.',
   },
+  partage: {
+    envoyer: 'Enviar para',
+    envoyerPlusieurs: 'Enviar {n} ficheiros para',
+  },
   editeur: {
     filtreOriginal: 'Original',
     filtreSombre: 'Escuro',

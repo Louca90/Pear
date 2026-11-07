@@ -263,6 +263,10 @@ export const de: Dictionary = {
     pasUneSauvegarde: 'Diese Datei ist keine Pear-Sicherung.',
     abimee: 'Beschädigte oder unvollständige Sicherung.',
   },
+  partage: {
+    envoyer: 'Senden an',
+    envoyerPlusieurs: '{n} Dateien senden an',
+  },
   editeur: {
     filtreOriginal: 'Original',
     filtreSombre: 'Dunkel',

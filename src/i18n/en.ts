@@ -263,6 +263,10 @@ export const en: Dictionary = {
     pasUneSauvegarde: 'This file is not a Pear backup.',
     abimee: 'Damaged or incomplete backup.',
   },
+  partage: {
+    envoyer: 'Send to',
+    envoyerPlusieurs: 'Send {n} files to',
+  },
   editeur: {
     filtreOriginal: 'Original',
     filtreSombre: 'Dark',

@@ -263,6 +263,10 @@ export const nl: Dictionary = {
     pasUneSauvegarde: 'Dit bestand is geen Pear-back-up.',
     abimee: 'Beschadigde of onvolledige back-up.',
   },
+  partage: {
+    envoyer: 'Versturen naar',
+    envoyerPlusieurs: '{n} bestanden versturen naar',
+  },
   editeur: {
     filtreOriginal: 'Origineel',
     filtreSombre: 'Donker',

@@ -9,7 +9,10 @@ export type Insets = { top: number; bottom: number };
 // Les retouches d'une vidéo (lot 10). matrix : 4 × 4 par colonnes, appliquée à (R, G, B, 1).
 export type VideoEdit = { overlayUri?: string; matrix?: number[]; startMs?: number; endMs?: number; mute?: boolean; speed?: number; bitrate: number };
 
-declare class PearNativeModule extends NativeModule<{ onBack: (event: BackEvent) => void; onDownloadProgress: (event: DownloadProgress) => void; onInsetsChange: (event: Insets) => void }> {
+export type SharedMedia = { uri: string; mime: string; size: number };
+
+declare class PearNativeModule extends NativeModule<{ onBack: (event: BackEvent) => void; onDownloadProgress: (event: DownloadProgress) => void; onInsetsChange: (event: Insets) => void; onShare: () => void }> {
+  takeSharedMedia?(): Promise<SharedMedia[]>;
   burnOverlay(videoUri: string, overlayUri: string, bitrate: number): Promise<string>;
   editVideo?(videoUri: string, edit: VideoEdit): Promise<string>;
   captureView?(tag: number, outputUri: string, scale: number): Promise<string>;
@@ -104,6 +107,16 @@ export function installApk(fileUri: string) {
 // Incruste une image transparente dans toute la vidéo, sur le téléphone. Renvoie le nouveau fichier.
 export function burnOverlay(videoUri: string, overlayUri: string, bitrate: number) {
   return PearNative.burnOverlay(videoUri, overlayUri, bitrate);
+}
+
+// Photos et vidéos partagées vers Pear depuis une autre app (lot 12), copiées dans le cache. Vide sinon.
+export function takeSharedMedia(): Promise<SharedMedia[]> {
+  return PearNative.takeSharedMedia ? PearNative.takeSharedMedia() : Promise.resolve([]);
+}
+
+// Un partage arrivé pendant que Pear est ouvert.
+export function addShareListener(listener: () => void) {
+  return PearNative.addListener('onShare', listener);
 }
 
 // Une vue dessinée dans une image PNG (calques de l'éditeur). Demande l'APK du lot 10.3.
