@@ -1,7 +1,7 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { Animated, Easing, Image, Pressable, StyleSheet, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { Camera, LucideIcon, MessageCircle, QrCode, User } from 'lucide-react-native';
+import { Camera, LucideIcon, MessageCircle, User, Users } from 'lucide-react-native';
 import { Circle } from 'react-native-svg';
 
 import { chat } from '../chat/manager';
@@ -10,12 +10,12 @@ import { useNavigationBarHeight } from './ui';
 import { log } from '../log';
 import { t } from '../i18n';
 
-export type Tab = 'add' | 'home' | 'camera' | 'profile';
+export type Tab = 'home' | 'camera' | 'contacts' | 'profile';
 
 const TABS: { tab: Tab; icon: LucideIcon; label: string }[] = [
-  { tab: 'add', icon: QrCode, label: t('onglets.monCode') },
   { tab: 'home', icon: MessageCircle, label: t('onglets.messages') },
   { tab: 'camera', icon: Camera, label: t('onglets.appareilPhoto') },
+  { tab: 'contacts', icon: Users, label: t('contacts.titre') },
   { tab: 'profile', icon: User, label: t('profil.titre') },
 ];
 
@@ -38,7 +38,7 @@ export function useBottomBarSpace() {
 function kickTransform(tab: Tab, kick: Animated.Value) {
   const range = (outputRange: number[]) => kick.interpolate({ inputRange: [0, 0.3, 0.65, 1], outputRange });
   const turn = (outputRange: string[]) => kick.interpolate({ inputRange: [0, 0.3, 0.65, 1], outputRange });
-  if (tab === 'add') return [{ scale: range([1, 0.8, 1.14, 1]) }, { rotate: turn(['0deg', '-8deg', '6deg', '0deg']) }];
+  if (tab === 'contacts') return [{ translateY: range([0, -5, 0, 0]) }];
   if (tab === 'profile') return [{ scale: range([1, 0.86, 1, 1]) }];
   if (tab === 'home') return [{ translateY: range([0, -7, 1, 0]) }, { rotate: turn(['0deg', '-14deg', '7deg', '0deg']) }];
   return [{ scale: range([1, 0.72, 1.16, 1]) }];
@@ -47,19 +47,6 @@ function kickTransform(tab: Tab, kick: Animated.Value) {
 // Le détail qui bouge dans l'icône remplie : la ligne de scan du QR, l'obturateur de l'appareil photo.
 function KickDetail({ tab, kick }: { tab: Tab; kick: Animated.Value }) {
   const styles = useStyles();
-  if (tab === 'add') {
-    return (
-      <Animated.View
-        style={[
-          styles.scanLine,
-          {
-            opacity: kick.interpolate({ inputRange: [0, 0.1, 0.9, 1], outputRange: [0, 1, 1, 0] }),
-            transform: [{ translateY: kick.interpolate({ inputRange: [0, 1], outputRange: [-ICON_SIZE / 2, ICON_SIZE / 2] }) }],
-          },
-        ]}
-      />
-    );
-  }
   if (tab === 'camera') {
     return (
       <Animated.View
@@ -242,13 +229,6 @@ const useStyles = createStyles((colors) => ({
   filled: {
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  scanLine: {
-    position: 'absolute',
-    left: 1,
-    right: 1,
-    height: 2,
-    backgroundColor: colors.background,
   },
   shutter: {
     position: 'absolute',

@@ -1,7 +1,7 @@
 import { ComponentRef, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { FlatList, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { FlatList, Pressable, ScrollView, Text, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { CheckCheck, Flame, Pin, PinOff, Plus, Search, Trash2, Users, X } from 'lucide-react-native';
+import { CheckCheck, Flame, Pin, PinOff, Plus, Trash2, Users } from 'lucide-react-native';
 
 import {
   deleteMessages,
@@ -21,6 +21,7 @@ import { useBottomBarSpace } from '../components/BottomBar';
 import { showDialog } from '../components/dialog';
 import { PermissionBanner } from '../components/PermissionBanner';
 import { RequestsBell } from '../components/RequestsBell';
+import { SearchField } from '../components/SearchField';
 import { Avatar, Button, Header, RowPressable, Screen } from '../components/ui';
 import { t } from '../i18n';
 import { log } from '../log';
@@ -201,22 +202,7 @@ export function HomeScreen({ contacts, onAdd, onOpen, onRequests, permissionMiss
     <Screen>
       <Header title="Pear" action={profileButton} />
       <PermissionBanner visible={permissionMissing} onPress={onFixPermissions} />
-      <View style={styles.search}>
-        <Search size={18} color={colors.textMuted} strokeWidth={1.75} />
-        <TextInput
-          style={styles.searchInput}
-          value={query}
-          onChangeText={setQuery}
-          placeholder={t('liste.rechercher')}
-          placeholderTextColor={colors.textMuted}
-          returnKeyType="search"
-        />
-        {query.length > 0 && (
-          <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityLabel={t('liste.effacer')}>
-            <X size={18} color={colors.textMuted} strokeWidth={1.75} />
-          </Pressable>
-        )}
-      </View>
+      <SearchField value={query} onChange={setQuery} placeholder={t('liste.rechercher')} />
       <View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
           {filters.map((option) => {
@@ -307,22 +293,6 @@ const useStyles = createStyles((colors) => ({
     color: colors.textMuted,
     textAlign: 'center',
     marginBottom: spacing.lg,
-  },
-  search: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginHorizontal: spacing.lg,
-    paddingHorizontal: spacing.md,
-    height: 40,
-    borderRadius: radius.full,
-    backgroundColor: colors.surface,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    color: colors.text,
-    paddingVertical: 0,
   },
   chips: {
     gap: spacing.sm,

@@ -22,7 +22,6 @@ export const fr = {
     contact: 'Contact',
   },
   onglets: {
-    monCode: 'Mon code',
     messages: 'Messages',
     appareilPhoto: 'Appareil photo',
   },
@@ -171,8 +170,6 @@ export const fr = {
   },
   ajout: {
     copierLien: 'Copiez d\'abord le lien Pear de votre contact.',
-    aide: 'Chacun scanne le code de l\'autre, une seule fois.',
-    scanner: 'Scanner son code',
     partager: 'Partager mon lien',
     coller: 'Coller un lien',
   },
@@ -372,5 +369,14 @@ export const fr = {
     limiteEpinglesAide: 'Désépingle une conversation pour en épingler une autre.',
     epingle: 'Épinglée',
     enAttenteLigne: 'En attente d’acceptation',
+  },
+  contacts: {
+    titre: 'Contacts',
+    montrerQr: 'Montrer mon QR code',
+    scanner: 'Scanner',
+    demandes: '{n} demande(s) en attente',
+    tous: 'Tous les contacts ({n})',
+    aucun: 'Aucun contact pour l’instant.',
+    message: 'Écrire un message',
   },
 };

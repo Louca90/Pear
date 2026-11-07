@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, AppState, Easing, BackHandler, StyleSheet, View } from 'react-native';
+import { Animated, AppState, Easing, BackHandler, PanResponder, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { NavigationBar } from 'expo-navigation-bar';
 import { StatusBar } from 'expo-status-bar';
 import * as Linking from 'expo-linking';
@@ -16,7 +16,7 @@ import { BottomBar, Tab } from './src/components/BottomBar';
 import { DialogHost, showDialog } from './src/components/dialog';
 import { ErrorBoundary, ErrorScreen } from './src/components/ErrorBoundary';
 import { deriveSharedSecret, getVerificationCode, Identity, PairingLink, parsePairingLink } from './src/crypto/pairing';
-import { AddContactScreen } from './src/screens/AddContactScreen';
+import { ContactsScreen } from './src/screens/ContactsScreen';
 import { CameraScreen } from './src/screens/CameraScreen';
 import { ChatScreen } from './src/screens/chat/ChatScreen';
 import { ContactScreen } from './src/screens/ContactScreen';
@@ -42,7 +42,7 @@ import { t } from './src/i18n';
 
 type Route =
   | { name: 'home' }
-  | { name: 'add' }
+  | { name: 'contacts' }
   | { name: 'camera' }
   | { name: 'scan' }
   | { name: 'profile' }
@@ -67,9 +67,18 @@ const BACK_EASING = Easing.bezier(0.2, 0.8, 0.2, 1);
 // Si le retour a seulement fermé quelque chose dans la page, celle-ci revient à sa place après ce délai.
 const BACK_SETTLE_MS = 250;
 const BACK_PAGE_SHIFT = 16;
+// Glissement entre onglets : la page suit le doigt (freinée), au-delà du seuil l'onglet voisin entre.
+const TAB_DRAG_FACTOR = 0.35;
+const TAB_SWIPE_RATIO = 0.22;
+const TAB_EXIT_MS = 120;
+const TAB_ENTER_MS = 240;
+const TAB_SHIFT_RATIO = 0.15;
+// Les bords restent au retour par geste d'Android.
+const TAB_EDGE = 28;
 // Coins arrondis de la page pendant l'aperçu, comme une carte qu'on repose.
 const BACK_CORNER_RADIUS = 28;
-const TAB_ROUTES: string[] = ['add', 'home', 'camera', 'profile'];
+// Dans l'ordre de la barre du bas : le glissement horizontal passe de l'un à l'autre.
+const TAB_ROUTES: string[] = ['home', 'camera', 'contacts', 'profile'];
 
 export default function Root() {
   return (
@@ -96,6 +105,8 @@ function App() {
   // L'écran précédent, montré sous la page pendant le geste de retour.
   const [peek, setPeek] = useState<{ route: Route; direction: number } | null>(null);
   const backGesture = useRef(new Animated.Value(0)).current;
+  const tabDrag = useRef(new Animated.Value(0)).current;
+  const { width: screenWidth } = useWindowDimensions();
   const gestureStarted = useRef(false);
   const url = Linking.useURL();
   const update = useUpdateState();
@@ -200,7 +211,7 @@ function App() {
 
   const parentOf = (current: Route): Route | null => {
     if (current.name === 'home') return null;
-    if (current.name === 'scan') return { name: 'add' };
+    if (current.name === 'scan') return { name: 'contacts' };
     if (current.name === 'diagnostic' || current.name === 'blocked') return { name: 'settings' };
     if (current.name === 'settings') return { name: 'profile' };
     if (current.name === 'customize') return { name: 'chat', publicKey: current.publicKey };
@@ -246,6 +257,48 @@ function App() {
 
   // Une fois sur le nouvel écran, on retire la copie posée dessous.
   useEffect(resetBackGesture, [route]);
+
+  // Changer d'onglet : la page sort du côté opposé à l'onglet visé, la nouvelle entre de l'autre côté.
+  const switchTab = (next: Tab) => {
+    const from = TAB_ROUTES.indexOf(route.name);
+    const to = TAB_ROUTES.indexOf(next);
+    if (from < 0 || to < 0 || from === to) {
+      setRoute({ name: next } as Route);
+      return;
+    }
+    const direction = to > from ? 1 : -1;
+    const shift = screenWidth * TAB_SHIFT_RATIO;
+    Animated.timing(tabDrag, { toValue: -direction * shift, duration: TAB_EXIT_MS, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(() => {
+      setRoute({ name: next } as Route);
+      tabDrag.setValue(direction * shift);
+      Animated.timing(tabDrag, { toValue: 0, duration: TAB_ENTER_MS, easing: BACK_EASING, useNativeDriver: true }).start();
+    });
+  };
+  const latestSwitch = useRef(switchTab);
+  latestSwitch.current = switchTab;
+  const latestRouteName = useRef(route.name);
+  latestRouteName.current = route.name;
+
+  const tabSwipe = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (event, { dx, dy, x0 }) => {
+        const name = latestRouteName.current;
+        // La caméra utilise déjà le glissement (changer de caméra).
+        if (!TAB_ROUTES.includes(name) || name === 'camera') return false;
+        if (x0 < TAB_EDGE || x0 > screenWidth - TAB_EDGE) return false;
+        return Math.abs(dx) > 24 && Math.abs(dx) > Math.abs(dy) * 2;
+      },
+      onPanResponderMove: (event, { dx }) => tabDrag.setValue(dx * TAB_DRAG_FACTOR),
+      onPanResponderRelease: (event, { dx, vx }) => {
+        const index = TAB_ROUTES.indexOf(latestRouteName.current);
+        const direction = dx < 0 ? 1 : -1;
+        const next = TAB_ROUTES[index + direction];
+        if (next && (Math.abs(dx) > screenWidth * TAB_SWIPE_RATIO || Math.abs(vx) > 0.6)) latestSwitch.current(next as Tab);
+        else Animated.timing(tabDrag, { toValue: 0, duration: TAB_ENTER_MS, easing: BACK_EASING, useNativeDriver: true }).start();
+      },
+      onPanResponderTerminate: () => Animated.timing(tabDrag, { toValue: 0, duration: TAB_ENTER_MS, easing: BACK_EASING, useNativeDriver: true }).start(),
+    }),
+  ).current;
 
   const latestParent = useRef(() => parentOf(route));
   latestParent.current = () => parentOf(route);
@@ -339,17 +392,21 @@ function App() {
     }
     if (!identity) return <View style={styles.center} />;
 
-    if (current.name === 'add') {
+    if (current.name === 'contacts') {
       return (
-        <AddContactScreen
+        <ContactsScreen
           publicKey={identity.publicKey}
+          contacts={contacts}
           onScan={() => setRoute({ name: 'scan' })}
           onKeyReceived={openKey}
+          onRequests={() => setRoute({ name: 'requests' })}
+          onOpenContact={(contact) => setRoute({ name: 'contact', publicKey: contact.publicKey })}
+          onMessage={(contact) => setRoute({ name: 'chat', publicKey: contact.publicKey })}
         />
       );
     }
     if (current.name === 'scan') {
-      return <ScannerScreen onBack={() => setRoute({ name: 'add' })} onKeyReceived={openKey} />;
+      return <ScannerScreen onBack={() => setRoute({ name: 'contacts' })} onKeyReceived={openKey} />;
     }
     if (current.name === 'camera') {
       return (
@@ -450,7 +507,7 @@ function App() {
     return (
       <HomeScreen
         contacts={contacts}
-        onAdd={() => setRoute({ name: 'add' })}
+        onAdd={() => setRoute({ name: 'contacts' })}
         onOpen={(contact) => setRoute({ name: 'chat', publicKey: contact.publicKey })}
         onRequests={() => setRoute({ name: 'requests' })}
         permissionMissing={permissionMissing}
@@ -473,8 +530,8 @@ function App() {
             markOnboardingDone();
             setOnboarding(null);
             setPermissionMissing(false);
-            // Sans contact, on ouvre directement « Ajouter un contact » : c'est la première chose à faire.
-            if (onboarding.mode === 'full') setRoute(contacts.length === 0 ? { name: 'add' } : { name: 'home' });
+            // Sans contact, on ouvre directement l'onglet Contacts (montrer son code, scanner) : c'est la première chose à faire.
+            if (onboarding.mode === 'full') setRoute(contacts.length === 0 ? { name: 'contacts' } : { name: 'home' });
           }}
         />
         <DialogHost />
@@ -517,6 +574,7 @@ function App() {
         </Animated.View>
       )}
       <Animated.View
+        {...tabSwipe.panHandlers}
         style={[
           styles.flex,
           peek && styles.pageDuringBack,
@@ -526,6 +584,7 @@ function App() {
             transform: [
               { translateX: backGesture.interpolate({ inputRange: [0, 1, 2], outputRange: [0, BACK_PAGE_SHIFT * direction, BACK_PAGE_SHIFT * direction] }) },
               { scale: backGesture.interpolate({ inputRange: [0, 1, 2], outputRange: [1, 0.92, 0.88] }) },
+              { translateX: tabDrag },
             ],
           },
         ]}
@@ -535,7 +594,7 @@ function App() {
         </ErrorBoundary>
       </Animated.View>
       {identity && !error && !filming && TAB_ROUTES.includes(route.name) && (
-        <BottomBar active={route.name as Tab} onChange={(tab) => setRoute({ name: tab } as Route)} />
+        <BottomBar active={route.name as Tab} onChange={switchTab} />
       )}
       {updatedInfo && identity && route.name === 'home' && (
         <UpdatedPopup
