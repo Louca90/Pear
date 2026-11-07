@@ -12,7 +12,8 @@ import { UPDATE_REQUIRED } from './protocol';
 // refused (fichier refusé par l'autre : il ne repart plus).
 // Messages reçus : offered (fichier trop lourd, il attend notre accord), receiving (fichier en cours),
 // delivered (pas lu), read-pending (lu, l'autre n'est pas encore prévenu), read, refused (fichier refusé).
-export type MessageStatus = 'sending' | 'offered' | 'receiving' | 'delivered' | 'read-pending' | 'read' | 'refused';
+// scheduled : envoi programmé, le message attend sur ce téléphone jusqu'à son heure (scheduled_at).
+export type MessageStatus = 'sending' | 'offered' | 'receiving' | 'delivered' | 'read-pending' | 'read' | 'refused' | 'scheduled';
 // wallpaper et avatar passent par le transfert de fichiers. avatar n'apparaît jamais dans la conversation.
 export type MessageKind = 'text' | 'image' | 'video' | 'audio' | 'file' | 'wallpaper' | 'avatar' | 'system';
 
@@ -57,6 +58,8 @@ export type Message = {
   // Heure de chaque réaction (absente sur les anciennes).
   my_reaction_at?: number | null;
   their_reaction_at?: number | null;
+  // Heure d'envoi programmée (heure de Paris), tant que le message attend.
+  scheduled_at?: number | null;
 };
 
 export type NewMessage = Pick<Message, 'id' | 'contact' | 'mine' | 'text' | 'status' | 'created_at'> & Partial<Message>;
@@ -613,9 +616,39 @@ export function getMessagePosition(contact: string, id: string): number {
   );
 }
 
+// --- Envoi programmé (lot 8.9) ---
+
+// Un message programmé : il est rangé à son heure prévue et ne part pas avant.
+export function addScheduledMessage(id: string, contact: string, text: string, at: number, replyTo: string | null) {
+  db().runSync(
+    "INSERT OR IGNORE INTO messages (id, contact, mine, text, status, created_at, kind, reply_to, scheduled_at) VALUES (?, ?, 1, ?, 'scheduled', ?, 'text', ?, ?)",
+    id,
+    contact,
+    text,
+    at,
+    replyTo,
+    at,
+  );
+}
+
+export function getDueScheduled(now: number): { id: string; contact: string }[] {
+  return db().getAllSync<{ id: string; contact: string }>("SELECT id, contact FROM messages WHERE status = 'scheduled' AND scheduled_at <= ?", now);
+}
+
+// L'heure est venue (ou « envoyer maintenant ») : le message part, daté de son vrai départ.
+export function releaseScheduled(id: string, contact: string, now: number, session: number) {
+  db().runSync(
+    "UPDATE messages SET status = 'sending', created_at = ?, scheduled_at = NULL, conn_session = ? WHERE id = ? AND contact = ? AND status = 'scheduled'",
+    now,
+    session,
+    id,
+    contact,
+  );
+}
+
 export function getUndelivered(contact: string): Message[] {
   return db().getAllSync<Message>(
-    "SELECT * FROM messages WHERE contact = ? AND mine = 1 AND status NOT IN ('delivered', 'read', 'refused') ORDER BY created_at",
+    "SELECT * FROM messages WHERE contact = ? AND mine = 1 AND status NOT IN ('delivered', 'read', 'refused', 'scheduled') ORDER BY created_at",
     contact,
   ).map(withFileKey);
 }
@@ -633,7 +666,7 @@ export function setReadReceiptSent(id: string, contact: string) {
 }
 
 export function getLastMessage(contact: string): Message | null {
-  const message = db().getFirstSync<Message>("SELECT * FROM messages WHERE contact = ? AND kind != 'avatar' ORDER BY created_at DESC LIMIT 1", contact);
+  const message = db().getFirstSync<Message>("SELECT * FROM messages WHERE contact = ? AND kind != 'avatar' AND status != 'scheduled' ORDER BY created_at DESC LIMIT 1", contact);
   return message && withoutFileKey(message);
 }
 

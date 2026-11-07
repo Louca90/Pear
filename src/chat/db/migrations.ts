@@ -177,6 +177,11 @@ const MIGRATIONS: Migration[] = [
       addColumn(db, 'messages', 'their_reaction_at', 'INTEGER');
     },
   },
+  {
+    // Lot 8.9 : envoi programmé (le message attend sur l'appareil jusqu'à l'heure choisie).
+    version: 11,
+    up: (db) => addColumn(db, 'messages', 'scheduled_at', 'INTEGER'),
+  },
 ];
 
 export const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

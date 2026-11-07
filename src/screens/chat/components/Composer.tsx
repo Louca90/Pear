@@ -23,6 +23,8 @@ type Props = {
   onCancelMode: () => void;
   onJump: (id: string) => void;
   onSend: () => void;
+  // Appui long sur Envoyer : programmer le message.
+  onSchedule: () => void;
   input: RefObject<ComponentRef<typeof TextInput> | null>;
   keyboardOpen: boolean;
   attachOpen: boolean;
@@ -42,6 +44,7 @@ export function Composer({
   onCancelMode,
   onJump,
   onSend,
+  onSchedule,
   input,
   keyboardOpen,
   attachOpen,
@@ -104,6 +107,7 @@ export function Composer({
         {(draft.trim() || editing) && voice.phase === 'idle' ? (
           <IconButton
             onPress={onSend}
+            onLongPress={editing ? undefined : onSchedule}
             disabled={!draft.trim()}
             label={editing ? t('commun.enregistrer') : t('chat.envoyer')}
             hitSlop={0}

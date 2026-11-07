@@ -36,6 +36,7 @@ type HeaderProps = {
 
 type IconButtonProps = {
   onPress: () => void;
+  onLongPress?: () => void;
   label: string;
   disabled?: boolean;
   hitSlop?: number;
@@ -44,12 +45,13 @@ type IconButtonProps = {
 };
 
 // Bouton à icône : il se tasse sous le doigt et revient avec un petit rebond.
-export function IconButton({ onPress, label, disabled, hitSlop = 12, style, children }: IconButtonProps) {
+export function IconButton({ onPress, onLongPress, label, disabled, hitSlop = 12, style, children }: IconButtonProps) {
   const scale = useRef(new Animated.Value(1)).current;
   const animate = (toValue: number) => Animated.spring(scale, { toValue, useNativeDriver: true, overshootClamping: true, damping: 12, stiffness: 320 }).start();
   return (
     <Pressable
       onPress={onPress}
+      onLongPress={onLongPress}
       onPressIn={() => animate(0.82)}
       onPressOut={() => animate(1)}
       disabled={disabled}

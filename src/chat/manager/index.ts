@@ -5,12 +5,13 @@ import { Identity } from '../../crypto/pairing';
 import { PeerStatus, RouteType } from '../../network/peer';
 import { Contact, loadContacts, loadOrCreateIdentity, saveContacts } from '../../storage';
 import { t } from '../../i18n';
-import { addMessage, blockKey, deleteMessage, deleteRelayIncoming, editMessage, getMessage, getPendingRequests, getRelayIncoming, unblockKey, markConversationRead, Message, setConversationSetting, setMessagePinned, setIncomingStatus, setReaction } from '../database';
+import { addMessage, blockKey, deleteMessage, deleteRelayIncoming, editMessage, getMessage, getPendingRequests, getRelayIncoming, unblockKey, markConversationRead, Message, addScheduledMessage, getDueScheduled, releaseScheduled, setConversationSetting, setMessagePinned, setIncomingStatus, setReaction } from '../database';
 import { clearMessageNotification } from '../notifications';
 
 import { deleteRelay } from '../../network/relay';
 import { unpublishToken } from '../../network/tokens';
 import { log } from '../../log';
+import { parisNow } from '../../time';
 
 import { publishMyToken, retryAll, watch } from './connections';
 import { ChatCore } from './core';
@@ -46,9 +47,11 @@ class ChatManager extends ChatCore {
       }
     }
     publishMyToken(this);
+    this.releaseDueScheduled();
     reconcile(this);
     if (!this.wakeTimer) {
       this.wakeTimer = setInterval(() => {
+        this.releaseDueScheduled();
         reconcile(this);
         this.names.forEach((_, contact) => {
           wakeIfNeeded(this, contact);
@@ -323,6 +326,26 @@ class ChatManager extends ChatCore {
         });
       }
     }
+  }
+
+  // Envoi programmé : le message attend ici jusqu'à son heure (heure de Paris), puis part normalement.
+  schedule(contact: string, text: string, at: number, replyTo: string | null = null) {
+    addScheduledMessage(to_base64(randombytes_buf(16)), contact, text, at, replyTo);
+    this.notify();
+  }
+
+  sendScheduledNow(contact: string, id: string) {
+    releaseScheduled(id, contact, Date.now(), this.sessionFor(contact));
+    this.afterSend(contact);
+    flush(this, contact);
+    wakeIfNeeded(this, contact);
+    this.notify();
+  }
+
+  // Vérifié au lancement, au retour de l'app et toutes les WAKE_CHECK_MS.
+  releaseDueScheduled() {
+    const due = getDueScheduled(parisNow());
+    for (const { id, contact } of due) this.sendScheduledNow(contact, id);
   }
 
   // Épingler ou désépingler un message, pour les deux.

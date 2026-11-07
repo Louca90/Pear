@@ -1,16 +1,18 @@
 import { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
-import { Check, CheckCheck } from 'lucide-react-native';
+import { Check, CheckCheck, Clock } from 'lucide-react-native';
 
 import { Message, MessageStatus } from '../../../chat/database';
 
 import { formatTime } from '../format';
+import { scheduleLabel } from './ScheduleSheet';
 import { useChatStyles } from '../styles';
 import { MetaTone } from '../types';
 import { t } from '../../../i18n';
 
 // 1 coche : pas encore reçu. 2 coches grises : reçu par l'autre. 2 coches contrastées : conversation ouverte par l'autre.
 function statusIcon(status: MessageStatus, tone: MetaTone) {
+  if (status === 'scheduled') return { Icon: Clock, color: tone.muted, label: t('programme.programme') };
   if (status === 'read') return { Icon: CheckCheck, color: tone.text, label: t('chat.lu') };
   if (status === 'delivered') return { Icon: CheckCheck, color: tone.muted, label: t('chat.recu') };
   return { Icon: Check, color: tone.muted, label: t('chat.pasRecu') };
@@ -35,7 +37,9 @@ export function MessageMeta({ message, tone, pill }: { message: Message; tone: M
   return (
     <View style={[styles.meta, pill && styles.metaPill]}>
       {message.edited === 1 && <Text style={[styles.time, { color: tone.muted }]}>{t('chat.modifie')}</Text>}
-      <Text style={[styles.time, { color: tone.muted }]}>{formatTime(message.created_at)}</Text>
+      <Text style={[styles.time, { color: tone.muted }]}>
+        {message.status === 'scheduled' && message.scheduled_at ? t('programme.prevu', { quand: scheduleLabel(message.scheduled_at) }) : formatTime(message.created_at)}
+      </Text>
       {message.mine === 1 && (
         <Animated.View style={{ transform: [{ scale: pop }] }}>
           <StatusIcon size={14} color={statusColor} strokeWidth={1.75} accessibilityLabel={statusLabel} />

@@ -6,7 +6,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
 import * as Sharing from 'expo-sharing';
-import { Copy, Download, Forward, MessageCircle, Pencil, Pin, PinOff, Reply, Trash2 } from 'lucide-react-native';
+import { Copy, Download, Forward, MessageCircle, Pencil, Pin, PinOff, Reply, Send, Trash2 } from 'lucide-react-native';
 
 import { getContactProfile, getContactRows, getConversationSettings, getMessagePosition, getMessages, getPeerState, getPinnedMessages, isBlocked, Message } from '../../chat/database';
 import { exportCopy, formatSize, MAX_FILE_BYTES, saveToGallery, videoThumbnail } from '../../chat/files';
@@ -30,6 +30,7 @@ import { MessageSelection, metaRoomFor, selectionLayout } from './components/Mes
 import { NewMessagesButton } from './components/NewMessagesButton';
 import { PinnedBanner } from './components/PinnedBanner';
 import { ReactionsSheet } from './components/ReactionsSheet';
+import { ScheduleSheet, scheduleLabel } from './components/ScheduleSheet';
 import { Toast } from './components/Toast';
 import { JUMP_PULSE_DELAY_MS, LIKE } from './constants';
 import { useChatScroll } from './hooks/useChatScroll';
@@ -61,6 +62,7 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
   const [toast, setToast] = useState<{ text: string; token: number } | null>(null);
   const [forwarding, setForwarding] = useState<Message | null>(null);
   const [showingReactions, setShowingReactions] = useState<Message | null>(null);
+  const [scheduling, setScheduling] = useState(false);
   const [viewing, setViewing] = useState<Viewing | null>(null);
   const [selection, setSelection] = useState<{ message: Message; rect: Rect; origin: { y: number; height: number }; clip: { top: number; bottom: number }; position: GroupPosition; keepOriginal: boolean } | null>(null);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
@@ -221,7 +223,24 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
     }
   };
 
-  const actionsFor = (message: Message): Action[] => [
+  const schedule = (time: number) => {
+    const text = draft.trim();
+    if (!text) return;
+    chat.schedule(contactKey, text, time, replyingTo?.id ?? null);
+    setReplyingTo(null);
+    setDraft('');
+    chat.sendTyping(contactKey, false);
+    setToast({ text: t('programme.programmeToast', { quand: scheduleLabel(time) }), token: Date.now() });
+  };
+
+  // Un message programmé n'est pas encore parti : l'envoyer tout de suite, le copier ou l'annuler.
+  const scheduledActions = (message: Message): Action[] => [
+    { label: t('programme.envoyerMaintenant'), icon: Send, onPress: () => chat.sendScheduledNow(contactKey, message.id) },
+    { label: t('chat.copier'), icon: Copy, onPress: () => Clipboard.setStringAsync(message.text) },
+    { label: t('programme.annuler'), icon: Trash2, danger: true, onPress: () => chat.deleteForMe(contactKey, message.id) },
+  ];
+
+  const actionsFor = (message: Message): Action[] => message.status === 'scheduled' ? scheduledActions(message) : [
     { label: t('chat.repondre'), icon: Reply, onPress: () => startReply(message) },
     ...(message.kind === 'text'
       ? [{ label: t('chat.copier'), icon: Copy, onPress: () => Clipboard.setStringAsync(message.text) }]
@@ -399,6 +418,7 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
           {messages.length > 0 && scrollbarControl.scrollbar}
           <NewMessagesButton count={scroll.newCount} onPress={scroll.scrollToBottom} />
           {toast && <Toast text={toast.text} token={toast.token} />}
+          {scheduling && <ScheduleSheet onSchedule={schedule} onClose={() => setScheduling(false)} />}
           {showingReactions && (
             <ReactionsSheet
               message={messages.find(({ id }) => id === showingReactions.id) ?? showingReactions}
@@ -457,6 +477,7 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
               onCancelMode={cancelComposerMode}
               onJump={jumpTo}
               onSend={send}
+              onSchedule={() => draft.trim() && setScheduling(true)}
               input={input}
               keyboardOpen={keyboardOpen}
               attachOpen={attachOpen}
