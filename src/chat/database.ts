@@ -368,6 +368,35 @@ export function deleteRelayIncoming(messageId: string, contact: string) {
   db().runSync('DELETE FROM relay_incoming WHERE message_id = ? AND contact = ?', messageId, contact);
 }
 
+// Messages reçus pas encore lus, par contact (calculé depuis la base : exact après un redémarrage).
+export function getUnreadCounts(): Map<string, number> {
+  const rows = db().getAllSync<{ contact: string; count: number }>(
+    "SELECT contact, COUNT(*) AS count FROM messages WHERE mine = 0 AND status = 'delivered' AND kind NOT IN ('system', 'avatar') GROUP BY contact",
+  );
+  return new Map(rows.map((row) => [row.contact, row.count]));
+}
+
+// Conversations épinglées, dans l'ordre où elles ont été épinglées.
+export function getPinnedOrder(): string[] {
+  return db()
+    .getAllSync<{ public_key: string }>('SELECT public_key FROM contacts WHERE pinned = 1 ORDER BY pin_order, rowid')
+    .map((row) => row.public_key);
+}
+
+export const MAX_PINNED = 3;
+
+// Renvoie false si la limite de 3 épingles est atteinte.
+export function setPinned(contact: string, pinned: boolean): boolean {
+  if (!pinned) {
+    db().runSync('UPDATE contacts SET pinned = 0, pin_order = NULL WHERE public_key = ?', contact);
+    return true;
+  }
+  if (getPinnedOrder().length >= MAX_PINNED) return false;
+  const next = (db().getFirstSync<{ top: number | null }>('SELECT MAX(pin_order) AS top FROM contacts')?.top ?? 0) + 1;
+  db().runSync('UPDATE contacts SET pinned = 1, pin_order = ? WHERE public_key = ?', next, contact);
+  return true;
+}
+
 export function getPinnedContacts(): Set<string> {
   return new Set(db().getAllSync<{ public_key: string }>('SELECT public_key FROM contacts WHERE pinned = 1').map((row) => row.public_key));
 }
