@@ -5,7 +5,7 @@ import { File, Paths } from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { getThumbnailAsync } from 'expo-video-thumbnails';
-import { Pencil, SlidersHorizontal, Smile, Trash2, Type } from 'lucide-react-native';
+import { Crop as CropIcon, Pencil, SlidersHorizontal, Smile, Trash2, Type } from 'lucide-react-native';
 import { GestureDetector, usePanGesture, usePinchGesture, useRotationGesture, useSimultaneousGestures, useTapGesture } from 'react-native-gesture-handler';
 import Svg, { Defs, FeColorMatrix, Filter, G, Image as SvgImage } from 'react-native-svg';
 
@@ -27,6 +27,8 @@ import { StickerLayerView } from './editor/StickerLayerView';
 import { StickerPicker } from './editor/StickerPicker';
 import { DrawPanel, StrokesView } from './editor/DrawPanel';
 import { BRUSH_DEFAULT, Stroke } from './editor/drawing';
+import { Crop, cropGeometry, ImagePlacement, isCropped, NO_CROP } from './editor/crop';
+import { CropPanel } from './editor/CropPanel';
 
 // Un glissé horizontal devient un changement de filtre au-delà de cette distance.
 const SWIPE_START = 12;
@@ -63,12 +65,24 @@ function EditorVideo({ uri }: { uri: string }) {
 
 // Une couche visible de la photo : filtrée par la carte graphique, avec la marque du filtre. Mémorisée :
 // déplacer un texte ne la redessine pas.
-const PhotoLayer = memo(function PhotoLayer({ uri, id, adjustments, stamp, width, height }: { uri: string; id: FilterId; adjustments: Adjustments; stamp: Stamp; width: number; height: number }) {
+// La photo est placée (et tournée) pour que la partie gardée au recadrage remplisse l'aperçu.
+function placedImageStyle(placement: ImagePlacement) {
+  return {
+    position: 'absolute' as const,
+    left: placement.left,
+    top: placement.top,
+    width: placement.width,
+    height: placement.height,
+    transform: [{ rotate: `${placement.rotation}deg` }],
+  };
+}
+
+const PhotoLayer = memo(function PhotoLayer({ uri, id, adjustments, stamp, width, height, placement }: { uri: string; id: FilterId; adjustments: Adjustments; stamp: Stamp; width: number; height: number; placement: ImagePlacement }) {
   const kind = presetOf(id).stamp;
   return (
     <>
       <FilteredView steps={stepsOf(id, adjustments)} style={StyleSheet.absoluteFill}>
-        <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+        <Image source={{ uri }} style={placedImageStyle(placement)} resizeMode="stretch" />
       </FilteredView>
       {kind && (
         <Svg pointerEvents="none" style={StyleSheet.absoluteFill} width={width} height={height}>
@@ -110,6 +124,8 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
   const [editing, setEditing] = useState<TextLayer | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
+  const [crop, setCrop] = useState<Crop>(NO_CROP);
+  const [cropping, setCropping] = useState(false);
   const [drawing, setDrawing] = useState(false);
   const [strokes, setStrokes] = useState<Stroke[]>([]);
   const [brush, setBrush] = useState({ color: '#FFFFFF', width: BRUSH_DEFAULT });
@@ -125,7 +141,7 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
     measured.then(({ width: measuredWidth, height: measuredHeight }) => setSize({ width: measuredWidth, height: measuredHeight })).catch((e) => log.warn('média', e));
   }, [uri, kind]);
 
-  const busy = adjusting || picking || drawing || editing !== null || dragging !== null;
+  const busy = adjusting || picking || drawing || cropping || editing !== null || dragging !== null;
   useEffect(() => {
     onToolChange?.(busy);
   }, [busy, onToolChange]);
@@ -156,9 +172,8 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
     Animated.timing(trashHover, { toValue: overTrash ? 1 : 0, duration: 140, easing: EASING, useNativeDriver: true }).start();
   }, [overTrash, trashHover]);
 
-  const fit = size ? Math.min(screen.width / size.width, screen.height / size.height) : 1;
-  const width = size ? size.width * fit : screen.width;
-  const height = size ? size.height * fit : screen.height;
+  const geometry = cropGeometry(size ?? screen, crop, screen);
+  const { width, height, image: placement, pixelsPerPoint } = geometry;
   const left = (screen.width - width) / 2;
   const top = (screen.height - height) / 2;
   const textMaxWidth = width * TEXT_MAX_WIDTH;
@@ -192,10 +207,10 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
           return;
         }
         const output = new File(Paths.cache, `edited-${Date.now()}.png`).uri;
-        captureView(tag, output, clamp(size.width / width, 1, EXPORT_SCALE_MAX)).then(done.resolve, done.reject);
+        captureView(tag, output, clamp(pixelsPerPoint, 1, EXPORT_SCALE_MAX)).then(done.resolve, done.reject);
       }),
     );
-  }, [exportToken, size, width]);
+  }, [exportToken, size, pixelsPerPoint]);
 
   const snapshot = (matrix: ColorMatrix | null) =>
     new Promise<string>((resolve, reject) => {
@@ -209,7 +224,7 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
       const matrix = matrixOf(steps);
       const colored = !isIdentity(matrix);
       const marked = !!presetOf(filter).stamp || layers.length > 0 || strokes.length > 0;
-      if (!colored && !marked) return uri;
+      if (!colored && !marked && !isCropped(crop)) return uri;
       if (kind === 'image') return snapshot(colored ? matrix : null);
       // Vidéo : le calque seulement s'il y a quelque chose à poser dessus.
       const overlayUri = marked ? await snapshot(null) : undefined;
@@ -442,7 +457,15 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
               )}
               {kind === 'image' && (
                 <G filter={exportMatrix ? 'url(#export)' : undefined}>
-                  <SvgImage href={{ uri }} width={width} height={height} preserveAspectRatio="xMidYMid slice" />
+                  <SvgImage
+                    href={{ uri }}
+                    x={placement.left}
+                    y={placement.top}
+                    width={placement.width}
+                    height={placement.height}
+                    preserveAspectRatio="none"
+                    transform={`rotate(${placement.rotation} ${placement.left + placement.width / 2} ${placement.top + placement.height / 2})`}
+                  />
                 </G>
               )}
               <StampMarks kind={currentStamp} stamp={stamp} width={width} height={height} />
@@ -452,7 +475,7 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
           </View>
         )}
 
-        {size && kind === 'image' && <PhotoLayer uri={uri} id={filter} adjustments={adjustments} stamp={stamp} width={width} height={height} />}
+        {size && kind === 'image' && <PhotoLayer uri={uri} id={filter} adjustments={adjustments} stamp={stamp} width={width} height={height} placement={placement} />}
         {size && kind === 'video' && (
           <>
             <FilteredView steps={steps} style={StyleSheet.absoluteFill}>
@@ -468,7 +491,7 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
         {size && neighbor && (
           <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.clip, { transform: [{ translateX: frameX }] }]}>
             <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ translateX: contentX }] }]}>
-              <PhotoLayer uri={uri} id={neighbor} adjustments={adjustments} stamp={stamp} width={width} height={height} />
+              <PhotoLayer uri={uri} id={neighbor} adjustments={adjustments} stamp={stamp} width={width} height={height} placement={placement} />
             </Animated.View>
           </Animated.View>
         )}
@@ -517,6 +540,7 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
         hidden={busy}
         tools={[
           { id: 'text', icon: Type, label: t('editeur.texte'), onPress: startNewText },
+          ...(kind === 'image' ? [{ id: 'crop', icon: CropIcon, label: t('editeur.recadrer'), onPress: () => setCropping(true) }] : []),
           { id: 'draw', icon: Pencil, label: t('editeur.dessin'), onPress: () => setDrawing(true) },
           { id: 'stickers', icon: Smile, label: t('editeur.stickers'), onPress: () => setPicking(true) },
           { id: 'adjust', icon: SlidersHorizontal, label: t('editeur.reglages'), active: adjusting, onPress: () => setAdjusting(true) },
@@ -536,6 +560,23 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
           onClose={() => setDrawing(false)}
         />
       )}
+      {cropping && size && (
+        <CropPanel
+          uri={uri}
+          image={size}
+          crop={crop}
+          bottom={navigationBar}
+          onDone={(next) => {
+            const after = cropGeometry(size, next, screen);
+            const sx = after.width / width;
+            const sy = after.height / height;
+            setLayers((current) => current.map((layer) => ({ ...layer, x: layer.x * sx, y: layer.y * sy })));
+            setStrokes((current) => current.map((stroke) => ({ ...stroke, points: stroke.points.map((value, index) => value * (index % 2 === 0 ? sx : sy)) })));
+            setCrop(next);
+            setCropping(false);
+          }}
+        />
+      )}
       {picking && <StickerPicker bottom={navigationBar} onPick={addSticker} onClose={() => setPicking(false)} />}
       {editing && <TextEditor layer={editing} maxWidth={textMaxWidth} onDone={finishEditing} />}
     </>
@@ -545,6 +586,7 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
 const useStyles = createMediaStyles((colors) => ({
   canvas: {
     position: 'absolute',
+    overflow: 'hidden',
   },
   clip: {
     overflow: 'hidden',
