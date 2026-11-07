@@ -101,6 +101,7 @@ async function upload(core: ChatCore, contact: string, message: Message) {
     mime: message.file_mime,
     kind: message.kind,
     key: message.file_key,
+    camera: message.from_camera === 1,
   });
 }
 
@@ -124,6 +125,7 @@ export function receiveRelayOffer(core: ChatCore, contact: string, data: Payload
     status: auto ? 'receiving' : 'offered',
     created_at: Date.now(),
     kind,
+    from_camera: data.camera === true ? 1 : 0,
     file_uri: storedFile(id).uri,
     file_size: size,
     file_mime: typeof data.mime === 'string' ? data.mime.slice(0, 255) : null,

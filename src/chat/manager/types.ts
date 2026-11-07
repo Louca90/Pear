@@ -42,6 +42,8 @@ export type PickedFile = {
   size: number;
   mime: string | null;
   kind: MessageKind;
+  // Pris avec la caméra de Pear : compte pour les séries.
+  fromCamera?: boolean;
 };
 
 // Après un envoi ou une réception, la connexion reste ouverte un moment : la réponse arrive souvent vite.

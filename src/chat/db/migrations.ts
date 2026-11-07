@@ -148,6 +148,17 @@ const MIGRATIONS: Migration[] = [
       addColumn(db, 'messages', 'pinned', 'INTEGER NOT NULL DEFAULT 0');
     },
   },
+  {
+    // Lot 8.4 : les séries ne comptent que les photos et vidéos prises avec la caméra de Pear. Les
+    // messages d'avant cette version gardent l'ancienne règle (les séries en cours ne cassent pas).
+    version: 7,
+    up: (db) => {
+      addColumn(db, 'messages', 'from_camera', 'INTEGER NOT NULL DEFAULT 0');
+      db.execSync(
+        "INSERT OR IGNORE INTO settings (key, value) VALUES ('camera_streak_since', CAST(CAST(strftime('%s', 'now') AS INTEGER) * 1000 AS TEXT))",
+      );
+    },
+  },
 ];
 
 export const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

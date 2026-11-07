@@ -106,7 +106,7 @@ function CaptureReview({ capture, contacts, onDiscard, onSent }: ReviewProps) {
       const uri = await finalUri();
       const ending = extension(uri);
       const mime = capture.kind === 'video' ? 'video/mp4' : ending === '.png' ? 'image/png' : 'image/jpeg';
-      await chat.sendFile(contact.publicKey, { uri, name: `${capture.kind === 'video' ? 'video' : 'photo'}${ending}`, size: 0, mime, kind: capture.kind });
+      await chat.sendFile(contact.publicKey, { uri, name: `${capture.kind === 'video' ? 'video' : 'photo'}${ending}`, size: 0, mime, kind: capture.kind, fromCamera: true });
       onSent(contact.publicKey);
     } catch (e) {
       showDialog(t('chat.envoiImpossible'), String(e));

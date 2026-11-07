@@ -62,6 +62,7 @@ export async function sendFile(core: ChatCore, contact: string, file: PickedFile
     file_uri: uri,
     file_size: size,
     file_mime: file.mime,
+    from_camera: file.fromCamera ? 1 : 0,
   });
   flush(core, contact);
   wakeIfNeeded(core, contact);
@@ -186,6 +187,7 @@ export function receiveFileOffer(core: ChatCore, contact: string, data: Payload)
       file_size: size,
       file_mime: typeof data.mime === 'string' ? data.mime.slice(0, 255) : null,
       file_key: data.key,
+      from_camera: data.camera === true ? 1 : 0,
     });
     if (decision === 'ask') {
       const message = getMessage(data.id, contact);

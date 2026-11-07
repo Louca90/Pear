@@ -48,6 +48,8 @@ export type Message = {
   their_reaction: string | null;
   // Épinglé : l'heure de l'épinglage (0 sinon).
   pinned?: number;
+  // Photo ou vidéo prise avec la caméra de Pear (compte pour les séries).
+  from_camera?: number;
 };
 
 export type NewMessage = Pick<Message, 'id' | 'contact' | 'mine' | 'text' | 'status' | 'created_at'> & Partial<Message>;
@@ -133,8 +135,8 @@ function openAndMigrate() {
 export function addMessage(message: NewMessage): boolean {
   // INSERT OR IGNORE : un message renvoyé après une coupure n'apparaît pas en double.
   const result = db().runSync(
-    `INSERT OR IGNORE INTO messages (id, contact, mine, text, status, created_at, kind, file_uri, file_size, file_mime, file_key, reply_to)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT OR IGNORE INTO messages (id, contact, mine, text, status, created_at, kind, file_uri, file_size, file_mime, file_key, reply_to, from_camera)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     message.id,
     message.contact,
     message.mine,
@@ -147,6 +149,7 @@ export function addMessage(message: NewMessage): boolean {
     message.file_mime ?? null,
     encryptFileKey(message.file_key),
     message.reply_to ?? null,
+    message.from_camera ?? 0,
   );
   return result.changes > 0;
 }
@@ -521,11 +524,18 @@ export function deleteOldAvatars(contact: string, mine: number, keepId: string |
 
 // Jours d'affilée où les deux personnes ont écrit, comme sur Snapchat. La série tient encore si le dernier jour est hier.
 export function getStreak(contact: string): number {
+  // Seules les photos et vidéos prises avec la caméra de Pear comptent ; avant cette règle, tous les
+  // messages comptaient (les séries déjà en cours sont gardées).
+  const since = Number(getSetting('camera_streak_since') ?? 0);
   const days = db().getAllSync<{ day: string; both: number }>(
     `SELECT date(created_at / 1000, 'unixepoch', 'localtime') AS day, (SUM(mine = 1) > 0 AND SUM(mine = 0) > 0) AS both
-     FROM messages WHERE contact = ? AND kind IN ('text', 'image', 'video', 'audio', 'file')
+     FROM messages WHERE contact = ? AND (
+       (kind IN ('image', 'video') AND from_camera = 1)
+       OR (created_at < ? AND kind IN ('text', 'image', 'video', 'audio', 'file'))
+     )
      GROUP BY day ORDER BY day DESC`,
     contact,
+    since,
   );
   const dayKey = (offset: number) => {
     const date = new Date();

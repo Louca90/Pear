@@ -66,6 +66,7 @@ export function flush(core: ChatCore, contact: string) {
         mime: message.file_mime,
         kind: message.kind,
         key,
+        camera: message.from_camera === 1,
       };
       if (!sendSecure(core, contact, offer)) return;
     } else if (!sendSecure(core, contact, { type: 'message', id: message.id, text: message.text, reply_to: message.reply_to })) {
