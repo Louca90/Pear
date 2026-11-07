@@ -5,6 +5,7 @@ import {
   addOutboxEvent,
   getOutboxEvents,
   getPendingReadReceipts,
+  getUpload,
   getUndelivered,
   setFileKey,
   setFileSize,
@@ -43,7 +44,8 @@ export function flush(core: ChatCore, contact: string) {
   if (!peer) return;
   for (const message of getUndelivered(contact)) {
     if (message.kind !== 'text') {
-      if (core.sendingFiles.has(message.id)) continue;
+      // Déjà déposé dans le relais : le destinataire le télécharge de là, on ne l'envoie pas deux fois.
+      if (core.sendingFiles.has(message.id) || getUpload(message.id, contact)?.state === 'uploaded') continue;
       // Réparation : une ancienne version pouvait annoncer une taille plus grande que le fichier,
       // et l'envoi échouait en boucle en arrivant au bout du fichier.
       const realSize = message.file_uri ? storedSize(message.file_uri) : 0;

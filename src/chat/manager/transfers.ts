@@ -9,6 +9,7 @@ import {
   finishIncomingFile,
   getMessage,
   getPendingIncomingBytes,
+  getRelayIncoming,
   setContactProfileField,
   setConversationSetting,
   setFileSize,
@@ -151,6 +152,8 @@ export function receiveFileOffer(core: ChatCore, contact: string, data: Payload)
   if (!isCount(size) || size > MAX_FILE_BYTES) return;
   if (typeof data.key !== 'string' || from_base64(data.key).length !== FILE_KEY_BYTES) return;
 
+  // Le même fichier arrive par le relais : on ne le reçoit pas une deuxième fois en direct.
+  if (getRelayIncoming(data.id, contact)) return;
   const existing = getMessage(data.id, contact);
   if (existing?.status === 'refused') {
     peer.send({ type: 'file-refused', id: data.id });

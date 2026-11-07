@@ -52,7 +52,18 @@ Elles sont versionnées dans `database.rules.json` : tout est fermé par défaut
 - `GET /api/inbox` → `{ v, serverKey }`. `POST /api/inbox` `{ v: 1, publicKey, at, proof }` → `{ v, inboxId }` : enregistre la boîte, ou la reprend après une réinstallation (même clé, nouveau compte anonyme). Réponses : `400` corps ou date invalide, `401`, `403` preuve fausse, `429` (10 par minute et par compte).
 - `POST /api/pair-request` `{ v: 1, inboxId, sealed }` : dépose la demande et envoie un push `{ type: 'pair', v }` au topic du destinataire (gardé 7 jours). Réponses : `204`, `400`, `401`, `413` demande trop grosse, `429` (5 par minute et par expéditeur, 10 par minute et par boîte), `507` boîte pleine (50 demandes en attente).
 - `GET /api/cleanup` : tâche quotidienne à 4 h UTC (`server/vercel.json`, gratuite sur le plan Hobby). Elle supprime les demandes de plus de 7 jours et les compteurs périmés, rien d'autre : l'appeler à la main est sans danger.
-- `turn.js` (lot 4) et le relais de fichiers (lot 7) viendront avec leur lot.
+- Pas de serveur TURN : les offres gratuites sans carte bancaire n'existent pas ou ne marchent pas. Sans connexion directe, les messages passent chiffrés dans les pushs, et les fichiers par le relais ci-dessous.
+
+## Relais des fichiers (lot 7)
+
+Quand le destinataire n'est pas joignable en direct depuis quelques secondes, l'app dépose le fichier chiffré dans la Realtime Database (gratuite, sans carte) :
+
+- `POST /api/relay` `{ v: 1, size }` → `{ v, id, chunks, chunkBytes }`. Réserve l'envoi et crée `relay/{id}/meta` = `{ owner, size, chunks, at }`. Réponses : `400`, `401`, `413` (plus de 25 Mo : le fichier attend une connexion directe), `429` (20 envois par jour et par compte), `507` (budget du mois atteint).
+- L'app écrit ensuite elle-même `relay/{id}/chunks/{n}` : 512 Ko en clair par morceau, chiffrés (XChaCha20-Poly1305, clé du fichier, contexte `pear-relay-v1.{id}.{n}`), puis en base64. Les règles n'autorisent que le propriétaire de la réservation, 100 morceaux au plus, 700 000 caractères par morceau, sans réécriture.
+- La clé du fichier ne voyage que dans un message chiffré par le ratchet (événement `relay`), envoyé une fois tout le fichier en ligne. Le destinataire télécharge, déchiffre, puis supprime `relay/{id}` ; l'identifiant (128 bits aléatoires) sert de droit de lecture et de suppression.
+- `relayUsage/{AAAA-MM}` compte les octets réservés dans le mois : au-delà de 6 Go, le relais s'arrête. Le plafond gratuit de téléchargement (10 Go par mois) est partagé avec la signalisation, qui doit toujours passer.
+- La tâche quotidienne supprime les fichiers de plus de 7 jours, et ceux de plus de 24 h jamais envoyés en entier.
+- Tests : `node server/test/relay.test.js`.
 
 **Tests des abus**, sans Firebase : `node server/test/pair.test.js` (aussi lancé par la CI). Cas couverts :
 

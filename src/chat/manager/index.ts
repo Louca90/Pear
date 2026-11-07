@@ -4,9 +4,10 @@ import { randombytes_buf, to_base64 } from 'react-native-libsodium';
 import { Identity } from '../../crypto/pairing';
 import { PeerStatus, RouteType } from '../../network/peer';
 import { Contact, loadContacts, loadOrCreateIdentity } from '../../storage';
-import { addMessage, deleteMessage, editMessage, getMessage, markConversationRead, setConversationSetting, setReaction } from '../database';
+import { addMessage, deleteMessage, deleteRelayIncoming, editMessage, getMessage, getRelayIncoming, markConversationRead, setConversationSetting, setIncomingStatus, setReaction } from '../database';
 import { clearMessageNotification } from '../notifications';
 
+import { deleteRelay } from '../../network/relay';
 import { unpublishToken } from '../../network/tokens';
 import { log } from '../../log';
 
@@ -18,6 +19,7 @@ import { acceptFile, closeIncomingFiles, dropIncomingFile, refuseFile, sendFile 
 import { AFTER_SEND_MS, PickedFile, WAKE_CHECK_MS } from './types';
 import { contactForTag, receivePush } from './incoming';
 import { reconcile } from './strategy';
+import { downloadRelayFile, relayPending } from './relay';
 import { acceptPairing, blockPairing, declinePairing, requestPairing, startPairing, syncPairRequests } from './pairing';
 import { deliverNow, settlePushAcks, wakeIfNeeded } from './wake';
 import { notifyMessage } from './notify';
@@ -45,7 +47,10 @@ class ChatManager extends ChatCore {
     if (!this.wakeTimer) {
       this.wakeTimer = setInterval(() => {
         reconcile(this);
-        this.names.forEach((_, contact) => wakeIfNeeded(this, contact));
+        this.names.forEach((_, contact) => {
+          wakeIfNeeded(this, contact);
+          relayPending(this, contact);
+        });
       }, WAKE_CHECK_MS);
     }
     this.markOpenConversationRead();
@@ -277,10 +282,23 @@ class ChatManager extends ChatCore {
 
   // Un fichier trop lourd attend notre accord avant d'être reçu.
   acceptFile(contact: string, id: string) {
+    // Un fichier qui attend dans le relais se télécharge de là ; sinon il viendra en direct.
+    if (getRelayIncoming(id, contact)) {
+      setIncomingStatus(id, contact, 'offered', 'receiving');
+      downloadRelayFile(this, contact, id).catch((e) => log.warn('réception par le relais', e));
+      this.notify();
+      return;
+    }
     acceptFile(this, contact, id);
   }
 
   refuseFile(contact: string, id: string) {
+    // Refusé alors qu'il attendait dans le relais : on le supprime tout de suite du serveur.
+    const relayed = getRelayIncoming(id, contact);
+    if (relayed) {
+      deleteRelay(relayed.file_id).catch((e) => log.warn('suppression du relais', e));
+      deleteRelayIncoming(id, contact);
+    }
     refuseFile(this, contact, id);
   }
 

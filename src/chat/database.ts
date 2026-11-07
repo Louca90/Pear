@@ -321,6 +321,53 @@ export function getNotificationMessages(contact: string): Message[] {
     .reverse();
 }
 
+// --- Relais des fichiers (lot 7) ---
+
+// Un envoi par le relais : reprend au dernier morceau envoyé, même après fermeture de l'app.
+export type RelayUpload = { file_id: string; message_id: string; contact: string; parts_done: number; state: 'uploading' | 'uploaded'; size: number };
+
+export function getUpload(messageId: string, contact: string): RelayUpload | null {
+  return db().getFirstSync<RelayUpload>('SELECT file_id, message_id, contact, parts_done, state, size FROM uploads WHERE message_id = ? AND contact = ?', messageId, contact);
+}
+
+export function saveUpload(upload: RelayUpload) {
+  db().runSync(
+    'INSERT OR REPLACE INTO uploads (file_id, message_id, contact, parts_done, state, size, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    upload.file_id,
+    upload.message_id,
+    upload.contact,
+    upload.parts_done,
+    upload.state,
+    upload.size,
+    Date.now(),
+  );
+}
+
+export function deleteUpload(messageId: string, contact: string) {
+  db().runSync('DELETE FROM uploads WHERE message_id = ? AND contact = ?', messageId, contact);
+}
+
+// Un fichier qui attend dans le relais, à télécharger.
+export type RelayIncoming = { file_id: string; contact: string; message_id: string; size: number };
+
+export function addRelayIncoming(incoming: RelayIncoming) {
+  db().runSync(
+    "INSERT OR REPLACE INTO relay_incoming (file_id, contact, message_id, state, size) VALUES (?, ?, ?, 'pending', ?)",
+    incoming.file_id,
+    incoming.contact,
+    incoming.message_id,
+    incoming.size,
+  );
+}
+
+export function getRelayIncoming(messageId: string, contact: string): RelayIncoming | null {
+  return db().getFirstSync<RelayIncoming>('SELECT file_id, contact, message_id, size FROM relay_incoming WHERE message_id = ? AND contact = ?', messageId, contact);
+}
+
+export function deleteRelayIncoming(messageId: string, contact: string) {
+  db().runSync('DELETE FROM relay_incoming WHERE message_id = ? AND contact = ?', messageId, contact);
+}
+
 export function getPinnedContacts(): Set<string> {
   return new Set(db().getAllSync<{ public_key: string }>('SELECT public_key FROM contacts WHERE pinned = 1').map((row) => row.public_key));
 }

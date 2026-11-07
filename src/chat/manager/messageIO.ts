@@ -3,6 +3,7 @@ import { AppState } from 'react-native';
 import {
   activateContact,
   addMessage,
+  deleteUpload,
   deleteMessage,
   deleteOldAvatars,
   editMessage,
@@ -20,6 +21,7 @@ import { CHUNK_BYTES, isValidFileId } from '../files';
 import { ChatCore } from './core';
 import { notifyMessage } from './notify';
 import { addSystemMessage, flush } from './outbox';
+import { receiveRelayOffer } from './relay';
 import { decryptIncoming, receiveRekey, receiveRekeyAck } from './sessions';
 import { queuePushAck } from './wake';
 import { dropIncomingFile, receiveFileOffer, setProgress, streamFile } from './transfers';
@@ -58,7 +60,10 @@ function acknowledge(core: ChatCore, contact: string, ack: { id?: string; eventI
 // Accusés arrivés par push (l'autre téléphone a reçu nos messages sans connexion directe).
 function receiveAcks(core: ChatCore, contact: string, data: Payload) {
   const strings = (value: unknown) => (Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string').slice(0, 100) : []);
-  for (const id of strings(data.ids)) setStatus(id, contact, 'delivered');
+  for (const id of strings(data.ids)) {
+    setStatus(id, contact, 'delivered');
+    deleteUpload(id, contact);
+  }
   for (const id of strings(data.events)) removeOutboxEvent(id, contact);
   core.notify();
 }
@@ -82,6 +87,9 @@ function receiveEvent(core: ChatCore, contact: string, data: Payload) {
     if (original?.kind === 'image' || original?.kind === 'video') {
       addSystemMessage(contact, 0, `saved:${original.kind}:${original.mine === 1 ? 'yours' : 'theirs'}`, data.eventId.slice(0, MAX_SAVED_ID_LENGTH));
     }
+  } else if (data.action === 'relay') {
+    // Un fichier qui attend dans le relais (l'expéditeur ne nous joignait pas en direct).
+    receiveRelayOffer(core, contact, data);
   } else if (data.action === 'accepted') {
     // Notre demande de pairing est acceptée : le contact passe d'« en attente » à actif.
     if (activateContact(contact)) core.contactsChanged();
@@ -145,6 +153,7 @@ export function receive(core: ChatCore, contact: string, received: unknown) {
     removeOutboxEvent(data.id, contact);
   } else if ((data.type === 'ack' || data.type === 'read') && typeof data.id === 'string') {
     setStatus(data.id, contact, data.type === 'read' ? 'read' : 'delivered');
+    deleteUpload(data.id, contact);
     core.notify();
   } else if (data.type === 'token' && typeof data.token === 'string' && data.token.length <= 4096) {
     setContactToken(contact, data.token);
