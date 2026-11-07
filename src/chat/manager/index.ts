@@ -10,19 +10,20 @@ import { clearMessageNotification } from '../notifications';
 import { unpublishToken } from '../../network/tokens';
 import { log } from '../../log';
 
-import { connect, publishMyToken, retryAll, watch } from './connections';
+import { publishMyToken, retryAll, watch } from './connections';
 import { ChatCore } from './core';
 import { addSystemMessage, flush, sendEvent } from './outbox';
 import { getMyProfile, saveProfile, shareProfile } from './profile';
 import { acceptFile, closeIncomingFiles, dropIncomingFile, refuseFile, sendFile } from './transfers';
-import { PickedFile, WAKE_CHECK_MS } from './types';
+import { AFTER_SEND_MS, PickedFile, WAKE_CHECK_MS } from './types';
 import { contactForTag, receivePush } from './incoming';
+import { reconcile } from './strategy';
 import { settlePushAcks, wakeIfNeeded } from './wake';
 
 export { MAX_PROFILE_NAME_LENGTH, MAX_TEXT_LENGTH } from './types';
 export type { PickedFile } from './types';
 
-// Garde une connexion par contact tant que l'app est ouverte, et prévient les écrans à chaque changement.
+// Garde les connexions utiles tant que l'app est ouverte (voir strategy.ts), et prévient les écrans à chaque changement.
 class ChatManager extends ChatCore {
   // Ouvre les connexions des nouveaux contacts et ferme celles des contacts supprimés.
   sync(identity: Identity, contacts: Contact[]) {
@@ -38,11 +39,12 @@ class ChatManager extends ChatCore {
       }
     }
     publishMyToken(this);
-    for (const key of this.names.keys()) {
-      if (!this.links.has(key)) connect(this, identity, key);
-    }
+    reconcile(this);
     if (!this.wakeTimer) {
-      this.wakeTimer = setInterval(() => this.links.forEach((_, contact) => wakeIfNeeded(this, contact)), WAKE_CHECK_MS);
+      this.wakeTimer = setInterval(() => {
+        reconcile(this);
+        this.names.forEach((_, contact) => wakeIfNeeded(this, contact));
+      }, WAKE_CHECK_MS);
     }
     this.markOpenConversationRead();
     this.names.forEach((_, contact) => shareProfile(this, contact));
@@ -59,6 +61,12 @@ class ChatManager extends ChatCore {
   async handlePush(data: { [key: string]: unknown } | undefined) {
     receivePush(this, data);
     await settlePushAcks(this);
+  }
+
+  // Réveil en arrière-plan : se connecter à ces contacts-là, le temps de récupérer ce qui attend.
+  connectForWake(contacts: string[]) {
+    contacts.forEach((contact) => this.keepConnected(contact, AFTER_SEND_MS));
+    reconcile(this);
   }
 
   // Le contact visé par un réveil, ou null pour un réveil d'une ancienne version (tous les contacts).
@@ -101,6 +109,7 @@ class ChatManager extends ChatCore {
   // La conversation affichée à l'écran : ses messages comptent comme lus.
   setOpenConversation(contact: string | null) {
     this.openConversation = contact;
+    reconcile(this);
     this.atBottom = true;
     this.markOpenConversationRead();
     this.notify();
@@ -124,13 +133,21 @@ class ChatManager extends ChatCore {
       created_at: Date.now(),
       reply_to: replyTo,
     });
+    this.afterSend(contact);
     flush(this, contact);
     wakeIfNeeded(this, contact);
     this.notify();
   }
 
+  // Un envoi garde (ou ouvre) la connexion un moment : la réponse arrive souvent vite.
+  private afterSend(contact: string) {
+    this.keepConnected(contact, AFTER_SEND_MS);
+    reconcile(this);
+  }
+
   edit(contact: string, id: string, text: string) {
     editMessage(id, contact, 1, text);
+    this.afterSend(contact);
     sendEvent(this, contact, { action: 'edit', id, text });
   }
 
@@ -138,6 +155,7 @@ class ChatManager extends ChatCore {
   react(contact: string, id: string, emoji: string) {
     const next = getMessage(id, contact)?.my_reaction === emoji ? null : emoji;
     setReaction(id, contact, 'my_reaction', next);
+    this.afterSend(contact);
     sendEvent(this, contact, { action: 'react', id, emoji: next });
   }
 
@@ -195,6 +213,7 @@ class ChatManager extends ChatCore {
   }
 
   sendFile(contact: string, file: PickedFile) {
+    this.afterSend(contact);
     return sendFile(this, contact, file);
   }
 

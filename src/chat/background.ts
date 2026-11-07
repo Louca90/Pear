@@ -24,7 +24,8 @@ export async function handleWake(message: { data?: { [key: string]: unknown } })
   }
 
   const target = chat.contactForWake(message.data);
-  chat.sync(identity, target ? contacts.filter((contact) => contact.publicKey === target) : contacts);
+  chat.sync(identity, contacts);
+  chat.connectForWake(target ? [target] : contacts.map((contact) => contact.publicKey));
 
   const start = Date.now();
   while (Date.now() - start < BACKGROUND_MAX_AWAKE_MS) {

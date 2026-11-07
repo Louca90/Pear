@@ -44,6 +44,10 @@ export type PickedFile = {
   kind: MessageKind;
 };
 
+// Après un envoi ou une réception, la connexion reste ouverte un moment : la réponse arrive souvent vite.
+export const AFTER_SEND_MS = 45 * 1000;
+export const AFTER_ACTIVITY_MS = 2 * 60 * 1000;
+
 // Ce qui arrive de l'autre téléphone n'est jamais supposé valide : chaque champ est vérifié avant usage.
 export type Payload = Record<string, unknown>;
 

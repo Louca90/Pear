@@ -246,6 +246,15 @@ export function replaceContactRows(contacts: ContactRow[]) {
   });
 }
 
+export function getPinnedContacts(): Set<string> {
+  return new Set(db().getAllSync<{ public_key: string }>('SELECT public_key FROM contacts WHERE pinned = 1').map((row) => row.public_key));
+}
+
+// Les contacts avec qui un message a été échangé depuis `since`.
+export function getRecentContacts(since: number): Set<string> {
+  return new Set(db().getAllSync<{ contact: string }>('SELECT DISTINCT contact FROM messages WHERE created_at > ?', since).map((row) => row.contact));
+}
+
 // États du double ratchet, déjà chiffrés par l'appelant (src/storage.ts).
 export function getRatchetRow(contact: string): string | null {
   return db().getFirstSync<{ state: string }>('SELECT state FROM ratchets WHERE contact = ?', contact)?.state ?? null;

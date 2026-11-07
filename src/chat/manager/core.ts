@@ -14,6 +14,8 @@ export class ChatCore {
   // Messages et événements déjà partis par push : on ne les renvoie pas tant que l'app tourne. Ils
   // repartiront en direct à la prochaine connexion (l'autre téléphone ignore les doublons).
   pushed = new Set<string>();
+  // Jusqu'à quand garder la connexion avec chaque contact (envoi, réception récente).
+  keepUntil = new Map<string, number>();
   // Dernière lecture du token publié par chaque contact.
   tokenFetches = new Map<string, number>();
   // Accusés de réception à renvoyer par push, par contact.
@@ -48,6 +50,11 @@ export class ChatCore {
   };
 
   getVersion = () => this.version;
+
+  // Garde (ou fait ouvrir, au prochain tri des connexions) la connexion avec ce contact pendant `ms`.
+  keepConnected(contact: string, ms: number) {
+    this.keepUntil.set(contact, Math.max(this.keepUntil.get(contact) ?? 0, Date.now() + ms));
+  }
 
   // Les messages reçus ne comptent comme lus que si on regarde les derniers, pas en étant remonté.
   isReading(contact: string) {

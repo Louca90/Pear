@@ -24,7 +24,7 @@ import { addSystemMessage, flush } from './outbox';
 import { loadOrCreateRatchet } from './secure';
 import { queuePushAck } from './wake';
 import { dropIncomingFile, receiveFileOffer, setProgress, streamFile } from './transfers';
-import { asPayload, isCount, isSupportedVersion, UPDATE_REQUIRED, MAX_PROFILE_NAME_LENGTH, MAX_REACTION_LENGTH, MAX_SAVED_ID_LENGTH, MAX_TEXT_LENGTH, Payload } from './types';
+import { AFTER_ACTIVITY_MS, asPayload, isCount, isSupportedVersion, UPDATE_REQUIRED, MAX_PROFILE_NAME_LENGTH, MAX_REACTION_LENGTH, MAX_SAVED_ID_LENGTH, MAX_TEXT_LENGTH, Payload } from './types';
 import { log } from '../../log';
 
 // L'état n'est enregistré que si le message est authentique : un message forgé ne change rien.
@@ -116,6 +116,7 @@ export function receive(core: ChatCore, contact: string, received: unknown) {
   const data = asPayload(received);
   if (!data) return;
   core.lastActivity = Date.now();
+  if (data.type !== 'heartbeat') core.keepConnected(contact, AFTER_ACTIVITY_MS);
   if (data.type === 'ratchet') {
     const { type: _type, ...envelope } = data;
     receiveRatchet(core, contact, envelope);

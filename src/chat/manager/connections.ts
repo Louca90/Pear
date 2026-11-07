@@ -10,7 +10,7 @@ import { receivePush } from './incoming';
 import { receive } from './messageIO';
 import { flush } from './outbox';
 import { receiveChunk } from './transfers';
-import { Link, OFFLINE_DELAY_MS } from './types';
+import { AFTER_ACTIVITY_MS, Link, OFFLINE_DELAY_MS } from './types';
 import { shareToken } from './wake';
 import { log } from '../../log';
 
@@ -42,6 +42,8 @@ export function connect(core: ChatCore, identity: Identity, contact: string) {
       },
       onMessage: (message) => receive(core, contact, message),
       onBytes: (bytes) => {
+        // Un fichier en cours de réception garde la connexion ouverte.
+        core.keepConnected(contact, AFTER_ACTIVITY_MS);
         core.writeQueue = core.writeQueue
           .then(() => receiveChunk(core, contact, bytes))
           .catch((e) => log.warn('écriture du fichier', e));
