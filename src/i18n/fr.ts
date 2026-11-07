@@ -388,4 +388,16 @@ export const fr = {
     bloquerQuestion: 'Bloquer ce contact ?',
     bloquerAide: 'Il ne pourra plus vous envoyer de messages, et il le saura. Vous pourrez le débloquer quand vous voulez.',
   },
+  notifs: {
+    titre: 'Notifications et autorisations',
+    parType: 'Me prévenir pour',
+    parTypeAide: 'Ce qui est coupé arrive quand même dans la conversation, sans notification.',
+    messages: 'Messages',
+    photos: 'Photos',
+    videos: 'Vidéos',
+    vocaux: 'Vocaux',
+    fichiers: 'Fichiers',
+    telephone: 'Téléphone',
+    reglagesTelephone: 'Autorisations du téléphone',
+  },
 };

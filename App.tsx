@@ -20,6 +20,7 @@ import { ContactsScreen } from './src/screens/ContactsScreen';
 import { CameraScreen } from './src/screens/CameraScreen';
 import { ChatScreen } from './src/screens/chat/ChatScreen';
 import { ContactScreen } from './src/screens/ContactScreen';
+import { NotificationSettingsScreen } from './src/screens/NotificationSettingsScreen';
 import { CustomizeScreen } from './src/screens/CustomizeScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { OnboardingScreen, OnboardingStep } from './src/onboarding/OnboardingScreen';
@@ -51,6 +52,7 @@ type Route =
   | { name: 'blocked' }
   | { name: 'requests' }
   | { name: 'customize'; publicKey: string }
+  | { name: 'notifications'; publicKey: string }
   // name : le pseudo lu dans le QR code ou le lien, proposé comme nom du contact.
   | { name: 'contact'; publicKey: string; suggestedName?: string | null }
   | { name: 'chat'; publicKey: string };
@@ -213,6 +215,7 @@ function App() {
     if (current.name === 'diagnostic' || current.name === 'blocked') return { name: 'settings' };
     if (current.name === 'settings') return { name: 'profile' };
     if (current.name === 'customize') return { name: 'chat', publicKey: current.publicKey };
+    if (current.name === 'notifications') return { name: 'customize', publicKey: current.publicKey };
     if (current.name === 'contact' && isSaved(current.publicKey)) return { name: 'chat', publicKey: current.publicKey };
     return { name: 'home' };
   };
@@ -465,6 +468,17 @@ function App() {
           name={contacts.find((contact) => contact.publicKey === publicKey)?.name ?? t('app.contact')}
           onBack={() => setRoute({ name: 'chat', publicKey })}
           onInfo={() => setRoute({ name: 'contact', publicKey })}
+          onNotifications={() => setRoute({ name: 'notifications', publicKey })}
+        />
+      );
+    }
+    if (current.name === 'notifications') {
+      const publicKey = current.publicKey;
+      return (
+        <NotificationSettingsScreen
+          contactKey={publicKey}
+          name={contacts.find((contact) => contact.publicKey === publicKey)?.name ?? t('app.contact')}
+          onBack={() => setRoute({ name: 'customize', publicKey })}
         />
       );
     }

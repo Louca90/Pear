@@ -439,6 +439,19 @@ export function setSetting(key: string, value: string | null) {
   db().runSync('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', key, value);
 }
 
+// Types de messages dont la conversation ne prévient plus (réglage local, par conversation).
+export function getMutedKinds(contact: string): MessageKind[] {
+  try {
+    return JSON.parse(getSetting(`notif_muted.${contact}`) ?? '[]');
+  } catch {
+    return [];
+  }
+}
+
+export function setMutedKinds(contact: string, kinds: MessageKind[]) {
+  setSetting(`notif_muted.${contact}`, kinds.length ? JSON.stringify(kinds) : null);
+}
+
 export function getConversationSettings(contact: string): ConversationSettings {
   return (
     db().getFirstSync<ConversationSettings>('SELECT my_bubble, their_bubble, wallpaper_uri FROM conversation_settings WHERE contact = ?', contact) ?? {
@@ -576,5 +589,6 @@ export function deleteMessages(contact: string) {
   db().runSync('DELETE FROM contact_tokens WHERE contact = ?', contact);
   db().runSync('DELETE FROM outbox WHERE contact = ?', contact);
   db().runSync('DELETE FROM conversation_settings WHERE contact = ?', contact);
+  db().runSync('DELETE FROM settings WHERE key = ?', `notif_muted.${contact}`);
   db().runSync('DELETE FROM contact_profiles WHERE contact = ?', contact);
 }

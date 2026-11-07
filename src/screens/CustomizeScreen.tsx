@@ -1,5 +1,5 @@
 import { ReactNode, useState, useSyncExternalStore } from 'react';
-import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { File, Paths } from 'expo-file-system';
 import { Bell, Check, ChevronRight, ImageMinus, Images, LucideIcon, User } from 'lucide-react-native';
 
@@ -64,9 +64,10 @@ type Props = {
   name: string;
   onBack: () => void;
   onInfo: () => void;
+  onNotifications: () => void;
 };
 
-export function CustomizeScreen({ contactKey, name, onBack, onInfo }: Props) {
+export function CustomizeScreen({ contactKey, name, onBack, onInfo, onNotifications }: Props) {
   const colors = useColors();
   const styles = useStyles();
   const [busy, setBusy] = useState(false);
@@ -142,7 +143,7 @@ export function CustomizeScreen({ contactKey, name, onBack, onInfo }: Props) {
 
         <Section title={t('perso.conversation')}>
           <SettingRow icon={User} label={t('perso.infosContact')} onPress={onInfo} />
-          <SettingRow icon={Bell} label={t('commun.notifications')} onPress={() => Linking.openSettings()} />
+          <SettingRow icon={Bell} label={t('notifs.titre')} onPress={onNotifications} />
         </Section>
       </ScrollView>
       {galleryOpen && <MediaPicker single onPick={applyWallpaper} onClose={() => setGalleryOpen(false)} />}
