@@ -31,8 +31,6 @@ const SHUTTER_SIZE = 84;
 const PHOTO_QUALITY = 0.9;
 const PHOTO_MAX_SIZE = 2048;
 const PHOTO_JPEG_QUALITY = 82;
-const PHOTO_MAX_SIZE = 2048;
-const PHOTO_JPEG_QUALITY = 82;
 const SHEET_OPEN_MS = 260;
 const SHEET_CLOSE_MS = 200;
 const DOUBLE_TAP_MS = 300;
@@ -279,7 +277,7 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
       const photo = await camera.current?.takePictureAsync({ quality: PHOTO_QUALITY });
       if (!photo?.uri) return;
       // Réduite à 2048 px : Pear n'est pas une app photo, une image légère part plus vite (et passe le relais).
-      const small = new File(Paths.cache, ).uri;
+      const small = new File(Paths.cache, `photo-${Date.now()}.jpg`).uri;
       const uri = await resizeImage(photo.uri, small, PHOTO_MAX_SIZE, PHOTO_JPEG_QUALITY).catch((e) => {
         log.warn('réduction de la photo', e);
         return photo.uri;
