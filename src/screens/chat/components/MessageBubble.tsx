@@ -12,7 +12,7 @@ import { ReplyQuote } from './ReplyQuote';
 import { t } from '../../../i18n';
 import { SystemRow } from './SystemRow';
 import { VoiceContent } from './VoiceContent';
-import { LONG_PRESS_MS, SWIPE_REPLY, SWIPE_START, TEXT_LINE_HEIGHT } from '../constants';
+import { LIKE, LONG_PRESS_MS, SWIPE_REPLY, SWIPE_START, TEXT_LINE_HEIGHT } from '../constants';
 import { isBareMedia, isMediaDeleted } from '../format';
 import { LikeBurst, useReactionAppear } from '../../../components/LikeAnimation';
 import { useDoubleTap } from '../hooks/useDoubleTap';
@@ -47,6 +47,9 @@ type BubbleProps = {
   position?: GroupPosition;
   // Photo du contact, à côté du dernier message reçu d'un groupe.
   avatar?: string | null;
+  // Faux dans la sélection : la bulle se place exactement là où elle était, sans marge.
+  spaced?: boolean;
+  onShowReactions?: (message: Message) => void;
 };
 
 // Coins des bulles : grands partout, petits côté auteur là où la bulle touche sa voisine du groupe.
@@ -72,7 +75,7 @@ export function markMessagesShown(ids: string[]) {
   for (const id of ids) shownIds.add(id);
 }
 
-export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, onOpenFile, onPrepareFile, onAcceptFile, onRefuseFile, onSelect, onDoubleTap, onReply, onJump, fit, position, avatar }: BubbleProps) {
+export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, onOpenFile, onPrepareFile, onAcceptFile, onRefuseFile, onSelect, onDoubleTap, onReply, onJump, fit, position, avatar, spaced = true, onShowReactions }: BubbleProps) {
   const styles = useStyles();
   const colors = useColors();
   const container = useRef<ViewRef>(null);
@@ -112,7 +115,8 @@ export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, on
   const press = useDoubleTap(
     onDoubleTap &&
       (() => {
-        setBurst(Date.now());
+        // Le double appui met le cœur, puis l'enlève : le petit cœur ne s'envole qu'à l'ajout.
+        if (message.my_reaction !== LIKE) setBurst(Date.now());
         onDoubleTap(message);
       }),
   );
@@ -136,7 +140,7 @@ export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, on
   const place = position ?? 'single';
   const endsGroup = place === 'last' || place === 'single';
   // Espace avec la bulle du dessus : collée dans un groupe, aérée entre deux groupes.
-  const spacingTop = position ? { marginTop: place === 'middle' || place === 'last' ? GROUP_GAP : BETWEEN_GROUPS } : null;
+  const spacingTop = position && spaced ? { marginTop: place === 'middle' || place === 'last' ? GROUP_GAP : BETWEEN_GROUPS } : null;
 
   return (
     <View
@@ -205,10 +209,12 @@ export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, on
           )}
         </Pressable>
         {badge.shown && (
-          <Animated.View style={[styles.reactions, badge.style]}>
-            {lastReactions.current.map((emoji, index) => (
-              <Text key={index} style={styles.reactionEmoji}>{emoji}</Text>
-            ))}
+          <Animated.View style={badge.style}>
+            <Pressable onPress={() => onShowReactions?.(message)} disabled={!onShowReactions} hitSlop={6} style={styles.reactions} accessibilityLabel={t('reactions.titre')}>
+              {lastReactions.current.map((emoji, index) => (
+                <Text key={index} style={styles.reactionEmoji}>{emoji}</Text>
+              ))}
+            </Pressable>
           </Animated.View>
         )}
         <LikeBurst token={burst} style={mine ? styles.burstMine : styles.burstTheirs} />

@@ -444,4 +444,8 @@ export const fr = {
     supprimerAide: '{taille} libérés. Les messages restent, les photos, vidéos, vocaux et fichiers sont supprimés de ce téléphone.',
     mediaSupprime: 'Média supprimé',
   },
+  reactions: {
+    titre: 'Réactions',
+    retirer: 'Appuyez pour retirer',
+  },
 };

@@ -169,6 +169,14 @@ const MIGRATIONS: Migration[] = [
     version: 9,
     up: (db) => addColumn(db, 'messages', 'conn_session', 'INTEGER'),
   },
+  {
+    // Qui a réagi et quand : l'heure de chaque réaction.
+    version: 10,
+    up: (db) => {
+      addColumn(db, 'messages', 'my_reaction_at', 'INTEGER');
+      addColumn(db, 'messages', 'their_reaction_at', 'INTEGER');
+    },
+  },
 ];
 
 export const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

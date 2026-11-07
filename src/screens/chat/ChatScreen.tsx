@@ -10,7 +10,7 @@ import { Copy, Download, Forward, MessageCircle, Pencil, Pin, PinOff, Reply, Tra
 
 import { getContactProfile, getContactRows, getConversationSettings, getMessages, getPeerState, getPinnedMessages, isBlocked, Message } from '../../chat/database';
 import { exportCopy, formatSize, MAX_FILE_BYTES, saveToGallery, videoThumbnail } from '../../chat/files';
-import { groupPosition } from '../../chat/grouping';
+import { GroupPosition, groupPosition } from '../../chat/grouping';
 import { chat, PickedFile } from '../../chat/manager';
 import { showDialog } from '../../components/dialog';
 import { ContactPickerSheet } from '../../components/ContactPickerSheet';
@@ -27,6 +27,7 @@ import { Bubble, markMessagesShown } from './components/MessageBubble';
 import { MessageSelection } from './components/MessageSelection';
 import { NewMessagesButton } from './components/NewMessagesButton';
 import { PinnedBanner } from './components/PinnedBanner';
+import { ReactionsSheet } from './components/ReactionsSheet';
 import { Toast } from './components/Toast';
 import { JUMP_PULSE_DELAY_MS, LIKE } from './constants';
 import { useChatScroll } from './hooks/useChatScroll';
@@ -57,8 +58,9 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [toast, setToast] = useState<{ text: string; token: number } | null>(null);
   const [forwarding, setForwarding] = useState<Message | null>(null);
+  const [showingReactions, setShowingReactions] = useState<Message | null>(null);
   const [viewing, setViewing] = useState<Viewing | null>(null);
-  const [selection, setSelection] = useState<{ message: Message; rect: Rect; origin: { y: number; height: number }; clip: { top: number; bottom: number } } | null>(null);
+  const [selection, setSelection] = useState<{ message: Message; rect: Rect; origin: { y: number; height: number }; clip: { top: number; bottom: number }; position: GroupPosition } | null>(null);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [editing, setEditing] = useState<Message | null>(null);
   const blurTarget = useRef<ViewRef>(null);
@@ -114,18 +116,13 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
       measure((rect) =>
         root.current?.measureInWindow((_x, y, _width, height) =>
           listArea.current?.measureInWindow((_listX, listY, _listWidth, listHeight) =>
-            setSelection({ message, rect, origin: { y, height }, clip: { top: listY, bottom: listY + listHeight } }),
+            setSelection({ message, rect, origin: { y, height }, clip: { top: listY, bottom: listY + listHeight }, position: groupPosition(messages, Math.max(0, messages.findIndex(({ id }) => id === message.id))) }),
           ),
         ),
       );
-    if (!Keyboard.isVisible()) return open();
-    // Le clavier qui se ferme fait descendre toute la conversation : on attend qu'il soit fermé et que la
-    // liste soit posée, sinon l'animation partirait de l'ancienne position de la bulle.
-    const subscription = Keyboard.addListener('keyboardDidHide', () => {
-      subscription.remove();
-      requestAnimationFrame(() => requestAnimationFrame(open));
-    });
-    Keyboard.dismiss();
+    // Clavier ouvert : il reste ouvert, la sélection s'ouvre tout de suite au-dessus de lui (sans
+    // attendre qu'il se ferme, ce qui faisait sauter la conversation).
+    open();
   };
 
   const send = () => {
@@ -169,9 +166,8 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
   };
 
   // Déjà liké : le double appui ne retire pas le like (on le retire depuis le menu des réactions).
-  const likeMessage = (message: Message) => {
-    if (message.my_reaction !== LIKE) chat.react(contactKey, message.id, LIKE);
-  };
+  // Double appui : met le cœur, ou l'enlève s'il y est déjà.
+  const likeMessage = (message: Message) => chat.react(contactKey, message.id, LIKE);
 
   const startReply = (message: Message) => {
     if (editing) setDraft('');
@@ -347,6 +343,7 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
                   onSelect={selectMessage}
                   onDoubleTap={likeMessage}
                   onReply={startReply}
+                  onShowReactions={setShowingReactions}
                 />
               )}
               contentContainerStyle={styles.list}
@@ -356,6 +353,14 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
           )}
           <NewMessagesButton count={scroll.newCount} onPress={scroll.scrollToBottom} />
           {toast && <Toast text={toast.text} token={toast.token} />}
+          {showingReactions && (
+            <ReactionsSheet
+              message={messages.find(({ id }) => id === showingReactions.id) ?? showingReactions}
+              name={name}
+              avatar={contactPhoto}
+              onClose={() => setShowingReactions(null)}
+            />
+          )}
           {forwarding && (
             <ContactPickerSheet
               title={t('transfert.titre')}
@@ -425,6 +430,8 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
           rect={selection.rect}
           origin={selection.origin}
           clip={selection.clip}
+          position={selection.position}
+          avatar={contactPhoto}
           blurTarget={blurTarget}
           actions={actionsFor(selection.message)}
           onReact={(emoji) => chat.react(contactKey, selection.message.id, emoji)}

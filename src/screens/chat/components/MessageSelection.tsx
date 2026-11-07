@@ -1,28 +1,35 @@
 import { RefObject, useEffect, useRef, useState } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { SmilePlus } from 'lucide-react-native';
-import { useBackInterceptor } from '../../../navigation/backInterceptors';
 
 import { Message } from '../../../chat/database';
 import { QUICK_REACTIONS } from '../../../chat/emojis';
-import { IconButton, useNavigationBarHeight } from '../../../components/ui';
+import { GroupPosition } from '../../../chat/grouping';
+import { IconButton } from '../../../components/ui';
+import { useBackInterceptor } from '../../../navigation/backInterceptors';
 import { createStyles, radius, spacing, useColors } from '../../../theme';
 
 import { EmojiPicker } from './EmojiPicker';
 import { Bubble } from './MessageBubble';
-import { ACTION_HEIGHT, REACTIONS_HEIGHT, SELECTION_CLOSE_MS, SELECTION_EASING, SELECTION_GAP, SELECTION_OPEN_MS, SELECTION_TOP, TEXT_LINE_HEIGHT } from '../constants';
+import { ACTION_HEIGHT, REACTIONS_HEIGHT, SELECTION_CLOSE_MS, SELECTION_EASING, SELECTION_GAP, SELECTION_OPEN_MS } from '../constants';
 import { Action, Palettes, Rect, ViewRef } from '../types';
 import { t } from '../../../i18n';
+
+// Grossissement léger du message soulevé.
+const LIFT_SCALE = 1.03;
 
 type SelectionProps = {
   message: Message;
   name: string;
   palettes: Palettes;
+  // La bulle telle qu'elle est dans la conversation : place dans son groupe et photo du contact.
+  position: GroupPosition;
+  avatar: string | null;
   rect: Rect;
   origin: { y: number; height: number };
-  // La zone de la conversation (entre la barre du haut et la saisie), en coordonnées de la fenêtre :
-  // le message n'en sort jamais, ni à la montée ni au retour.
+  // La zone de la conversation (entre la barre du haut et la saisie, au-dessus du clavier s'il est
+  // ouvert), en coordonnées de la fenêtre : le message, les réactions et les actions y restent.
   clip: { top: number; bottom: number };
   blurTarget: RefObject<ViewRef | null>;
   actions: Action[];
@@ -30,31 +37,29 @@ type SelectionProps = {
   onClose: () => void;
 };
 
-// Comme dans Google Messages : tout s'assombrit et se floute, le message monte et grossit,
-// avec les réactions au-dessus et les actions en dessous.
-export function MessageSelection({ message, name, palettes, rect, origin, clip, blurTarget, actions, onReact, onClose }: SelectionProps) {
+// Sélection d'un message : le fond se floute et s'assombrit, le message monte légèrement, les réactions
+// restent fixées au-dessus et les actions en dessous. Un message trop long s'affiche dans un aperçu à
+// hauteur limitée qu'on fait défiler (au lieu d'être replié). Toutes les animations passent par le
+// pilote natif : position, taille et fondus restent fluides, clavier ouvert ou non.
+export function MessageSelection({ message, name, palettes, position, avatar, rect, origin, clip, blurTarget, actions, onReact, onClose }: SelectionProps) {
   const colors = useColors();
   const styles = useStyles();
   const progress = useRef(new Animated.Value(0)).current;
   const [pickerOpen, setPickerOpen] = useState(false);
   const closing = useRef(false);
   const mine = message.mine === 1;
-  const bottom = useNavigationBarHeight();
 
-  // Le message redescend à sa place, puis l'action choisie s'exécute.
   const dismiss = useRef((after?: () => void) => {
     if (closing.current) return;
     closing.current = true;
-    // Une seule valeur, animée côté JavaScript, pilote tout : position, taille, repli du texte, fond et
-    // boutons restent synchrones jusqu'à la dernière image.
-    Animated.timing(progress, { toValue: 0, duration: SELECTION_CLOSE_MS, easing: SELECTION_EASING, useNativeDriver: false }).start(() => {
+    Animated.timing(progress, { toValue: 0, duration: SELECTION_CLOSE_MS, easing: SELECTION_EASING, useNativeDriver: true }).start(() => {
       onClose();
       after?.();
     });
   }).current;
 
   useEffect(() => {
-    Animated.timing(progress, { toValue: 1, duration: SELECTION_OPEN_MS, easing: SELECTION_EASING, useNativeDriver: false }).start();
+    Animated.timing(progress, { toValue: 1, duration: SELECTION_OPEN_MS, easing: SELECTION_EASING, useNativeDriver: true }).start();
   }, [progress]);
 
   // Le retour ferme la sélection sans quitter la conversation.
@@ -65,23 +70,24 @@ export function MessageSelection({ message, name, palettes, rect, origin, clip, 
     dismiss(() => onReact(emoji));
   };
 
-  // Le message se place pour laisser la place aux réactions et aux actions, sans sortir de l'écran.
+  // La place disponible, en coordonnées de cette vue : réactions au-dessus, actions en dessous.
+  const areaTop = clip.top - origin.y;
+  const areaBottom = clip.bottom - origin.y;
   const menuHeight = actions.length * ACTION_HEIGHT + spacing.sm * 2;
+  const previewTop = areaTop + spacing.sm + REACTIONS_HEIGHT + spacing.sm;
+  const previewBottom = areaBottom - spacing.sm - menuHeight - SELECTION_GAP;
+  const previewHeight = Math.max(ACTION_HEIGHT, Math.min(rect.height, previewBottom - previewTop));
+  const tooLong = rect.height > previewHeight;
   const startY = rect.y - origin.y;
-  // Un message trop long est raccourci ici seulement, pour que réactions et actions restent à l'écran.
-  const topLimit = SELECTION_TOP + REACTIONS_HEIGHT;
-  const maxHeight = Math.max(TEXT_LINE_HEIGHT * 2, origin.height - bottom - spacing.lg - menuHeight - SELECTION_GAP - topLimit);
-  const shownHeight = Math.min(rect.height, maxHeight);
-  const fit = rect.height > maxHeight ? { maxHeight, fullHeight: rect.height, progress } : undefined;
-  const lowest = origin.height - bottom - spacing.lg - menuHeight - SELECTION_GAP - shownHeight;
-  const targetY = Math.max(topLimit, Math.min(startY - spacing.sm, lowest));
+  const targetY = Math.max(previewTop, Math.min(startY, previewBottom - previewHeight));
   const edge = mine ? styles.alignEnd : styles.alignStart;
-  const clipTop = clip.top - origin.y;
 
   const appear = {
     opacity: progress,
-    transform: [{ scale: progress.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1] }) }],
+    transform: [{ scale: progress.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }) }],
   };
+
+  const bubble = <Bubble message={message} name={name} palettes={palettes} position={position} avatar={avatar} spaced={false} />;
 
   return (
     <View style={StyleSheet.absoluteFill}>
@@ -91,29 +97,36 @@ export function MessageSelection({ message, name, palettes, rect, origin, clip, 
       </Animated.View>
       <Pressable style={StyleSheet.absoluteFill} onPress={() => dismiss()} accessibilityLabel={t('commun.fermer')} />
 
-      <View pointerEvents="none" style={[styles.clip, { top: clipTop, height: clip.bottom - clip.top }]}>
+      {/* Le message reste dans la zone de la conversation pendant qu'il monte. */}
+      <View pointerEvents="box-none" style={[styles.clip, { top: areaTop, height: areaBottom - areaTop }]}>
         <Animated.View
+          pointerEvents={tooLong ? 'auto' : 'none'}
           style={[
             styles.selected,
             {
-              top: startY - clipTop,
-              left: spacing.md,
-              right: spacing.md,
+              top: startY - areaTop,
+              height: previewHeight,
               transform: [
                 { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [0, targetY - startY] }) },
-                { scale: progress.interpolate({ inputRange: [0, 1], outputRange: [1, 1.05] }) },
+                { scale: progress.interpolate({ inputRange: [0, 1], outputRange: [1, LIFT_SCALE] }) },
               ],
             },
           ]}
         >
-          <Bubble message={message} name={name} palettes={palettes} fit={fit} />
+          {tooLong ? (
+            <ScrollView style={styles.flex} showsVerticalScrollIndicator={false} nestedScrollEnabled>
+              {bubble}
+            </ScrollView>
+          ) : (
+            bubble
+          )}
         </Animated.View>
       </View>
 
       <Animated.View style={[styles.reactionBar, edge, { top: targetY - REACTIONS_HEIGHT - spacing.sm }, appear]}>
         {QUICK_REACTIONS.map((emoji) => (
-          <IconButton key={emoji} onPress={() => react(emoji)} label={emoji} hitSlop={4} style={styles.reactionOption}>
-            <Text style={[styles.reactionChoice, message.my_reaction === emoji && styles.reactionActive]}>{emoji}</Text>
+          <IconButton key={emoji} onPress={() => react(emoji)} label={emoji} hitSlop={4} style={[styles.reactionOption, message.my_reaction === emoji && styles.reactionChosen]}>
+            <Text style={styles.reactionChoice}>{emoji}</Text>
           </IconButton>
         ))}
         <IconButton onPress={() => setPickerOpen(true)} label={t('chat.tousEmojis')} hitSlop={4} style={styles.reactionOption}>
@@ -121,7 +134,7 @@ export function MessageSelection({ message, name, palettes, rect, origin, clip, 
         </IconButton>
       </Animated.View>
 
-      <Animated.View style={[styles.actionsMenu, edge, { top: targetY + shownHeight + SELECTION_GAP }, appear]}>
+      <Animated.View style={[styles.actionsMenu, edge, { top: targetY + previewHeight + SELECTION_GAP }, appear]}>
         {actions.map(({ label, icon: Icon, onPress, danger }) => (
           <Pressable key={label} onPress={() => dismiss(onPress)} style={({ pressed }) => [styles.action, pressed && styles.actionPressed]}>
             <Icon size={20} color={danger ? colors.danger : colors.text} strokeWidth={1.75} />
@@ -136,6 +149,9 @@ export function MessageSelection({ message, name, palettes, rect, origin, clip, 
 }
 
 const useStyles = createStyles((colors) => ({
+  flex: {
+    flex: 1,
+  },
   alignEnd: {
     right: spacing.md,
   },
@@ -154,6 +170,9 @@ const useStyles = createStyles((colors) => ({
   },
   selected: {
     position: 'absolute',
+    left: spacing.md,
+    right: spacing.md,
+    overflow: 'hidden',
   },
   reactionBar: {
     position: 'absolute',
@@ -168,14 +187,16 @@ const useStyles = createStyles((colors) => ({
   reactionOption: {
     width: 42,
     height: 42,
+    borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // La réaction déjà mise : un rond discret derrière (la toucher l'enlève).
+  reactionChosen: {
+    backgroundColor: colors.elevatedActive,
+  },
   reactionChoice: {
     fontSize: 26,
-  },
-  reactionActive: {
-    opacity: 0.45,
   },
   actionsMenu: {
     position: 'absolute',

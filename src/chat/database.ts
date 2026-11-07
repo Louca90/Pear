@@ -54,6 +54,9 @@ export type Message = {
   forwarded?: number;
   // Session de connexion (regroupement des bulles) ; absente sur les anciens messages.
   conn_session?: number | null;
+  // Heure de chaque réaction (absente sur les anciennes).
+  my_reaction_at?: number | null;
+  their_reaction_at?: number | null;
 };
 
 export type NewMessage = Pick<Message, 'id' | 'contact' | 'mine' | 'text' | 'status' | 'created_at'> & Partial<Message>;
@@ -166,7 +169,7 @@ export function editMessage(id: string, contact: string, mine: number, text: str
 }
 
 export function setReaction(id: string, contact: string, column: 'my_reaction' | 'their_reaction', emoji: string | null) {
-  db().runSync(`UPDATE messages SET ${column} = ? WHERE id = ? AND contact = ?`, emoji, id, contact);
+  db().runSync(`UPDATE messages SET ${column} = ?, ${column}_at = ? WHERE id = ? AND contact = ?`, emoji, emoji ? Date.now() : null, id, contact);
 }
 
 export function deleteMessage(id: string, contact: string, mine?: number) {
