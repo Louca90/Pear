@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, AppState, Easing, BackHandler, Dimensions, StyleSheet, View } from 'react-native';
+import { Animated, AppState, Easing, BackHandler, StyleSheet, View } from 'react-native';
 import { NavigationBar } from 'expo-navigation-bar';
 import { StatusBar } from 'expo-status-bar';
 import * as Linking from 'expo-linking';
@@ -29,7 +29,7 @@ import { SettingsScreen } from './src/screens/SettingsScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { ScannerScreen } from './src/screens/ScannerScreen';
 import { Contact, hasIdentity, loadContacts, loadOrCreateIdentity, saveContacts } from './src/storage';
-import { createStyles, loadTheme, Palette, radius, spacing, useColors } from './src/theme';
+import { createStyles, loadTheme, Palette, spacing, useColors } from './src/theme';
 import { markUpdateSeen, pendingUpdatedInfo, UpdatedInfo } from './src/update/updated';
 import { UpdatedPopup } from './src/update/UpdatedPopup';
 import { checkForUpdate, isBlocking, useUpdateState } from './src/update/updates';
@@ -52,7 +52,7 @@ type Route =
   | { name: 'contact'; publicKey: string; suggestedName?: string | null }
   | { name: 'chat'; publicKey: string };
 
-const BACK_EXIT_MS = 170;
+const BACK_EXIT_MS = 220;
 // Bouton retour maintenu (barre à 3 boutons) : Android n'envoie presque aucune progression. Si rien
 // n'arrive après ce délai, la page glisse seule vers un aperçu stable, puis attend le relâchement.
 const BACK_HOLD_DELAY_MS = 80;
@@ -63,7 +63,9 @@ const BACK_CANCEL_MS = 220;
 const BACK_EASING = Easing.bezier(0.2, 0.8, 0.2, 1);
 // Si le retour a seulement fermé quelque chose dans la page, celle-ci revient à sa place après ce délai.
 const BACK_SETTLE_MS = 250;
-const BACK_PAGE_SHIFT = 20;
+const BACK_PAGE_SHIFT = 16;
+// Coins arrondis de la page pendant l'aperçu, comme une carte qu'on repose.
+const BACK_CORNER_RADIUS = 28;
 const TAB_ROUTES: string[] = ['add', 'home', 'camera', 'profile'];
 
 export default function Root() {
@@ -260,7 +262,7 @@ function App() {
       } else if (gestureStarted.current) {
         clearTimeout(holdTimer.current);
         backGesture.stopAnimation();
-        Animated.timing(backGesture, { toValue: 2, duration: BACK_EXIT_MS, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(() => {
+        Animated.timing(backGesture, { toValue: 2, duration: BACK_EXIT_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start(() => {
           completeBack().catch((e) => log.warn('retour', e));
           setTimeout(resetBackGesture, BACK_SETTLE_MS);
         });
@@ -437,7 +439,6 @@ function App() {
     );
   };
 
-  const { width } = Dimensions.get('window');
   const direction = peek?.direction ?? 1;
 
   if (blocked && update.release) {
@@ -455,30 +456,35 @@ function App() {
     <>
       <StatusBar style={barStyle} />
       <NavigationBar style={barStyle} />
+      {/* Retour en arrière, en fondu : la page d'avant apparaît derrière, un peu en retrait, et se rapproche
+          à mesure que la page actuelle se réduit ; à la validation, elle prend toute la place. */}
       {peek && (
-        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              opacity: backGesture.interpolate({ inputRange: [0, 1, 2], outputRange: [0.4, 0.85, 1] }),
+              transform: [{ scale: backGesture.interpolate({ inputRange: [0, 1, 2], outputRange: [0.94, 0.97, 1] }) }],
+            },
+          ]}
+        >
           {render(peek.route, true)}
           {!TAB_ROUTES.includes(route.name) && TAB_ROUTES.includes(peek.route.name) && (
             <BottomBar active={peek.route.name as Tab} onChange={() => {}} />
           )}
-          <Animated.View
-            style={[
-              StyleSheet.absoluteFill,
-              styles.backDim,
-              { opacity: backGesture.interpolate({ inputRange: [0, 1, 2], outputRange: [0.35, 0.12, 0] }) },
-            ]}
-          />
-        </View>
+        </Animated.View>
       )}
       <Animated.View
         style={[
           styles.flex,
           peek && styles.pageDuringBack,
           {
+            // La page actuelle se réduit et s'écarte un peu vers le bord du geste, puis s'efface sur place.
             opacity: backGesture.interpolate({ inputRange: [0, 1, 2], outputRange: [1, 1, 0] }),
             transform: [
-              { translateX: backGesture.interpolate({ inputRange: [0, 1, 2], outputRange: [0, BACK_PAGE_SHIFT * direction, width * direction] }) },
-              { scale: backGesture.interpolate({ inputRange: [0, 1, 2], outputRange: [1, 0.9, 0.86] }) },
+              { translateX: backGesture.interpolate({ inputRange: [0, 1, 2], outputRange: [0, BACK_PAGE_SHIFT * direction, BACK_PAGE_SHIFT * direction] }) },
+              { scale: backGesture.interpolate({ inputRange: [0, 1, 2], outputRange: [1, 0.92, 0.88] }) },
             ],
           },
         ]}
@@ -530,11 +536,8 @@ const useStyles = createStyles((colors) => ({
     flex: 1,
   },
   pageDuringBack: {
-    borderRadius: radius.lg,
+    borderRadius: BACK_CORNER_RADIUS,
     overflow: 'hidden',
-  },
-  backDim: {
-    backgroundColor: colors.text,
   },
   center: {
     flex: 1,
