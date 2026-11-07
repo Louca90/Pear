@@ -3,9 +3,11 @@ const { getDatabase } = require('firebase-admin/database');
 const { getSetupError } = require('../lib/firebase');
 
 // Tâche quotidienne (server/vercel.json) : supprime les demandes de pairing de plus de 7 jours et les
-// compteurs de débit d'une minute passée. Sans danger si quelqu'un l'appelle : elle n'efface que du périmé.
+// compteurs de débit d'une minute passée, et les tokens publiés il y a plus de 60 jours (un téléphone actif
+// republie le sien tous les 30 jours). Sans danger si quelqu'un l'appelle : elle n'efface que du périmé.
 const EXPIRY_MS = 7 * 24 * 3600000;
 const MINUTE_MS = 60000;
+const TOKEN_EXPIRY_MS = 60 * 24 * 3600000;
 
 module.exports = async (req, res) => {
   if (getSetupError()) return res.status(500).json({ error: 'Serveur mal configuré' });
@@ -18,6 +20,13 @@ module.exports = async (req, res) => {
   for (const [inboxId, inbox] of Object.entries(requests)) {
     for (const [id, request] of Object.entries(inbox || {})) {
       if (!request || now - request.at > EXPIRY_MS) updates[`requests/${inboxId}/${id}`] = null;
+    }
+  }
+
+  const tokens = (await database.ref('tokens').once('value')).val() || {};
+  for (const [inboxId, entries] of Object.entries(tokens)) {
+    for (const [tag, entry] of Object.entries(entries || {})) {
+      if (!entry || now - entry.at > TOKEN_EXPIRY_MS) updates[`tokens/${inboxId}/${tag}`] = null;
     }
   }
 

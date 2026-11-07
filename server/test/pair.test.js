@@ -89,10 +89,12 @@ function proof(device, serverKey, uid, at) {
   state.db = {
     requests: { [inboxId]: { old: { v: 1, data: 'x', at: Date.now() - 8 * 24 * 3600000 }, fresh: { v: 1, data: 'y', at: Date.now() } } },
     rateLimits: { caller: { u1: { minute: 1, count: 3 }, u2: { minute: Math.floor(Date.now() / 60000), count: 1 } } },
+    tokens: { [inboxId]: { vieux: { v: 1, data: 'x', at: Date.now() - 61 * 24 * 3600000 }, recent: { v: 1, data: 'y', at: Date.now() } } },
   };
   assert.equal((await call(cleanup, { method: 'POST' })).code, 405);
   const cleaned = await call(cleanup, { method: 'GET' });
-  assert.equal(cleaned.payload.removed, 2);
+  assert.equal(cleaned.payload.removed, 3);
+  assert.deepEqual(Object.keys(get('tokens/' + inboxId)), ['recent']);
   assert.deepEqual(Object.keys(get(`requests/${inboxId}`)), ['fresh']);
   assert.deepEqual(Object.keys(get('rateLimits/caller')), ['u2']);
 

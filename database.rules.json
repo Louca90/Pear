@@ -40,6 +40,27 @@
           ".write": "auth != null && root.child('inboxOwners/' + $inbox + '/uid').val() === auth.uid && !newData.exists()"
         }
       }
+    },
+    "tokens": {
+      "$inbox": {
+        "$tag": {
+          ".read": "auth != null && $tag.matches(/^[A-Za-z0-9_-]{22}$/)",
+          ".write": "auth != null && root.child('inboxOwners/' + $inbox + '/uid').val() === auth.uid && $tag.matches(/^[A-Za-z0-9_-]{22}$/)",
+          ".validate": "newData.hasChildren(['v', 'data', 'at'])",
+          "v": {
+            ".validate": "newData.isNumber()"
+          },
+          "data": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 600"
+          },
+          "at": {
+            ".validate": "newData.isNumber() && newData.val() <= now"
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
+      }
     }
   }
 }

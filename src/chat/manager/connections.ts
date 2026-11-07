@@ -3,6 +3,7 @@ import { addNetworkStateListener, getNetworkStateAsync, NetworkState } from 'exp
 
 import { deriveSharedSecret, Identity } from '../../crypto/pairing';
 import { PeerLink } from '../../network/peer';
+import { publishTokens } from '../../network/tokens';
 
 import { ChatCore } from './core';
 import { receivePush } from './incoming';
@@ -66,20 +67,26 @@ export function watch(core: ChatCore) {
 
   const messaging = getMessaging();
   getToken(messaging)
-    .then((token) => {
-      core.myToken = token;
-      shareToken(core);
-    })
+    .then((token) => setMyToken(core, token))
     .catch((e) => log.warn('token FCM', e));
   // App ouverte : les pushs arrivent ici. Un message qui n'a pas pu passer en direct s'affiche quand même.
   onMessage(messaging, (message) => {
     if (message.data?.type === 'msg') receivePush(core, message.data);
     else retryAll(core);
   });
-  onTokenRefresh(messaging, (token) => {
-    core.myToken = token;
-    shareToken(core);
-  });
+  onTokenRefresh(messaging, (token) => setMyToken(core, token));
+}
+
+// Notre token part en direct aux contacts connectés, et chiffré dans Firebase pour les autres.
+function setMyToken(core: ChatCore, token: string) {
+  core.myToken = token;
+  shareToken(core);
+  publishMyToken(core);
+}
+
+export function publishMyToken(core: ChatCore) {
+  if (!core.identity || !core.myToken) return;
+  publishTokens(core.identity, [...core.names.keys()], core.myToken).catch((e) => log.warn('publication du token', e));
 }
 
 function setOnline(core: ChatCore, online: boolean) {

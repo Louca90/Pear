@@ -1,5 +1,6 @@
+import { fetchContactToken } from '../../network/tokens';
 import { PushResult, sendPush } from '../../network/wake';
-import { deleteContactToken, getContactToken, getOutboxEvents, getUndelivered } from '../database';
+import { deleteContactToken, getContactToken, getOutboxEvents, getUndelivered, setContactToken } from '../database';
 import { encodePushPayload } from '../pushPayload';
 
 import { ChatCore } from './core';
@@ -17,9 +18,22 @@ const ACK_DELAY_MS = 300;
 // un simple réveil : l'autre téléphone se connecte et le reçoit en direct.
 export function wakeIfNeeded(core: ChatCore, contact: string) {
   if (!core.online || core.links.get(contact)?.status === 'connected') return;
-  const token = getContactToken(contact);
-  if (!token) return;
-  pushPending(core, contact, token).catch((e) => log.warn('push', e));
+  if (getUndelivered(contact).length === 0 && getOutboxEvents(contact).length === 0) return;
+  resolveToken(core, contact)
+    .then((token) => (token ? pushPending(core, contact, token) : undefined))
+    .catch((e) => log.warn('push', e));
+}
+
+// Le token du contact : celui reçu en direct, sinon celui qu'il a publié (chiffré) dans Firebase. Relu
+// au plus une fois par minute, par exemple après un token périmé.
+async function resolveToken(core: ChatCore, contact: string) {
+  const known = getContactToken(contact);
+  if (known) return known;
+  if (!core.identity || Date.now() - (core.tokenFetches.get(contact) ?? 0) < WAKE_INTERVAL_MS) return null;
+  core.tokenFetches.set(contact, Date.now());
+  const fresh = await fetchContactToken(core.identity, contact);
+  if (fresh) setContactToken(contact, fresh);
+  return fresh;
 }
 
 async function pushPending(core: ChatCore, contact: string, token: string) {
@@ -60,7 +74,7 @@ function handleResult(core: ChatCore, contact: string, result: PushResult, id?: 
   if (result === 'sent') return true;
   if (id) core.pushed.delete(id);
   if (result === 'expired') {
-    // Le token ne sert plus : on l'oublie. Le contact enverra le nouveau à la prochaine connexion.
+    // Le token ne sert plus : on l'oublie. Le prochain essai relit celui que le contact a publié.
     deleteContactToken(contact);
     log.info('token du contact périmé', contact.slice(0, 6));
   }
@@ -95,7 +109,7 @@ async function flushPushAcks(core: ChatCore) {
   for (const [contact, { ids, events }] of all) {
     // Connecté entre-temps : les accusés sont déjà partis en direct.
     if (core.links.get(contact)?.status === 'connected') continue;
-    const token = getContactToken(contact);
+    const token = await resolveToken(core, contact);
     if (!token) continue;
     const keys = pushKeysFor(core, contact);
     const payload = encodePushPayload(keys.tag, keys.key, sealSecure(core, contact, { type: 'acks', ids: [...ids], events: [...events] }));

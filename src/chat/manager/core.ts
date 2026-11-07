@@ -14,6 +14,8 @@ export class ChatCore {
   // Messages et événements déjà partis par push : on ne les renvoie pas tant que l'app tourne. Ils
   // repartiront en direct à la prochaine connexion (l'autre téléphone ignore les doublons).
   pushed = new Set<string>();
+  // Dernière lecture du token publié par chaque contact.
+  tokenFetches = new Map<string, number>();
   // Accusés de réception à renvoyer par push, par contact.
   pushAcks = new Map<string, { ids: Set<string>; events: Set<string> }>();
   pushAckTimer?: ReturnType<typeof setTimeout>;

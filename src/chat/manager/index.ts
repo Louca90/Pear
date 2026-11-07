@@ -7,7 +7,10 @@ import { Contact } from '../../storage';
 import { addMessage, deleteMessage, editMessage, getMessage, markConversationRead, setConversationSetting, setReaction } from '../database';
 import { clearMessageNotification } from '../notifications';
 
-import { connect, retryAll, watch } from './connections';
+import { unpublishToken } from '../../network/tokens';
+import { log } from '../../log';
+
+import { connect, publishMyToken, retryAll, watch } from './connections';
 import { ChatCore } from './core';
 import { addSystemMessage, flush, sendEvent } from './outbox';
 import { getMyProfile, saveProfile, shareProfile } from './profile';
@@ -31,8 +34,10 @@ class ChatManager extends ChatCore {
       if (!this.names.has(key)) {
         link.peer.stop();
         this.links.delete(key);
+        unpublishToken(identity, key).catch((e) => log.warn('retrait du token', e));
       }
     }
+    publishMyToken(this);
     for (const key of this.names.keys()) {
       if (!this.links.has(key)) connect(this, identity, key);
     }
