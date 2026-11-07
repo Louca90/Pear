@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Keyboard, PanResponder, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Animated, Easing, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 
 import { t, TextKey } from '../../i18n';
 import { log } from '../../log';
 import { createMediaStyles, radius, spacing, useMediaColors } from '../../theme';
 import { useInsets } from '../ui';
-import { clamp, TEXT_BACKGROUNDS, TEXT_COLORS, TEXT_FONTS, TEXT_SIZE_MAX, TEXT_SIZE_MIN, TextBackground, TextFont, TextLayer } from './layers';
+import { TEXT_BACKGROUNDS, TEXT_COLORS, TEXT_FONTS, TEXT_SIZE_MAX, TEXT_SIZE_MIN, TextBackground, TextFont, TextLayer } from './layers';
 import { FONT_STYLES, textLook } from './TextLayerView';
+import { VerticalSlider } from './VerticalSlider';
 
 const OPEN_MS = 160;
 const EASING = Easing.bezier(0.2, 0.8, 0.2, 1);
@@ -29,30 +30,6 @@ const BACKGROUND_LABELS: Record<TextBackground, TextKey> = {
 
 function vibrate() {
   Haptics.selectionAsync().catch((e) => log.warn('vibration', e));
-}
-
-// La taille, à gauche : glisser vers le haut grossit le texte.
-function SizeSlider({ value, onChange }: { value: number; onChange: (size: number) => void }) {
-  const styles = useStyles();
-  const latest = useRef(onChange);
-  latest.current = onChange;
-  const fromY = (y: number) => latest.current(Math.round(TEXT_SIZE_MIN + (1 - clamp(y / SLIDER_HEIGHT, 0, 1)) * (TEXT_SIZE_MAX - TEXT_SIZE_MIN)));
-  const pan = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderTerminationRequest: () => false,
-      onPanResponderGrant: ({ nativeEvent }) => fromY(nativeEvent.locationY),
-      onPanResponderMove: ({ nativeEvent }) => fromY(nativeEvent.locationY),
-    }),
-  ).current;
-  const ratio = (value - TEXT_SIZE_MIN) / (TEXT_SIZE_MAX - TEXT_SIZE_MIN);
-  return (
-    <View style={styles.slider} accessibilityRole="adjustable" accessibilityLabel={t('editeur.taille')} accessibilityValue={{ min: TEXT_SIZE_MIN, max: TEXT_SIZE_MAX, now: value }} {...pan.panHandlers}>
-      <View pointerEvents="none" style={styles.sliderTrack} />
-      <View pointerEvents="none" style={[styles.sliderThumb, { top: (1 - ratio) * SLIDER_HEIGHT - 11 }]} />
-    </View>
-  );
 }
 
 type Props = { layer: TextLayer; maxWidth: number; onDone: (layer: TextLayer) => void };
@@ -124,7 +101,7 @@ export function TextEditor({ layer, maxWidth, onDone }: Props) {
       </View>
 
       <View style={[styles.sliderWrap, { top: top + 170 }]}>
-        <SizeSlider value={draft.size} onChange={(size) => change({ size })} />
+        <VerticalSlider value={draft.size} min={TEXT_SIZE_MIN} max={TEXT_SIZE_MAX} height={SLIDER_HEIGHT} label={t('editeur.taille')} onChange={(size) => change({ size })} />
       </View>
 
       <View pointerEvents="box-none" style={[styles.center, { paddingBottom: keyboard + 72 }]}>
@@ -230,24 +207,6 @@ const useStyles = createMediaStyles((colors) => ({
   sliderWrap: {
     position: 'absolute',
     left: spacing.md,
-  },
-  slider: {
-    width: 36,
-    height: SLIDER_HEIGHT,
-    alignItems: 'center',
-  },
-  sliderTrack: {
-    width: 4,
-    height: SLIDER_HEIGHT,
-    borderRadius: radius.full,
-    backgroundColor: 'rgba(255, 255, 255, 0.5)',
-  },
-  sliderThumb: {
-    position: 'absolute',
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: colors.background,
   },
   center: {
     ...StyleSheet.absoluteFill,

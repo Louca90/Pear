@@ -5,7 +5,7 @@ import { File, Paths } from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { getThumbnailAsync } from 'expo-video-thumbnails';
-import { SlidersHorizontal, Smile, Trash2, Type } from 'lucide-react-native';
+import { Pencil, SlidersHorizontal, Smile, Trash2, Type } from 'lucide-react-native';
 import { GestureDetector, usePanGesture, usePinchGesture, useRotationGesture, useSimultaneousGestures, useTapGesture } from 'react-native-gesture-handler';
 import Svg, { Defs, FeColorMatrix, Filter, G, Image as SvgImage } from 'react-native-svg';
 
@@ -25,6 +25,8 @@ import { TextEditor } from './editor/TextEditor';
 import { TextLayerView } from './editor/TextLayerView';
 import { StickerLayerView } from './editor/StickerLayerView';
 import { StickerPicker } from './editor/StickerPicker';
+import { DrawPanel, StrokesView } from './editor/DrawPanel';
+import { BRUSH_DEFAULT, Stroke } from './editor/drawing';
 
 // Un glissé horizontal devient un changement de filtre au-delà de cette distance.
 const SWIPE_START = 12;
@@ -108,6 +110,9 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
   const [editing, setEditing] = useState<TextLayer | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
+  const [drawing, setDrawing] = useState(false);
+  const [strokes, setStrokes] = useState<Stroke[]>([]);
+  const [brush, setBrush] = useState({ color: '#FFFFFF', width: BRUSH_DEFAULT });
   const [overTrash, setOverTrash] = useState(false);
   // Pendant un glissé sur une photo : le filtre voisin (1 : suivant, par la droite ; -1 : précédent).
   const [swipeDirection, setSwipeDirection] = useState<0 | 1 | -1>(0);
@@ -120,7 +125,7 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
     measured.then(({ width: measuredWidth, height: measuredHeight }) => setSize({ width: measuredWidth, height: measuredHeight })).catch((e) => log.warn('média', e));
   }, [uri, kind]);
 
-  const busy = adjusting || picking || editing !== null || dragging !== null;
+  const busy = adjusting || picking || drawing || editing !== null || dragging !== null;
   useEffect(() => {
     onToolChange?.(busy);
   }, [busy, onToolChange]);
@@ -203,7 +208,7 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
     flatten: async () => {
       const matrix = matrixOf(steps);
       const colored = !isIdentity(matrix);
-      const marked = !!presetOf(filter).stamp || layers.length > 0;
+      const marked = !!presetOf(filter).stamp || layers.length > 0 || strokes.length > 0;
       if (!colored && !marked) return uri;
       if (kind === 'image') return snapshot(colored ? matrix : null);
       // Vidéo : le calque seulement s'il y a quelque chose à poser dessus.
@@ -442,6 +447,7 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
               )}
               <StampMarks kind={currentStamp} stamp={stamp} width={width} height={height} />
             </Svg>
+            <StrokesView strokes={strokes} width={width} height={height} />
             {textLayers(false)}
           </View>
         )}
@@ -466,6 +472,7 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
             </Animated.View>
           </Animated.View>
         )}
+        <StrokesView strokes={strokes} width={width} height={height} />
         <View pointerEvents="none" style={StyleSheet.absoluteFill}>
           {textLayers(true)}
         </View>
@@ -510,12 +517,25 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
         hidden={busy}
         tools={[
           { id: 'text', icon: Type, label: t('editeur.texte'), onPress: startNewText },
+          { id: 'draw', icon: Pencil, label: t('editeur.dessin'), onPress: () => setDrawing(true) },
           { id: 'stickers', icon: Smile, label: t('editeur.stickers'), onPress: () => setPicking(true) },
           { id: 'adjust', icon: SlidersHorizontal, label: t('editeur.reglages'), active: adjusting, onPress: () => setAdjusting(true) },
         ]}
       />
 
       {adjusting && <AdjustPanel value={adjustments} bottom={navigationBar} onChange={setAdjustments} onClose={() => setAdjusting(false)} />}
+      {drawing && (
+        <DrawPanel
+          frame={{ left, top, width, height }}
+          strokes={strokes}
+          color={brush.color}
+          width={brush.width}
+          bottom={navigationBar}
+          onStrokes={setStrokes}
+          onBrush={setBrush}
+          onClose={() => setDrawing(false)}
+        />
+      )}
       {picking && <StickerPicker bottom={navigationBar} onPick={addSticker} onClose={() => setPicking(false)} />}
       {editing && <TextEditor layer={editing} maxWidth={textMaxWidth} onDone={finishEditing} />}
     </>
