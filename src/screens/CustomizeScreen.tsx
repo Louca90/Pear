@@ -1,17 +1,22 @@
 import { ReactNode, useState, useSyncExternalStore } from 'react';
 import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
+import { File, Paths } from 'expo-file-system';
 import { Bell, Check, ChevronRight, ImageMinus, Images, LucideIcon, User } from 'lucide-react-native';
 
 import { getConversationSettings, setConversationSetting } from '../chat/database';
-import { chat } from '../chat/manager';
+import { chat, PickedFile } from '../chat/manager';
 import { showDialog } from '../components/dialog';
+import { MediaPicker } from '../components/MediaPicker';
+import { resizeImage } from '../../modules/pear-native';
+import { log } from '../log';
 import { Button, Header, IconButton, Screen } from '../components/ui';
 import { BUBBLE_COLORS, bubblePalette, createStyles, radius, spacing, useColors } from '../theme';
 import { t } from '../i18n';
 
 // Le fond voyage sur le réseau : une image moins lourde arrive plus vite, sans perte visible en plein écran.
-const WALLPAPER_QUALITY = 0.8;
+// Un fond n'a pas besoin de plus que la taille d'un écran.
+const WALLPAPER_MAX_SIZE = 2048;
+const WALLPAPER_QUALITY = 80;
 
 function ColorChoices({ selected, onPick }: { selected: string; onPick: (color: string) => void }) {
   const styles = useStyles();
@@ -65,6 +70,7 @@ export function CustomizeScreen({ contactKey, name, onBack, onInfo }: Props) {
   const colors = useColors();
   const styles = useStyles();
   const [busy, setBusy] = useState(false);
+  const [galleryOpen, setGalleryOpen] = useState(false);
   useSyncExternalStore(chat.subscribe, chat.getVersion);
 
   const settings = getConversationSettings(contactKey);
@@ -76,17 +82,23 @@ export function CustomizeScreen({ contactKey, name, onBack, onInfo }: Props) {
     chat.refresh();
   };
 
-  const pickWallpaper = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: WALLPAPER_QUALITY });
-    const asset = result.assets?.[0];
-    if (result.canceled || !asset) return;
+  const pickWallpaper = () => setGalleryOpen(true);
+
+  const applyWallpaper = async ([picked]: PickedFile[]) => {
+    setGalleryOpen(false);
+    if (!picked) return;
     setBusy(true);
     try {
+      const small = new File(Paths.cache, `fond-${Date.now()}.jpg`).uri;
+      const uri = await resizeImage(picked.uri, small, WALLPAPER_MAX_SIZE, WALLPAPER_QUALITY).catch((e) => {
+        log.warn('réduction du fond', e);
+        return picked.uri;
+      });
       await chat.setWallpaper(contactKey, {
-        uri: asset.uri,
+        uri,
         name: 'fond.jpg',
-        size: asset.fileSize ?? 0,
-        mime: asset.mimeType ?? null,
+        size: new File(uri).size ?? 0,
+        mime: 'image/jpeg',
         kind: 'wallpaper',
       });
     } catch (e) {
@@ -133,6 +145,7 @@ export function CustomizeScreen({ contactKey, name, onBack, onInfo }: Props) {
           <SettingRow icon={Bell} label={t('commun.notifications')} onPress={() => Linking.openSettings()} />
         </Section>
       </ScrollView>
+      {galleryOpen && <MediaPicker single onPick={applyWallpaper} onClose={() => setGalleryOpen(false)} />}
     </Screen>
   );
 }

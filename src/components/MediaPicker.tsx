@@ -142,8 +142,15 @@ function AlbumList({ onOpen }: { onOpen: (album: MediaLibrary.Album) => void }) 
   );
 }
 
+type PickerProps = {
+  onPick: (files: PickedFile[]) => void;
+  onClose: () => void;
+  // Une seule photo (fond d'écran…) : un appui la choisit, sans onglet vidéos.
+  single?: boolean;
+};
+
 // Notre propre galerie : photos, vidéos et albums, sans quitter l'app. La permission n'est demandée qu'ici.
-export function MediaPicker({ onPick, onClose }: { onPick: (files: PickedFile[]) => void; onClose: () => void }) {
+export function MediaPicker({ onPick, onClose, single }: PickerProps) {
   const colors = useColors();
   const styles = useStyles();
   const bottom = useNavigationBarHeight();
@@ -162,8 +169,13 @@ export function MediaPicker({ onPick, onClose }: { onPick: (files: PickedFile[])
       });
   }, []);
 
-  const toggle = (asset: MediaLibrary.Asset) =>
+  const toggle = (asset: MediaLibrary.Asset) => {
+    if (single) {
+      if (asset.mediaType !== MediaLibrary.MediaType.video) onPick([toPickedFile(asset)]);
+      return;
+    }
     setSelected((current) => (current.some(({ id }) => id === asset.id) ? current.filter(({ id }) => id !== asset.id) : [...current, asset]));
+  };
 
   const send = () => {
     try {
@@ -195,7 +207,7 @@ export function MediaPicker({ onPick, onClose }: { onPick: (files: PickedFile[])
           <>
             {!album && (
               <View style={styles.sections}>
-                {SECTIONS.map(({ section: value, label }) => (
+                {SECTIONS.filter(({ section: value }) => !single || value !== 'videos').map(({ section: value, label }) => (
                   <Pressable key={value} onPress={() => setSection(value)} accessibilityState={{ selected: section === value }} style={[styles.section, section === value && styles.sectionOn]}>
                     <Text style={[styles.sectionLabel, section === value && styles.sectionLabelOn]}>{label}</Text>
                   </Pressable>
