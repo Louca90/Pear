@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, Text, View } from 'react-native';
 import { Forward, Reply } from 'lucide-react-native';
 
@@ -14,6 +14,7 @@ import { SystemRow } from './SystemRow';
 import { VoiceContent } from './VoiceContent';
 import { LONG_PRESS_MS, SWIPE_REPLY, SWIPE_START, TEXT_LINE_HEIGHT } from '../constants';
 import { isBareMedia, isMediaDeleted } from '../format';
+import { LikeBurst, useReactionAppear } from '../../../components/LikeAnimation';
 import { useDoubleTap } from '../hooks/useDoubleTap';
 import { useSwipeReply } from '../hooks/useSwipeReply';
 import { useChatStyles } from '../styles';
@@ -86,7 +87,24 @@ export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, on
     onSelect?.(message, (done) => container.current?.measureInWindow((x, y, width, height) => done({ x, y, width, height })));
   };
 
-  const press = useDoubleTap(onDoubleTap && (() => onDoubleTap(message)));
+  // Like : un petit cœur s'envole du coin de la bulle (double appui, ou like reçu conversation ouverte).
+  const [burst, setBurst] = useState(0);
+  const press = useDoubleTap(
+    onDoubleTap &&
+      (() => {
+        setBurst(Date.now());
+        onDoubleTap(message);
+      }),
+  );
+  const previousTheirs = useRef(message.their_reaction);
+  useEffect(() => {
+    if (message.their_reaction && message.their_reaction !== previousTheirs.current) setBurst(Date.now());
+    previousTheirs.current = message.their_reaction;
+  }, [message.their_reaction]);
+  // Le badge garde ses réactions le temps de disparaître.
+  const lastReactions = useRef(reactions);
+  if (reactions.length > 0) lastReactions.current = reactions;
+  const badge = useReactionAppear(reactions.length > 0);
 
   if (message.kind === 'wallpaper' || message.kind === 'system') {
     return <SystemRow message={message} name={name} hasWallpaper={palettes.hasWallpaper} />;
@@ -156,13 +174,14 @@ export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, on
             <MessageMeta message={message} tone={palette} />
           )}
         </Pressable>
-        {reactions.length > 0 && (
-          <View style={styles.reactions}>
-            {reactions.map((emoji, index) => (
+        {badge.shown && (
+          <Animated.View style={[styles.reactions, badge.style]}>
+            {lastReactions.current.map((emoji, index) => (
               <Text key={index} style={styles.reactionEmoji}>{emoji}</Text>
             ))}
-          </View>
+          </Animated.View>
         )}
+        <LikeBurst token={burst} style={mine ? styles.burstMine : styles.burstTheirs} />
       </Animated.View>
     </View>
   );
@@ -238,6 +257,14 @@ const useLocalStyles = createStyles((colors) => ({
   },
   reactionEmoji: {
     fontSize: 14,
+  },
+  burstMine: {
+    top: 4,
+    left: -14,
+  },
+  burstTheirs: {
+    top: 4,
+    right: -14,
   },
 }));
 
