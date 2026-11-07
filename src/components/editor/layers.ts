@@ -1,4 +1,4 @@
-// Les calques posés sur une photo ou une vidéo (textes pour l'instant ; dessins et stickers ensuite).
+// Les calques posés sur une photo ou une vidéo : textes et stickers (dessins ensuite).
 // Chaque calque a son centre (x, y, en points de l'aperçu), une échelle et une rotation (radians).
 
 export type TextFont = 'classic' | 'strong' | 'elegant' | 'typewriter' | 'hand';
@@ -18,7 +18,20 @@ export type TextLayer = {
   rotation: number;
 };
 
-export type Layer = TextLayer;
+// Un emoji, posé comme un autocollant.
+export type StickerLayer = {
+  id: string;
+  kind: 'sticker';
+  emoji: string;
+  x: number;
+  y: number;
+  scale: number;
+  rotation: number;
+};
+
+export type Layer = TextLayer | StickerLayer;
+
+export const STICKER_SIZE = 88;
 
 export type Size = { width: number; height: number };
 
@@ -70,8 +83,8 @@ export function bringToFront(layers: Layer[], id: string) {
   return layer ? [...layers.filter((item) => item.id !== id), layer] : layers;
 }
 
-export function updateLayer(layers: Layer[], id: string, change: Partial<Layer>) {
-  return layers.map((layer) => (layer.id === id ? { ...layer, ...change } : layer));
+export function updateLayer(layers: Layer[], id: string, change: Partial<Pick<Layer, 'x' | 'y' | 'scale' | 'rotation'>> | Partial<TextLayer>) {
+  return layers.map((layer) => (layer.id === id ? ({ ...layer, ...change } as Layer) : layer));
 }
 
 // Texte noir sur fond clair, blanc sur fond foncé (fond plein).

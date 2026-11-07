@@ -5,7 +5,7 @@ import { File, Paths } from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { getThumbnailAsync } from 'expo-video-thumbnails';
-import { SlidersHorizontal, Trash2, Type } from 'lucide-react-native';
+import { SlidersHorizontal, Smile, Trash2, Type } from 'lucide-react-native';
 import { GestureDetector, usePanGesture, usePinchGesture, useRotationGesture, useSimultaneousGestures, useTapGesture } from 'react-native-gesture-handler';
 import Svg, { Defs, FeColorMatrix, Filter, G, Image as SvgImage } from 'react-native-svg';
 
@@ -23,6 +23,8 @@ import { bringToFront, clamp, Layer, layerAt, newLayerId, SCALE_MAX, SCALE_MIN, 
 import { formatStamp, Stamp, StampMarks } from './editor/stamps';
 import { TextEditor } from './editor/TextEditor';
 import { TextLayerView } from './editor/TextLayerView';
+import { StickerLayerView } from './editor/StickerLayerView';
+import { StickerPicker } from './editor/StickerPicker';
 
 // Un glissé horizontal devient un changement de filtre au-delà de cette distance.
 const SWIPE_START = 12;
@@ -105,6 +107,7 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
   // Le texte en cours d'écriture (nouveau, ou existant : il est alors caché sur l'image).
   const [editing, setEditing] = useState<TextLayer | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
+  const [picking, setPicking] = useState(false);
   const [overTrash, setOverTrash] = useState(false);
   // Pendant un glissé sur une photo : le filtre voisin (1 : suivant, par la droite ; -1 : précédent).
   const [swipeDirection, setSwipeDirection] = useState<0 | 1 | -1>(0);
@@ -117,7 +120,7 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
     measured.then(({ width: measuredWidth, height: measuredHeight }) => setSize({ width: measuredWidth, height: measuredHeight })).catch((e) => log.warn('média', e));
   }, [uri, kind]);
 
-  const busy = adjusting || editing !== null || dragging !== null;
+  const busy = adjusting || picking || editing !== null || dragging !== null;
   useEffect(() => {
     onToolChange?.(busy);
   }, [busy, onToolChange]);
@@ -331,10 +334,10 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
     tap: (x: number, y: number) => {
       if (busy) return;
       const hit = layerAt(layers, sizes, x, y);
-      if (hit) {
+      if (hit?.kind === 'text') {
         vibrate();
         setEditing(hit);
-      } else {
+      } else if (!hit) {
         startNewText();
       }
     },
@@ -406,17 +409,17 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
   const contentX = reveal.interpolate({ inputRange: [0, 1], outputRange: [-side * width, 0] });
   const currentStamp = presetOf(filter).stamp;
 
+  // Les calques, à l'écran (mesurés, animés) ou dans la copie de l'export (mêmes tailles, immobiles).
   const textLayers = (measured: boolean) =>
-    layers.map((layer) => (
-      <TextLayerView
-        key={layer.id}
-        layer={layer}
-        maxWidth={textMaxWidth}
-        size={sizes[layer.id]}
-        onMeasure={measured ? measure : undefined}
-        hidden={measured && (editing?.id === layer.id || (dragging === layer.id && overTrash))}
-      />
-    ));
+    layers.map((layer) => {
+      const hidden = measured && (editing?.id === layer.id || (dragging === layer.id && overTrash));
+      const onMeasure = measured ? measure : undefined;
+      if (layer.kind === 'sticker') return <StickerLayerView key={layer.id} layer={layer} size={sizes[layer.id]} onMeasure={onMeasure} hidden={hidden} animated={measured} />;
+      return <TextLayerView key={layer.id} layer={layer} maxWidth={textMaxWidth} size={sizes[layer.id]} onMeasure={onMeasure} hidden={hidden} />;
+    });
+
+  const addSticker = (emoji: string) =>
+    setLayers((current) => [...current, { id: newLayerId(), kind: 'sticker', emoji, x: width / 2, y: height / 2, scale: 1, rotation: 0 }]);
 
   return (
     <>
@@ -507,11 +510,13 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
         hidden={busy}
         tools={[
           { id: 'text', icon: Type, label: t('editeur.texte'), onPress: startNewText },
+          { id: 'stickers', icon: Smile, label: t('editeur.stickers'), onPress: () => setPicking(true) },
           { id: 'adjust', icon: SlidersHorizontal, label: t('editeur.reglages'), active: adjusting, onPress: () => setAdjusting(true) },
         ]}
       />
 
       {adjusting && <AdjustPanel value={adjustments} bottom={navigationBar} onChange={setAdjustments} onClose={() => setAdjusting(false)} />}
+      {picking && <StickerPicker bottom={navigationBar} onPick={addSticker} onClose={() => setPicking(false)} />}
       {editing && <TextEditor layer={editing} maxWidth={textMaxWidth} onDone={finishEditing} />}
     </>
   );

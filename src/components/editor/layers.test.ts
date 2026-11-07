@@ -1,8 +1,8 @@
 import { describe, expect, it } from '@jest/globals';
 
-import { bringToFront, contains, Layer, layerAt, readableOn, updateLayer } from './layers';
+import { bringToFront, contains, layerAt, readableOn, TextLayer, updateLayer } from './layers';
 
-const text = (fields: Partial<Layer> = {}): Layer => ({
+const text = (fields: Partial<TextLayer> = {}): TextLayer => ({
   id: 'a',
   kind: 'text',
   text: 'Salut',
@@ -41,6 +41,9 @@ describe('calques', () => {
     expect(layerAt(layers, sizes, 400, 400)).toBeNull();
     expect(bringToFront(layers, 'a').map((layer) => layer.id)).toEqual(['b', 'a']);
     expect(updateLayer(layers, 'a', { x: 5 })[0].x).toBe(5);
+    // Un sticker se touche comme un texte.
+    const sticker = { id: 's', kind: 'sticker' as const, emoji: '🔥', x: 100, y: 100, scale: 1, rotation: 0 };
+    expect(layerAt([...layers, sticker], { ...sizes, s: size }, 100, 100)?.id).toBe('s');
   });
 
   it('choisit un texte lisible sur un fond plein', () => {
