@@ -1,6 +1,7 @@
 import { AppState } from 'react-native';
 import { NativeModule, requireNativeModule } from 'expo';
 import { log } from '../../src/log';
+import { t } from '../../src/i18n';
 
 export type BackEvent = { type: 'started' | 'progress' | 'cancelled' | 'invoked'; progress: number; fromRight: boolean };
 export type DownloadProgress = { received: number; total: number };
@@ -107,7 +108,7 @@ export function burnOverlay(videoUri: string, overlayUri: string, bitrate: numbe
 
 // Une vue dessinée dans une image PNG (calques de l'éditeur). Demande l'APK du lot 10.3.
 export function captureView(tag: number, outputUri: string, scale: number): Promise<string> {
-  if (!PearNative.captureView) return Promise.reject(new Error('Mets Pear à jour pour enregistrer les textes.'));
+  if (!PearNative.captureView) return Promise.reject(new Error(t('editeur.majPourTextes')));
   return PearNative.captureView(tag, outputUri, scale);
 }
 

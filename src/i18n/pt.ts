@@ -261,7 +261,7 @@ export const pt: Dictionary = {
     policeClassique: 'Clássica',
     policeForte: 'Forte',
     policeElegante: 'Elegante',
-    policeMachine: 'Máquina',
+    policeMachine: 'Máquina de escrever',
     policeManuscrite: 'Manuscrita',
     fondAucun: 'Sem fundo',
     fondPlein: 'Fundo sólido',
@@ -288,6 +288,8 @@ export const pt: Dictionary = {
     ajouterTexte: 'Adicionar texto',
     ecrire: 'Escreva algo',
     valider: 'Confirmar o texto',
+    imagePasPrete: 'A imagem ainda não está pronta.',
+    majPourTextes: 'Atualize o Pear para guardar textos e desenhos.',
   },
   galerie: {
     videos: 'Vídeos',

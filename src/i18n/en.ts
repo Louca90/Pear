@@ -288,6 +288,8 @@ export const en: Dictionary = {
     ajouterTexte: 'Add text',
     ecrire: 'Write something',
     valider: 'Confirm text',
+    imagePasPrete: 'The image isn’t ready yet.',
+    majPourTextes: 'Update Pear to save texts and drawings.',
   },
   galerie: {
     videos: 'Videos',

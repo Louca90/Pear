@@ -259,7 +259,7 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
         const tag = findNodeHandle(exportRoot.current);
         if (!done) return;
         if (!tag || !size) {
-          done.reject(new Error("L'image n'est pas prête."));
+          done.reject(new Error(t('editeur.imagePasPrete')));
           return;
         }
         const output = new File(Paths.cache, `edited-${Date.now()}.png`).uri;

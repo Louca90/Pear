@@ -246,7 +246,7 @@ export const de: Dictionary = {
     formatLibre: 'Frei',
     dessin: 'Zeichnen',
     annuler: 'Rückgängig',
-    retablir: 'Wiederholen',
+    retablir: 'Wiederherstellen',
     gomme: 'Radierer',
     epaisseur: 'Pinselgröße',
     stickers: 'Sticker',
@@ -288,6 +288,8 @@ export const de: Dictionary = {
     ajouterTexte: 'Text hinzufügen',
     ecrire: 'Schreib etwas',
     valider: 'Text bestätigen',
+    imagePasPrete: 'Das Bild ist noch nicht bereit.',
+    majPourTextes: 'Aktualisiere Pear, um Texte und Zeichnungen zu speichern.',
   },
   galerie: {
     videos: 'Videos',
