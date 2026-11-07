@@ -33,6 +33,7 @@
     "lucide-react-native": "^1.66.0",
     "react": "19.3.0",
     "react-native": "0.88.1",
+    "react-native-gesture-handler": "~3.3.0",
     "react-native-libsodium": "^1.7.0",
     "react-native-qrcode-svg": "^6.3.49",
     "react-native-svg": "15.16.0",
