@@ -85,6 +85,12 @@ export function openDatabase(): SQLiteDatabase {
 
 const db = openDatabase;
 
+// Copie cohérente et compacte de la base, sans son journal (sauvegarde, lot 12). Le chemin est un
+// chemin de fichier brut, pas une URI.
+export function snapshotDatabase(path: string) {
+  db().execSync(`VACUUM INTO '${path.replace(/'/g, "''")}'`);
+}
+
 // expo-sqlite range ses bases dans files/SQLite. defaultDatabaseDirectory est un chemin brut que File
 // refuse (« URI is not absolute ») : on part de Paths.document, qui est une URI file://.
 function databaseFile(suffix = '') {

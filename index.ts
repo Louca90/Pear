@@ -1,3 +1,5 @@
+// En tout premier : une restauration en attente remplace la base avant que quoi que ce soit ne l'ouvre.
+import './src/backup/applyOnStart';
 import { registerRootComponent } from 'expo';
 import notifee from '@notifee/react-native';
 import { getMessaging, setBackgroundMessageHandler } from '@react-native-firebase/messaging';

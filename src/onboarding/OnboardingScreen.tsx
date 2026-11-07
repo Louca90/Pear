@@ -1,7 +1,7 @@
 import { ComponentRef, useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, AppState, BackHandler, Easing, KeyboardAvoidingView, Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { BatteryCharging, Bell, Camera, Check, ChevronRight, Download, LucideIcon } from 'lucide-react-native';
+import { BatteryCharging, Bell, Camera, Check, ChevronRight, Download, LucideIcon, FileUp } from 'lucide-react-native';
 
 import { chat } from '../chat/manager';
 import { LINK_NAME_LENGTH } from '../crypto/pairing';
@@ -14,6 +14,7 @@ import { log } from '../log';
 import { createStyles, radius, setThemePreference, spacing, ThemePreference, useColors, useThemePreference } from '../theme';
 import { checkAllPermissions, PermissionId, PermissionState, requestPermission } from './permissions';
 import { Pear, PEAR_RATIO } from './Pear';
+import { BackupSheet } from '../components/BackupSheet';
 import { saveOnboardingStep } from './progress';
 
 export type OnboardingStep = 0 | 1 | 2 | 3;
@@ -106,6 +107,7 @@ export function OnboardingScreen({ mode, initialStep, onDone }: Props) {
   const [manufacturerAdvice, setManufacturerAdvice] = useState<{ brand: string; settings: boolean } | null>(null);
   const saved = chat.getMyProfile();
   const [name, setName] = useState(saved.name ?? '');
+  const [restoring, setRestoring] = useState(false);
   const [photo, setPhoto] = useState(saved.photo);
 
   const refresh = useCallback(() => {
@@ -255,6 +257,7 @@ export function OnboardingScreen({ mode, initialStep, onDone }: Props) {
                 <Text style={styles.text}>{t('priseEnMain.presentation')}</Text>
                 <View style={styles.spacer} />
                 <Button label={t('priseEnMain.commencer')} icon={ChevronRight} onPress={() => goTo(1)} />
+                <Button label={t('sauvegarde.restaurer')} icon={FileUp} variant="secondary" onPress={() => setRestoring(true)} />
               </View>
             )}
             {step === 1 && (
@@ -318,6 +321,7 @@ export function OnboardingScreen({ mode, initialStep, onDone }: Props) {
           </Animated.View>
         </Animated.ScrollView>
       </KeyboardAvoidingView>
+      {restoring && <BackupSheet mode="import" onClose={() => setRestoring(false)} />}
     </Animated.View>
   );
 }

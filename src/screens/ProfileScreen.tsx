@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, ScrollView, Text, TextInput, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { Camera, Check, ImageMinus, Settings } from 'lucide-react-native';
+import { Camera, Check, FileDown, FileUp, ImageMinus, Settings } from 'lucide-react-native';
 
 import { chat, MAX_PROFILE_NAME_LENGTH } from '../chat/manager';
+import { BackupSheet } from '../components/BackupSheet';
 import { useBottomBarSpace } from '../components/BottomBar';
 import { showDialog } from '../components/dialog';
 import { Avatar, Button, Header, IconButton, Screen } from '../components/ui';
@@ -24,6 +25,7 @@ export function ProfileScreen({ onSettings }: { onSettings: () => void }) {
   const [name, setName] = useState(saved.name ?? '');
   const [photo, setPhoto] = useState(saved.photo);
   const [state, setState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [backup, setBackup] = useState<'export' | 'import' | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(timer.current), []);
 
@@ -87,8 +89,18 @@ export function ProfileScreen({ onSettings }: { onSettings: () => void }) {
             onPress={save}
           />
 
+          <Text style={[styles.label, styles.section]}>{t('sauvegarde.titre')}</Text>
+          <View style={styles.backupRow}>
+            <View style={styles.flex}>
+              <Button label={t('sauvegarde.exporter')} icon={FileDown} variant="secondary" onPress={() => setBackup('export')} />
+            </View>
+            <View style={styles.flex}>
+              <Button label={t('sauvegarde.charger')} icon={FileUp} variant="secondary" onPress={() => setBackup('import')} />
+            </View>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
+      {backup && <BackupSheet mode={backup} onClose={() => setBackup(null)} />}
     </Screen>
   );
 }
@@ -147,5 +159,12 @@ const useStyles = createStyles((colors) => ({
     fontSize: 14,
     color: colors.textMuted,
     marginBottom: spacing.lg,
+  },
+  section: {
+    marginTop: spacing.lg,
+  },
+  backupRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
   },
 }));
