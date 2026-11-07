@@ -1,5 +1,5 @@
 {
-  "version": "1.2.0",
-  "versionCode": 4,
-  "summary": "- Toucher une notification ouvre directement la bonne conversation, même quand Pear est en arrière-plan.\n- La conversation descend toute seule quand tu envoies, et un bouton « nouveaux messages » apparaît si tu es remonté.\n- Les messages ne sont marqués « lus » qu'une fois que tu es redescendu les voir.\n- Photos et vidéos s'ouvrent instantanément ; un appui long permet d'y réagir.\n- Plusieurs bugs corrigés : barre du haut après le déverrouillage, messages très longs, envois de fichiers bloqués."
+  "version": "1.3.0",
+  "versionCode": 5,
+  "summary": "- Les messages arrivent même quand Pear est fermé : ils voyagent chiffrés dans la notification.\n- Tu peux répondre ou marquer comme lu directement depuis la notification.\n- Nouveau thème sombre (ou automatique) dans ton profil.\n- Un écran « Diagnostic des notifications » aide à comprendre quand un message tarde.\n- Chiffrement renforcé : tes conversations passent sur des clés neuves, sans rien perdre."
 }
