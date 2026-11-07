@@ -12,6 +12,7 @@ import { getContactRows, getConversationSettings, getMessages, getPeerState, get
 import { exportCopy, formatSize, MAX_FILE_BYTES, saveToGallery, videoThumbnail } from '../../chat/files';
 import { chat, PickedFile } from '../../chat/manager';
 import { showDialog } from '../../components/dialog';
+import { ContactPickerSheet } from '../../components/ContactPickerSheet';
 import { MediaPicker } from '../../components/MediaPicker';
 import { Screen, useInsets } from '../../components/ui';
 import { bubblePalette, createStyles, radius, spacing, useColors } from '../../theme';
@@ -23,7 +24,6 @@ import { ComposerFade } from './components/ComposerFade';
 import { MediaViewer, Viewing } from './components/MediaViewer';
 import { Bubble, markMessagesShown } from './components/MessageBubble';
 import { MessageSelection } from './components/MessageSelection';
-import { ForwardSheet } from './components/ForwardSheet';
 import { NewMessagesButton } from './components/NewMessagesButton';
 import { PinnedBanner } from './components/PinnedBanner';
 import { Toast } from './components/Toast';
@@ -353,7 +353,8 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
           <NewMessagesButton count={scroll.newCount} onPress={scroll.scrollToBottom} />
           {toast && <Toast text={toast.text} token={toast.token} />}
           {forwarding && (
-            <ForwardSheet
+            <ContactPickerSheet
+              title={t('transfert.titre')}
               contacts={getContactRows()
                 .filter((row) => !isBlocked(row.public_key))
                 .map((row) => ({ publicKey: row.public_key, name: row.name, ...(row.state === 'pending' ? { pending: true } : {}) }))}

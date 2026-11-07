@@ -1,5 +1,5 @@
 import { ComponentRef, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, FlatList, Linking, Modal, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, Linking, Modal, PanResponder, StyleSheet, Text, View } from 'react-native';
 import { CameraType, CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import { File, Paths } from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
@@ -9,13 +9,13 @@ import { Camera, Check, Download, Lock, Send, Settings, Square, SwitchCamera, X,
 
 import { resizeImage } from '../../modules/pear-native';
 
-import { getContactProfile } from '../chat/database';
 import { saveToGallery } from '../chat/files';
 import { chat } from '../chat/manager';
 import { useBottomBarSpace } from '../components/BottomBar';
 import { showDialog } from '../components/dialog';
+import { ContactPickerSheet } from '../components/ContactPickerSheet';
 import { MediaEditor, MediaEditorHandle } from '../components/MediaEditor';
-import { Avatar, Button, IconButton, RowPressable, useInsets, useNavigationBarHeight } from '../components/ui';
+import { Button, IconButton, useInsets, useNavigationBarHeight } from '../components/ui';
 import { Contact } from '../storage';
 import { createMediaStyles, radius, spacing, useMediaColors } from '../theme';
 import { log } from '../log';
@@ -31,8 +31,6 @@ const SHUTTER_SIZE = 84;
 const PHOTO_QUALITY = 0.9;
 const PHOTO_MAX_SIZE = 2048;
 const PHOTO_JPEG_QUALITY = 82;
-const SHEET_OPEN_MS = 260;
-const SHEET_CLOSE_MS = 200;
 const DOUBLE_TAP_MS = 300;
 const FLIP_SWIPE_DISTANCE = 70;
 const FLIP_TAP_DISTANCE = 10;
@@ -64,20 +62,8 @@ function CaptureReview({ capture, contacts, onDiscard, onSent }: ReviewProps) {
   const bottom = useNavigationBarHeight();
   const [picking, setPicking] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [sheetHeight, setSheetHeight] = useState(600);
-  const sheet = useRef(new Animated.Value(0)).current;
   const editor = useRef<MediaEditorHandle>(null);
   const [preparing, setPreparing] = useState(false);
-
-  // La liste monte simplement du bas vers le haut, sans rebond.
-  useEffect(() => {
-    Animated.timing(sheet, {
-      toValue: picking ? 1 : 0,
-      duration: picking ? SHEET_OPEN_MS : SHEET_CLOSE_MS,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
-  }, [picking, sheet]);
 
   const finalUri = async () => {
     setPreparing(true);
@@ -101,13 +87,16 @@ function CaptureReview({ capture, contacts, onDiscard, onSent }: ReviewProps) {
     }
   };
 
-  const send = async (contact: Contact) => {
+  // Un ou plusieurs contacts : le média préparé une seule fois, puis envoyé à chacun (chiffré à part).
+  const send = async (keys: string[]) => {
     try {
       const uri = await finalUri();
       const ending = extension(uri);
       const mime = capture.kind === 'video' ? 'video/mp4' : ending === '.png' ? 'image/png' : 'image/jpeg';
-      await chat.sendFile(contact.publicKey, { uri, name: `${capture.kind === 'video' ? 'video' : 'photo'}${ending}`, size: 0, mime, kind: capture.kind, fromCamera: true });
-      onSent(contact.publicKey);
+      for (const key of keys) {
+        await chat.sendFile(key, { uri, name: `${capture.kind === 'video' ? 'video' : 'photo'}${ending}`, size: 0, mime, kind: capture.kind, fromCamera: true });
+      }
+      onSent(keys[0]);
     } catch (e) {
       showDialog(t('chat.envoiImpossible'), String(e));
     }
@@ -129,29 +118,9 @@ function CaptureReview({ capture, contacts, onDiscard, onSent }: ReviewProps) {
           <Button label={t('camera.envoyerA')} icon={Send} variant="secondary" onPress={() => setPicking(true)} />
         </View>
 
-        {picking && <Pressable style={StyleSheet.absoluteFill} onPress={() => setPicking(false)} accessibilityLabel={t('commun.fermer')} />}
-        <Animated.View
-          pointerEvents={picking ? 'auto' : 'none'}
-          onLayout={(event) => setSheetHeight(event.nativeEvent.layout.height)}
-          style={[
-            styles.sheet,
-            { paddingBottom: bottom + spacing.md },
-            { transform: [{ translateY: sheet.interpolate({ inputRange: [0, 1], outputRange: [sheetHeight, 0] }) }] },
-          ]}
-        >
-          <Text style={styles.sheetTitle}>{t('camera.envoyerA')}</Text>
-          <FlatList
-            data={contacts}
-            keyExtractor={(contact) => contact.publicKey}
-            renderItem={({ item }) => (
-              <RowPressable onPress={() => send(item)} style={styles.contactRow}>
-                <Avatar uri={getContactProfile(item.publicKey).photo_uri} size={40} />
-                <Text style={styles.contactName} numberOfLines={1}>{item.name}</Text>
-              </RowPressable>
-            )}
-            ListEmptyComponent={<Text style={styles.sheetEmpty}>{t('camera.aucunContact')}</Text>}
-          />
-        </Animated.View>
+        {picking && (
+          <ContactPickerSheet title={t('camera.envoyerA')} contacts={contacts} onSend={send} onClose={() => setPicking(false)} />
+        )}
         {preparing && (
           <View style={styles.preparing} accessibilityLiveRegion="polite">
             <ActivityIndicator color={colors.background} size="large" />
@@ -602,42 +571,5 @@ const useStyles = createMediaStyles((colors) => ({
     position: 'absolute',
     left: spacing.lg,
     right: spacing.lg,
-  },
-  sheet: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    maxHeight: '60%',
-    paddingTop: spacing.lg,
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
-    backgroundColor: colors.background,
-  },
-  sheetTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.sm,
-  },
-  sheetEmpty: {
-    fontSize: 16,
-    color: colors.textMuted,
-    padding: spacing.lg,
-  },
-  contactRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    marginHorizontal: spacing.sm,
-    paddingHorizontal: spacing.lg - spacing.sm,
-    paddingVertical: spacing.sm + 4,
-  },
-  contactName: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '500',
-    color: colors.text,
   },
 }));

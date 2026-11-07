@@ -1,19 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, FlatList, Modal, Pressable, Text, View, useWindowDimensions } from 'react-native';
+import { Animated, Easing, FlatList, Modal, PanResponder, Pressable, Text, View, useWindowDimensions } from 'react-native';
 import { ArrowUp } from 'lucide-react-native';
 import Svg, { Path } from 'react-native-svg';
 
-import { getContactProfile } from '../../../chat/database';
-import { SearchField } from '../../../components/SearchField';
-import { Avatar, useNavigationBarHeight } from '../../../components/ui';
-import { t } from '../../../i18n';
-import { Contact } from '../../../storage';
-import { createStyles, radius, spacing, useColors } from '../../../theme';
+import { getContactProfile } from '../chat/database';
+import { SearchField } from './SearchField';
+import { Avatar, useNavigationBarHeight } from './ui';
+import { t } from '../i18n';
+import { Contact } from '../storage';
+import { createStyles, radius, spacing, useColors } from '../theme';
 
 const OPEN_MS = 260;
 const CLOSE_MS = 200;
 const EASING = Easing.bezier(0.2, 0.8, 0.2, 1);
 const CHECK_MS = 220;
+// Tirée vers le bas au-delà de cette distance (ou lâchée vite), la feuille finit de se fermer.
+const DRAG_CLOSE_DISTANCE = 110;
+const DRAG_CLOSE_SPEED = 0.8;
+const TAP_SLOP = 6;
 // Longueur du tracé de la coche (dans une grille de 24) : il se dessine de 0 à cette longueur.
 const CHECK_LENGTH = 16;
 const AnimatedPath = Animated.createAnimatedComponent(Path);
@@ -53,9 +57,13 @@ function CheckBox({ checked }: { checked: boolean }) {
   );
 }
 
-// Feuille « Transférer à » : monte du bas sur la conversation, recherche, un ou plusieurs contacts,
-// puis « Envoyer ». Les contacts en attente d'acceptation ne sont pas proposés.
-export function ForwardSheet({ contacts, onSend, onClose }: { contacts: Contact[]; onSend: (keys: string[]) => void; onClose: () => void }) {
+// Feuille de choix de contacts (transfert, envoi depuis la caméra) : monte du bas, recherche, un ou
+// plusieurs contacts, puis « Envoyer ». Les contacts en attente d'acceptation ne sont pas proposés.
+// La barre du haut se touche pour fermer, ou se tire vers le bas : au-delà d'un seuil la feuille
+// finit de se fermer, sinon elle remonte. Couleurs du thème (clair ou sombre).
+type Props = { title: string; contacts: Contact[]; onSend: (keys: string[]) => void; onClose: () => void };
+
+export function ContactPickerSheet({ title, contacts, onSend, onClose }: Props) {
   const colors = useColors();
   const styles = useStyles();
   const bottom = useNavigationBarHeight();
@@ -63,7 +71,10 @@ export function ForwardSheet({ contacts, onSend, onClose }: { contacts: Contact[
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
   const progress = useRef(new Animated.Value(0)).current;
+  const drag = useRef(new Animated.Value(0)).current;
   const closing = useRef(false);
+  // Hauteur réelle de la feuille : fermée, elle descend entièrement sous l'écran.
+  const [sheetHeight, setSheetHeight] = useState(height);
 
   useEffect(() => {
     Animated.timing(progress, { toValue: 1, duration: OPEN_MS, easing: EASING, useNativeDriver: true }).start();
@@ -77,6 +88,21 @@ export function ForwardSheet({ contacts, onSend, onClose }: { contacts: Contact[
       then?.();
     });
   };
+  const latestClose = useRef(close);
+  latestClose.current = close;
+
+  const handlePan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_event, gesture) => Math.abs(gesture.dy) > TAP_SLOP,
+      onPanResponderMove: (_event, gesture) => drag.setValue(Math.max(0, gesture.dy)),
+      onPanResponderRelease: (_event, gesture) => {
+        if (Math.abs(gesture.dy) < TAP_SLOP || gesture.dy > DRAG_CLOSE_DISTANCE || gesture.vy > DRAG_CLOSE_SPEED) latestClose.current();
+        else Animated.timing(drag, { toValue: 0, duration: CLOSE_MS, easing: EASING, useNativeDriver: true }).start();
+      },
+      onPanResponderTerminate: () => Animated.timing(drag, { toValue: 0, duration: CLOSE_MS, easing: EASING, useNativeDriver: true }).start(),
+    }),
+  ).current;
 
   const search = query.trim().toLocaleLowerCase('fr');
   const shown = contacts
@@ -95,11 +121,14 @@ export function ForwardSheet({ contacts, onSend, onClose }: { contacts: Contact[
         style={[
           styles.sheet,
           { maxHeight: height * 0.75, paddingBottom: bottom + spacing.md },
-          { transform: [{ translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [height * 0.6, 0] }) }] },
+          { transform: [{ translateY: Animated.add(progress.interpolate({ inputRange: [0, 1], outputRange: [sheetHeight + spacing.lg, 0] }), drag) }] },
         ]}
+        onLayout={(event) => setSheetHeight(event.nativeEvent.layout.height)}
       >
-        <View style={styles.handle} />
-        <Text style={styles.title}>{t('transfert.titre')}</Text>
+        <View {...handlePan.panHandlers} style={styles.header} accessibilityRole="button" accessibilityLabel={t('commun.fermer')}>
+          <View style={styles.handle} />
+          <Text style={styles.title}>{title}</Text>
+        </View>
         <SearchField value={query} onChange={setQuery} placeholder={t('liste.rechercher')} />
         <FlatList
           data={shown}
@@ -148,10 +177,12 @@ const useStyles = createStyles((colors) => ({
     left: 0,
     right: 0,
     bottom: 0,
-    paddingTop: spacing.sm,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     backgroundColor: colors.background,
+  },
+  header: {
+    paddingTop: spacing.sm,
   },
   handle: {
     alignSelf: 'center',
