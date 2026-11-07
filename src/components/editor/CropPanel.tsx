@@ -4,7 +4,7 @@ import * as Haptics from 'expo-haptics';
 import { RotateCw } from 'lucide-react-native';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
 
-import { t, TextKey } from '../../i18n';
+import { t } from '../../i18n';
 import { log } from '../../log';
 import { createMediaStyles, radius, spacing, useMediaColors } from '../../theme';
 import { IconButton, useInsets } from '../ui';
@@ -21,24 +21,41 @@ const HANDLE = 22;
 const TOP_SPACE = 84;
 const BOTTOM_SPACE = 190;
 
-const ASPECT_LABELS: Record<Aspect, TextKey> = {
-  free: 'editeur.formatLibre',
-  square: 'editeur.formatCarre',
-  portrait: 'editeur.formatPortrait',
-  story: 'editeur.formatStory',
-};
+// Le nom d'un format : « Libre », sinon sa proportion (1:1, 4:5…), la même dans toutes les langues.
+function aspectLabel(id: Aspect) {
+  return id === 'free' ? t('editeur.formatLibre') : id;
+}
 
-// L'icône d'un format : un cadre à ses proportions (en pointillés pour le format libre).
-const ASPECT_SHAPES: Record<Aspect, { width: number; height: number; dashed?: boolean }> = {
-  free: { width: 22, height: 16, dashed: true },
-  square: { width: 18, height: 18 },
-  portrait: { width: 16, height: 20 },
-  story: { width: 12, height: 21 },
-};
+// L'icône d'un format : un cadre à ses proportions. Le format libre : les quatre équerres d'un
+// recadrage, sans cadre fermé.
+const ICON_BOX = 22;
 
-function AspectIcon({ id, color }: { id: Aspect; color: string }) {
-  const shape = ASPECT_SHAPES[id];
-  return <View style={{ width: shape.width, height: shape.height, borderWidth: 2, borderRadius: 3, borderColor: color, borderStyle: shape.dashed ? 'dashed' : 'solid' }} />;
+function AspectIcon({ id, ratio, color }: { id: Aspect; ratio: number | null; color: string }) {
+  if (id === 'free' || !ratio) {
+    const arm = 7;
+    const corner = (vertical: 'top' | 'bottom', horizontal: 'left' | 'right') => ({
+      position: 'absolute' as const,
+      width: arm,
+      height: arm,
+      [vertical]: 0,
+      [horizontal]: 0,
+      borderColor: color,
+      [vertical === 'top' ? 'borderTopWidth' : 'borderBottomWidth']: 2,
+      [horizontal === 'left' ? 'borderLeftWidth' : 'borderRightWidth']: 2,
+      [`border${vertical === 'top' ? 'Top' : 'Bottom'}${horizontal === 'left' ? 'Left' : 'Right'}Radius`]: 2,
+    });
+    return (
+      <View style={{ width: ICON_BOX - 2, height: ICON_BOX - 6 }}>
+        <View style={corner('top', 'left')} />
+        <View style={corner('top', 'right')} />
+        <View style={corner('bottom', 'left')} />
+        <View style={corner('bottom', 'right')} />
+      </View>
+    );
+  }
+  const width = ratio >= 1 ? ICON_BOX : ICON_BOX * ratio;
+  const height = ratio >= 1 ? ICON_BOX / ratio : ICON_BOX;
+  return <View style={{ width, height, borderWidth: 2, borderRadius: 3, borderColor: color }} />;
 }
 
 type Mode = 'move' | 'tl' | 'tr' | 'bl' | 'br' | 't' | 'b' | 'l' | 'r' | null;
@@ -225,16 +242,19 @@ export function CropPanel({ uri, image, crop: initial, bottom, onDone }: Props) 
 
       <View style={[styles.bottomRow, { bottom: bottom + spacing.lg }]}>
         <View style={styles.aspects}>
-          {ASPECTS.map(({ id }) => (
+          {ASPECTS.map(({ id, ratio: value }) => (
             <Pressable
               key={id}
               onPress={() => chooseAspect(id)}
               accessibilityRole="button"
-              accessibilityLabel={t(ASPECT_LABELS[id])}
+              accessibilityLabel={aspectLabel(id)}
               accessibilityState={{ selected: aspect === id }}
               style={[styles.chip, aspect === id && styles.chipOn]}
             >
-              <AspectIcon id={id} color={aspect === id ? colors.text : colors.background} />
+              <View style={styles.chipIcon}>
+                <AspectIcon id={id} ratio={value} color={aspect === id ? colors.text : colors.background} />
+              </View>
+              <Text style={[styles.chipLabel, aspect === id && { color: colors.text }]}>{aspectLabel(id)}</Text>
             </Pressable>
           ))}
         </View>
@@ -323,12 +343,23 @@ const useStyles = createMediaStyles((colors) => ({
     gap: spacing.sm,
   },
   chip: {
-    width: 48,
-    height: 44,
-    borderRadius: radius.full,
+    width: 52,
+    height: 56,
+    borderRadius: 14,
     backgroundColor: 'rgba(255, 255, 255, 0.14)',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 4,
+  },
+  chipIcon: {
+    height: ICON_BOX,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chipLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.background,
   },
   chipOn: {
     backgroundColor: colors.background,

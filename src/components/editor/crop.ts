@@ -4,14 +4,16 @@
 export type Rotation = 0 | 90 | 180 | 270;
 export type Rect = { x: number; y: number; width: number; height: number };
 export type Crop = { rotation: Rotation; rect: Rect };
-export type Aspect = 'free' | 'square' | 'portrait' | 'story';
+export type Aspect = 'free' | '1:1' | '4:5' | '3:4' | '9:16' | '16:9';
 
 export const NO_CROP: Crop = { rotation: 0, rect: { x: 0, y: 0, width: 1, height: 1 } };
 export const ASPECTS: { id: Aspect; ratio: number | null }[] = [
   { id: 'free', ratio: null },
-  { id: 'square', ratio: 1 },
-  { id: 'portrait', ratio: 4 / 5 },
-  { id: 'story', ratio: 9 / 16 },
+  { id: '1:1', ratio: 1 },
+  { id: '4:5', ratio: 4 / 5 },
+  { id: '3:4', ratio: 3 / 4 },
+  { id: '9:16', ratio: 9 / 16 },
+  { id: '16:9', ratio: 16 / 9 },
 ];
 
 type Size = { width: number; height: number };
