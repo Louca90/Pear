@@ -1,6 +1,7 @@
 import { AppState } from 'react-native';
 
 import {
+  setMessagePinned,
   activateContact,
   addMessage,
   deleteUpload,
@@ -97,6 +98,8 @@ function receiveEvent(core: ChatCore, contact: string, data: Payload) {
   } else if (data.action === 'delete' && getMessage(data.id, contact)?.mine === 0) {
     dropIncomingFile(core, contact, data.id);
     deleteMessage(data.id, contact, 0);
+  } else if (data.action === 'pin' && typeof data.pinned === 'boolean') {
+    setMessagePinned(data.id, contact, data.pinned);
   } else if (data.action === 'wallpaper-clear') {
     setConversationSetting(contact, 'wallpaper_uri', null);
     addSystemMessage(contact, 0);

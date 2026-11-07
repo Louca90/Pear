@@ -46,6 +46,8 @@ export type Message = {
   edited: number;
   my_reaction: string | null;
   their_reaction: string | null;
+  // Épinglé : l'heure de l'épinglage (0 sinon).
+  pinned?: number;
 };
 
 export type NewMessage = Pick<Message, 'id' | 'contact' | 'mine' | 'text' | 'status' | 'created_at'> & Partial<Message>;
@@ -311,6 +313,26 @@ export function getMediaMessages(contact: string): Message[] {
   return db().getAllSync<Message>(
     "SELECT * FROM messages WHERE contact = ? AND kind IN ('image', 'video', 'file') AND file_uri IS NOT NULL ORDER BY created_at DESC",
     contact,
+  );
+}
+
+// Messages épinglés d'une conversation, du plus récent au plus ancien (au plus 3, partagés avec le contact).
+export const MAX_PINNED_MESSAGES = 3;
+
+export function getPinnedMessages(contact: string): Message[] {
+  return db()
+    .getAllSync<Message>('SELECT * FROM messages WHERE contact = ? AND pinned > 0 ORDER BY pinned DESC LIMIT ?', contact, MAX_PINNED_MESSAGES)
+    .map(withoutFileKey);
+}
+
+export function setMessagePinned(id: string, contact: string, pinned: boolean) {
+  db().runSync('UPDATE messages SET pinned = ? WHERE id = ? AND contact = ?', pinned ? Date.now() : 0, id, contact);
+  // Au-delà de la limite, le plus ancien épinglage saute.
+  db().runSync(
+    'UPDATE messages SET pinned = 0 WHERE contact = ? AND pinned > 0 AND id NOT IN (SELECT id FROM messages WHERE contact = ? AND pinned > 0 ORDER BY pinned DESC LIMIT ?)',
+    contact,
+    contact,
+    MAX_PINNED_MESSAGES,
   );
 }
 

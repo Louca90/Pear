@@ -114,6 +114,10 @@ export const fr = {
     sa: 'sa',
     majRequise: 'Mets à jour Pear pour lire ce message',
     ecrit: 'écrit…',
+    epingler: 'Épingler',
+    desepingler: 'Désépingler',
+    messageEpingle: 'Message épinglé',
+    messageEpingleN: 'Message épinglé {i}/{n}',
   },
   profil: {
     themeAuto: 'Automatique',

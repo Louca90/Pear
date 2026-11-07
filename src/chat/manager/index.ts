@@ -5,7 +5,7 @@ import { Identity } from '../../crypto/pairing';
 import { PeerStatus, RouteType } from '../../network/peer';
 import { Contact, loadContacts, loadOrCreateIdentity, saveContacts } from '../../storage';
 import { t } from '../../i18n';
-import { addMessage, blockKey, deleteMessage, deleteRelayIncoming, editMessage, getMessage, getPendingRequests, getRelayIncoming, unblockKey, markConversationRead, setConversationSetting, setIncomingStatus, setReaction } from '../database';
+import { addMessage, blockKey, deleteMessage, deleteRelayIncoming, editMessage, getMessage, getPendingRequests, getRelayIncoming, unblockKey, markConversationRead, setConversationSetting, setMessagePinned, setIncomingStatus, setReaction } from '../database';
 import { clearMessageNotification } from '../notifications';
 
 import { deleteRelay } from '../../network/relay';
@@ -303,6 +303,13 @@ class ChatManager extends ChatCore {
     setReaction(id, contact, 'my_reaction', next);
     this.afterSend(contact);
     sendEvent(this, contact, { action: 'react', id, emoji: next });
+  }
+
+  // Épingler ou désépingler un message, pour les deux.
+  pin(contact: string, id: string, pinned: boolean) {
+    setMessagePinned(id, contact, pinned);
+    this.notify();
+    sendEvent(this, contact, { action: 'pin', id, pinned });
   }
 
   deleteForEveryone(contact: string, id: string) {

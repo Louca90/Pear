@@ -6,9 +6,9 @@ import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
 import * as Sharing from 'expo-sharing';
-import { Copy, Download, MessageCircle, Pencil, Reply, Trash2 } from 'lucide-react-native';
+import { Copy, Download, MessageCircle, Pencil, Pin, PinOff, Reply, Trash2 } from 'lucide-react-native';
 
-import { getConversationSettings, getMessages, getPeerState, isBlocked, Message } from '../../chat/database';
+import { getConversationSettings, getMessages, getPeerState, getPinnedMessages, isBlocked, Message } from '../../chat/database';
 import { exportCopy, formatSize, MAX_FILE_BYTES, saveToGallery, videoThumbnail } from '../../chat/files';
 import { chat, PickedFile } from '../../chat/manager';
 import { showDialog } from '../../components/dialog';
@@ -24,6 +24,7 @@ import { MediaViewer, Viewing } from './components/MediaViewer';
 import { Bubble, markMessagesShown } from './components/MessageBubble';
 import { MessageSelection } from './components/MessageSelection';
 import { NewMessagesButton } from './components/NewMessagesButton';
+import { PinnedBanner } from './components/PinnedBanner';
 import { Toast } from './components/Toast';
 import { JUMP_PULSE_DELAY_MS, LIKE } from './constants';
 import { useChatScroll } from './hooks/useChatScroll';
@@ -80,6 +81,7 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
 
   // Relu seulement quand le moteur signale un changement, pas à chaque rafraîchissement de l'écran.
   const messages = useMemo(() => getMessages(contactKey), [contactKey, version]);
+  const pinnedMessages = useMemo(() => getPinnedMessages(contactKey), [contactKey, version]);
   // À l'ouverture, les messages déjà là ne font pas d'entrée ; seuls les suivants apparaissent en douceur.
   const openedWith = useRef<string | null>(null);
   if (openedWith.current !== contactKey) {
@@ -207,6 +209,9 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
     ...((message.kind === 'image' || message.kind === 'video') && message.file_uri
       ? [{ label: t('commun.enregistrer'), icon: Download, onPress: () => saveMedia(message) }]
       : []),
+    message.pinned
+      ? { label: t('chat.desepingler'), icon: PinOff, onPress: () => chat.pin(contactKey, message.id, false) }
+      : { label: t('chat.epingler'), icon: Pin, onPress: () => chat.pin(contactKey, message.id, true) },
     { label: t('commun.supprimer'), icon: Trash2, danger: true, onPress: () => confirmDelete(message) },
   ];
 
@@ -299,6 +304,7 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
         <KeyboardAvoidingView behavior="padding" keyboardVerticalOffset={topInset} style={styles.flex}>
           <View ref={listArea} collapsable={false} style={styles.flex}>
           {palettes.hasWallpaper && <ComposerFade />}
+          <PinnedBanner messages={pinnedMessages} onJump={jumpTo} />
           {messages.length === 0 ? (
             <View style={styles.empty}>
               <MessageCircle size={28} color={colors.textMuted} strokeWidth={1.75} />
