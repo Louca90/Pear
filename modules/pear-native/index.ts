@@ -11,6 +11,7 @@ export type VideoEdit = { overlayUri?: string; matrix?: number[]; startMs?: numb
 declare class PearNativeModule extends NativeModule<{ onBack: (event: BackEvent) => void; onDownloadProgress: (event: DownloadProgress) => void; onInsetsChange: (event: Insets) => void }> {
   burnOverlay(videoUri: string, overlayUri: string, bitrate: number): Promise<string>;
   editVideo?(videoUri: string, edit: VideoEdit): Promise<string>;
+  captureView?(tag: number, outputUri: string, scale: number): Promise<string>;
   navigationBarHeight(): number | null;
   systemInsets(): Insets | null;
   watchInsets(): Promise<void>;
@@ -102,6 +103,12 @@ export function installApk(fileUri: string) {
 // Incruste une image transparente dans toute la vidéo, sur le téléphone. Renvoie le nouveau fichier.
 export function burnOverlay(videoUri: string, overlayUri: string, bitrate: number) {
   return PearNative.burnOverlay(videoUri, overlayUri, bitrate);
+}
+
+// Une vue dessinée dans une image PNG (calques de l'éditeur). Demande l'APK du lot 10.3.
+export function captureView(tag: number, outputUri: string, scale: number): Promise<string> {
+  if (!PearNative.captureView) return Promise.reject(new Error('Mets Pear à jour pour enregistrer les textes.'));
+  return PearNative.captureView(tag, outputUri, scale);
 }
 
 // Un APK d'avant le lot 10 ne sait que poser le calque : les autres retouches sont alors ignorées.

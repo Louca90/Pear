@@ -20,6 +20,7 @@ import { FilterStrip, FilterSwatch } from '../components/editor/FilterStrip';
 import { FilterId, NO_ADJUSTMENTS, presetOf, stepsOf } from '../components/editor/filters';
 import { formatStamp, StampMarks } from '../components/editor/stamps';
 import Svg from 'react-native-svg';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Button, IconButton, useInsets, useNavigationBarHeight } from '../components/ui';
 import { Contact } from '../storage';
 import { createMediaStyles, radius, spacing, useMediaColors } from '../theme';
@@ -121,7 +122,8 @@ function CaptureReview({ capture, contacts, onDiscard, onSent }: ReviewProps) {
 
   return (
     <Modal visible animationType="fade" onRequestClose={() => (picking ? setPicking(false) : onDiscard())} statusBarTranslucent navigationBarTranslucent>
-      <View style={styles.review}>
+      {/* Sur Android, les gestes d'une fenêtre Modal ne marchent que si son contenu a sa propre racine. */}
+      <GestureHandlerRootView style={styles.review}>
         <MediaEditor ref={editor} uri={capture.uri} kind={capture.kind} takenAt={capture.takenAt} initialFilter={capture.filter} onToolChange={setToolOpen} />
         <Animated.View pointerEvents={toolOpen ? 'none' : 'box-none'} style={[styles.topControls, { top: topInset + spacing.md, opacity: controls }]}>
           <IconButton onPress={onDiscard} label={t('camera.jeter')} style={styles.roundControl}>
@@ -144,7 +146,7 @@ function CaptureReview({ capture, contacts, onDiscard, onSent }: ReviewProps) {
             <Text style={styles.preparingText}>{capture.kind === 'video' ? t('camera.preparationVideo') : t('camera.preparationImage')}</Text>
           </View>
         )}
-      </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }

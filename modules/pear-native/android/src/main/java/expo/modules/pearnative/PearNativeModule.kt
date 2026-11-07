@@ -3,6 +3,7 @@ package expo.modules.pearnative
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
@@ -36,6 +37,8 @@ import androidx.media3.transformer.ExportResult
 import androidx.media3.transformer.Transformer
 import androidx.media3.transformer.VideoEncoderSettings
 import com.facebook.react.ReactActivity
+import com.facebook.react.bridge.ReactContext
+import com.facebook.react.uimanager.UIManagerHelper
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
@@ -253,6 +256,12 @@ class PearNativeModule : Module() {
       }
     }.runOnQueue(Queues.MAIN)
 
+    // Dessine une vue (et tout ce qu'elle contient) dans une image PNG, agrandie de `scale` : les textes
+    // et les traits sont redessinés à cette taille, donc nets. Le fond reste transparent.
+    AsyncFunction("captureView") { tag: Int, outputUri: String, scale: Double ->
+      captureView(tag, outputUri, scale)
+    }.runOnQueue(Queues.MAIN)
+
     // Toutes les retouches d'une vidéo en un passage : couleurs (matrice), calque, découpe, son, vitesse.
     AsyncFunction("editVideo") { videoUri: String, edit: VideoEdit, promise: Promise ->
       try {
@@ -361,6 +370,22 @@ class PearNativeModule : Module() {
       .setDataAndType(uri, APK_MIME)
       .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
     activity.startActivity(intent)
+  }
+
+  private fun captureView(tag: Int, outputUri: String, scale: Double): String {
+    val context = appContext.reactContext as? ReactContext ?: throw IllegalStateException("L'app n'est pas prête.")
+    val view = UIManagerHelper.getUIManagerForReactTag(context, tag)?.resolveView(tag)
+      ?: throw IllegalArgumentException("Vue introuvable.")
+    if (view.width <= 0 || view.height <= 0) throw IllegalStateException("Vue pas encore mesurée.")
+    val factor = scale.toFloat().coerceIn(0.5f, 4f)
+    val bitmap = Bitmap.createBitmap((view.width * factor).toInt(), (view.height * factor).toInt(), Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    canvas.scale(factor, factor)
+    view.draw(canvas)
+    val path = Uri.parse(outputUri).path ?: throw IllegalArgumentException("Fichier invalide.")
+    FileOutputStream(path).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    bitmap.recycle()
+    return outputUri
   }
 
   private fun editVideo(videoUri: String, edit: VideoEdit, promise: Promise) {
