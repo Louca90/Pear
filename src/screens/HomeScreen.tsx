@@ -5,6 +5,7 @@ import { Flame, Plus, Users } from 'lucide-react-native';
 import { describeMessage, getContactProfile, getLastMessage, getPendingRequests, getStreak } from '../chat/database';
 import { chat } from '../chat/manager';
 import { useBottomBarSpace } from '../components/BottomBar';
+import { PermissionBanner } from '../components/PermissionBanner';
 import { RequestsBell } from '../components/RequestsBell';
 import { Avatar, Button, Header, RowPressable, Screen } from '../components/ui';
 import { Contact } from '../storage';
@@ -16,9 +17,11 @@ type Props = {
   onAdd: () => void;
   onOpen: (contact: Contact) => void;
   onRequests: () => void;
+  permissionMissing: boolean;
+  onFixPermissions: () => void;
 };
 
-export function HomeScreen({ contacts, onAdd, onOpen, onRequests }: Props) {
+export function HomeScreen({ contacts, onAdd, onOpen, onRequests, permissionMissing, onFixPermissions }: Props) {
   const colors = useColors();
   const styles = useStyles();
   useSyncExternalStore(chat.subscribe, chat.getVersion);
@@ -31,6 +34,7 @@ export function HomeScreen({ contacts, onAdd, onOpen, onRequests }: Props) {
     return (
       <Screen>
         <Header title="Pear" action={profileButton} />
+        <PermissionBanner visible={permissionMissing} onPress={onFixPermissions} />
         <View style={styles.empty}>
           <View style={styles.emptyIcon}>
             <Users size={28} color={colors.text} strokeWidth={1.75} />
@@ -45,10 +49,8 @@ export function HomeScreen({ contacts, onAdd, onOpen, onRequests }: Props) {
 
   return (
     <Screen>
-      <Header
-        title="Pear"
-        action={profileButton}
-      />
+      <Header title="Pear" action={profileButton} />
+      <PermissionBanner visible={permissionMissing} onPress={onFixPermissions} />
       <FlatList
         data={contacts}
         contentContainerStyle={{ paddingBottom: barSpace }}

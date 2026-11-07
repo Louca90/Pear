@@ -186,6 +186,26 @@ class PearNativeModule : Module() {
       true
     }
 
+    // Batterie « sans restriction » : sinon Android retarde les pushs quand le téléphone dort.
+    Function("isIgnoringBatteryOptimizations") {
+      val context = appContext.reactContext ?: return@Function false
+      val power = context.getSystemService(android.content.Context.POWER_SERVICE) as android.os.PowerManager
+      power.isIgnoringBatteryOptimizations(context.packageName)
+    }
+
+    // Fenêtre système « Autoriser Pear à fonctionner en arrière-plan ? ». Si elle n'existe pas sur ce
+    // téléphone, on ouvre la liste des optimisations de batterie.
+    Function("requestIgnoreBatteryOptimizations") {
+      val activity = appContext.currentActivity ?: return@Function false
+      try {
+        activity.startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${activity.packageName}")))
+      } catch (e: Exception) {
+        Log.w("PearNative", "Fenêtre de batterie indisponible", e)
+        activity.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+      }
+      true
+    }
+
     // Reprend là où le fichier partiel s'est arrêté, si le serveur le permet.
     AsyncFunction("downloadFile") { url: String, fileUri: String -> downloadFile(url, fileUri) }
 

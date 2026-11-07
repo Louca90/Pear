@@ -16,6 +16,8 @@ declare class PearNativeModule extends NativeModule<{ onBack: (event: BackEvent)
   backHookAvailable(): boolean;
   appVersionCode(): number | null;
   appVersionName(): string | null;
+  isIgnoringBatteryOptimizations(): boolean;
+  requestIgnoreBatteryOptimizations(): boolean;
   canRequestPackageInstalls(): boolean;
   openUnknownAppSourcesSettings(): boolean;
   downloadFile(url: string, fileUri: string): Promise<void>;
@@ -49,6 +51,15 @@ export function appVersionCode() {
 
 export function appVersionName() {
   return PearNative.appVersionName();
+}
+
+export function isIgnoringBatteryOptimizations(): boolean {
+  return PearNative.isIgnoringBatteryOptimizations();
+}
+
+// Fenêtre système pour passer la batterie de Pear en « sans restriction ».
+export function requestIgnoreBatteryOptimizations() {
+  return PearNative.requestIgnoreBatteryOptimizations();
 }
 
 export function canRequestPackageInstalls() {

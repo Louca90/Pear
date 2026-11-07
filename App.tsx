@@ -22,6 +22,9 @@ import { ChatScreen } from './src/screens/chat/ChatScreen';
 import { ContactScreen } from './src/screens/ContactScreen';
 import { CustomizeScreen } from './src/screens/CustomizeScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
+import { OnboardingScreen, OnboardingStep } from './src/onboarding/OnboardingScreen';
+import { checkAllPermissions } from './src/onboarding/permissions';
+import { isOnboardingDone, loadOnboardingStep, markOnboardingDone } from './src/onboarding/progress';
 import { BlockedScreen } from './src/screens/BlockedScreen';
 import { DiagnosticScreen } from './src/screens/DiagnosticScreen';
 import { RequestsScreen } from './src/screens/RequestsScreen';
@@ -99,6 +102,9 @@ function App() {
   const blocked = isBlocking(update);
   // Le popup « Pear est à jour ! » attend l'accueil, et ne passe jamais devant l'écran de mise à jour.
   const [updatedInfo, setUpdatedInfo] = useState<UpdatedInfo | null>(null);
+  const [onboarding, setOnboarding] = useState<{ mode: 'full' | 'permissions'; step: OnboardingStep } | null>(null);
+  // Une autorisation retirée depuis la prise en main : un bandeau discret sur l'accueil.
+  const [permissionMissing, setPermissionMissing] = useState(false);
 
   useEffect(() => {
     // La base est ouverte et migrée avant tout : un échec affiche une erreur au lieu de planter en boucle.
@@ -112,6 +118,13 @@ function App() {
       .then(hasIdentity)
       .then(async (existed) => {
         const [savedIdentity, savedContacts] = await Promise.all([loadOrCreateIdentity(), loadContacts()]);
+        // Prise en main : en entier sur un nouveau téléphone ; pour un utilisateur existant, seulement
+        // les autorisations s'il en manque une.
+        if (!isOnboardingDone()) {
+          if (!existed) setOnboarding({ mode: 'full', step: loadOnboardingStep() });
+          else if (Object.values(await checkAllPermissions()).some((state) => state !== 'granted')) setOnboarding({ mode: 'permissions', step: 1 });
+          else markOnboardingDone();
+        }
         setContacts(savedContacts);
         setIdentity(savedIdentity);
         setUpdatedInfo(pendingUpdatedInfo(existed));
@@ -213,9 +226,17 @@ function App() {
   // Sur l'accueil, Android montre lui-même l'aperçu pour quitter. L'appareil photo n'a pas d'aperçu.
   useEffect(() => {
     // Entre deux onglets, pas d'aperçu : la barre du bas reste en place et son rond glisse vers l'accueil.
-    const mode = blocked ? 'default' : route.name === 'home' ? 'system' : TAB_ROUTES.includes(route.name) ? 'default' : 'app';
+    const mode = blocked || onboarding ? 'default' : route.name === 'home' ? 'system' : TAB_ROUTES.includes(route.name) ? 'default' : 'app';
     setBackMode(mode).catch((e) => log.warn('retour', e));
-  }, [route.name, blocked]);
+  }, [route.name, blocked, onboarding]);
+
+  // À chaque retour au premier plan, une fois la prise en main finie : les autorisations sont-elles toujours là ?
+  useEffect(() => {
+    if (!active || onboarding || !identity) return;
+    checkAllPermissions()
+      .then((states) => setPermissionMissing(Object.values(states).some((state) => state !== 'granted')))
+      .catch((e) => log.warn('autorisations', e));
+  }, [active, onboarding, identity]);
 
   const sawProgress = useRef(false);
   const holdTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -435,11 +456,34 @@ function App() {
         onAdd={() => setRoute({ name: 'add' })}
         onOpen={(contact) => setRoute({ name: 'chat', publicKey: contact.publicKey })}
         onRequests={() => setRoute({ name: 'requests' })}
+        permissionMissing={permissionMissing}
+        onFixPermissions={() => setOnboarding({ mode: 'permissions', step: 1 })}
       />
     );
   };
 
   const direction = peek?.direction ?? 1;
+
+  if (onboarding && identity && !blocked) {
+    return (
+      <>
+        <StatusBar style={barStyle} />
+        <NavigationBar style={barStyle} />
+        <OnboardingScreen
+          mode={onboarding.mode}
+          initialStep={onboarding.step}
+          onDone={() => {
+            markOnboardingDone();
+            setOnboarding(null);
+            setPermissionMissing(false);
+            // Sans contact, on ouvre directement « Ajouter un contact » : c'est la première chose à faire.
+            if (onboarding.mode === 'full') setRoute(contacts.length === 0 ? { name: 'add' } : { name: 'home' });
+          }}
+        />
+        <DialogHost />
+      </>
+    );
+  }
 
   if (blocked && update.release) {
     return (
