@@ -1,5 +1,5 @@
 import { ComponentRef, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { FlatList, Pressable, ScrollView, Text, View } from 'react-native';
+import { Animated, Easing, FlatList, Pressable, ScrollView, Text, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { CheckCheck, Flame, Pin, PinOff, Plus, Trash2, Users } from 'lucide-react-native';
 
@@ -41,6 +41,11 @@ type Props = {
 };
 
 type Filter = 'all' | 'unread' | 'pinned' | 'pending' | 'online';
+
+// Changement de catégorie : la pastille glisse jusqu'à la nouvelle, la liste entre en fondu du même côté.
+const CHIP_MS = 260;
+const LIST_SHIFT = 24;
+const CHIP_EASING = Easing.bezier(0.2, 0.8, 0.2, 1);
 type Item = { contact: Contact; last: Message | null; unread: number; pinned: boolean; online: boolean };
 
 // Rafraîchit « il y a X min » tant que l'écran est affiché.
@@ -109,6 +114,31 @@ export function HomeScreen({ contacts, onAdd, onOpen, onRequests, permissionMiss
   const barSpace = useBottomBarSpace();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
+  const chipLayouts = useRef(new Map<Filter, { x: number; width: number }>()).current;
+  const pillX = useRef(new Animated.Value(0)).current;
+  const pillWidth = useRef(new Animated.Value(0)).current;
+  const listIn = useRef(new Animated.Value(1)).current;
+  const listFrom = useRef(new Animated.Value(0)).current;
+
+  const choose = (next: Filter) => {
+    if (next === filter) return;
+    const order = filters.map(({ value }) => value);
+    const side = order.indexOf(next) > order.indexOf(filter) ? 1 : -1;
+    const target = chipLayouts.get(next);
+    if (target) {
+      Animated.parallel([
+        Animated.timing(pillX, { toValue: target.x, duration: CHIP_MS, easing: CHIP_EASING, useNativeDriver: false }),
+        Animated.timing(pillWidth, { toValue: target.width, duration: CHIP_MS, easing: CHIP_EASING, useNativeDriver: false }),
+      ]).start();
+    }
+    listIn.setValue(0);
+    listFrom.setValue(side * LIST_SHIFT);
+    Animated.parallel([
+      Animated.timing(listIn, { toValue: 1, duration: CHIP_MS, easing: CHIP_EASING, useNativeDriver: true }),
+      Animated.timing(listFrom, { toValue: 0, duration: CHIP_MS, easing: CHIP_EASING, useNativeDriver: true }),
+    ]).start();
+    setFilter(next);
+  };
   const [now, setNow] = useState(parisNow);
   const [selected, setSelected] = useState<{ item: Item; rect: Rect } | null>(null);
   const rows = useRef(new Map<string, ComponentRef<typeof View>>());
@@ -205,17 +235,30 @@ export function HomeScreen({ contacts, onAdd, onOpen, onRequests, permissionMiss
       <SearchField value={query} onChange={setQuery} placeholder={t('liste.rechercher')} />
       <View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+          <Animated.View style={[styles.chipPill, { left: pillX, width: pillWidth }]} />
           {filters.map((option) => {
             const active = option.value === filter;
             return (
-              <Pressable key={option.value} onPress={() => setFilter(option.value)} style={[styles.chip, active && styles.chipActive]}>
+              <Pressable
+                key={option.value}
+                onPress={() => choose(option.value)}
+                onLayout={({ nativeEvent: { layout } }) => {
+                  chipLayouts.set(option.value, { x: layout.x, width: layout.width });
+                  if (active) {
+                    pillX.setValue(layout.x);
+                    pillWidth.setValue(layout.width);
+                  }
+                }}
+                style={[styles.chip, active && styles.chipActive]}
+              >
                 <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>{option.label}</Text>
               </Pressable>
             );
           })}
         </ScrollView>
       </View>
-      <FlatList
+      <Animated.FlatList
+        style={{ opacity: listIn, transform: [{ translateX: listFrom }] }}
         data={visible}
         contentContainerStyle={{ paddingBottom: barSpace }}
         keyExtractor={(item) => item.contact.publicKey}
@@ -306,7 +349,15 @@ const useStyles = createStyles((colors) => ({
     backgroundColor: colors.surface,
     justifyContent: 'center',
   },
+  // Transparente : c'est la pastille, qui glisse dessous, qui la colore.
   chipActive: {
+    backgroundColor: 'transparent',
+  },
+  chipPill: {
+    position: 'absolute',
+    top: spacing.md,
+    height: 32,
+    borderRadius: radius.full,
     backgroundColor: colors.accent,
   },
   chipLabel: {
