@@ -4,13 +4,13 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Camera } from 'lucide-react-native';
 
 import { Button, Header, Screen } from '../components/ui';
-import { parsePairingLink } from '../crypto/pairing';
+import { PairingLink, parsePairingLink } from '../crypto/pairing';
 import { createStyles, radius, spacing } from '../theme';
 import { t } from '../i18n';
 
 type Props = {
   onBack: () => void;
-  onKeyReceived: (publicKey: string) => void;
+  onKeyReceived: (link: PairingLink) => void;
 };
 
 export function ScannerScreen({ onBack, onKeyReceived }: Props) {

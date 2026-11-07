@@ -4,6 +4,7 @@ import { Check, QrCode, Trash2 } from 'lucide-react-native';
 
 import { ContactProfile } from '../chat/database';
 import { showDialog } from '../components/dialog';
+import { MyQrSheet } from '../components/MyQrSheet';
 import { Avatar, Button, Header, Screen } from '../components/ui';
 import { createStyles, radius, spacing, useColors } from '../theme';
 import { t } from '../i18n';
@@ -16,14 +17,16 @@ type Props = {
   isNew: boolean;
   onBack: () => void;
   onSave: (name: string) => void;
-  onShowMyCode: () => void;
+  // Notre clé, pour montrer notre QR code sans quitter l'écran.
+  myPublicKey: string;
   onRemove: () => void;
 };
 
-export function ContactScreen({ initialName, profile, code, isNew, onBack, onSave, onShowMyCode, onRemove }: Props) {
+export function ContactScreen({ initialName, profile, code, isNew, onBack, onSave, myPublicKey, onRemove }: Props) {
   const colors = useColors();
   const styles = useStyles();
   const [name, setName] = useState(initialName);
+  const [showingCode, setShowingCode] = useState(false);
 
   const confirmRemove = () => {
     showDialog(t('contact.supprimerQuestion'), t('contact.supprimerAide'), [
@@ -65,7 +68,7 @@ export function ContactScreen({ initialName, profile, code, isNew, onBack, onSav
 
           <View style={styles.actions}>
             <Button label={t('commun.enregistrer')} icon={Check} onPress={() => onSave(name.trim() || t('app.contact'))} />
-            <Button label={t('contact.montrerCode')} icon={QrCode} variant="secondary" onPress={onShowMyCode} />
+            <Button label={t('contact.montrerCode')} icon={QrCode} variant="secondary" onPress={() => setShowingCode(true)} />
           </View>
 
           {!isNew && (
@@ -76,6 +79,7 @@ export function ContactScreen({ initialName, profile, code, isNew, onBack, onSav
           )}
         </ScrollView>
       </KeyboardAvoidingView>
+      <MyQrSheet visible={showingCode} publicKey={myPublicKey} onClose={() => setShowingCode(false)} />
     </Screen>
   );
 }

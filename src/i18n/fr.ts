@@ -290,4 +290,8 @@ export const fr = {
     sansRelais: 'Sans connexion directe, les messages passent chiffrés par les notifications push : pas de serveur relais.',
     journalAide: 'Sans contenu de message ni clé : pour comprendre un problème.',
   },
+  qr: {
+    titre: 'Mon code',
+    aide: 'Ton contact le scanne avec Pear pour t\'ajouter.',
+  },
 };

@@ -6,19 +6,20 @@ import { ClipboardPaste, ScanLine, Share2 } from 'lucide-react-native';
 import { useBottomBarSpace } from '../components/BottomBar';
 import { showDialog } from '../components/dialog';
 import { Button, Header, Screen } from '../components/ui';
-import { buildPairingLink, parsePairingLink } from '../crypto/pairing';
+import { chat } from '../chat/manager';
+import { buildPairingLink, PairingLink, parsePairingLink } from '../crypto/pairing';
 import { createStyles, radius, spacing } from '../theme';
 import { t } from '../i18n';
 
 type Props = {
   publicKey: string;
   onScan: () => void;
-  onKeyReceived: (publicKey: string) => void;
+  onKeyReceived: (link: PairingLink) => void;
 };
 
 export function AddContactScreen({ publicKey, onScan, onKeyReceived }: Props) {
   const styles = useStyles();
-  const link = buildPairingLink(publicKey);
+  const link = buildPairingLink(publicKey, chat.getMyProfile().name);
   const barSpace = useBottomBarSpace();
 
   const pasteLink = async () => {
@@ -34,7 +35,7 @@ export function AddContactScreen({ publicKey, onScan, onKeyReceived }: Props) {
         <Text style={styles.text}>{t('ajout.aide')}</Text>
         {/* Le QR code reste noir sur blanc et garde sa marge pour rester lisible. */}
         <View style={styles.qr}>
-          <QRCode value={link} size={220} color="#000000" backgroundColor="#FFFFFF" />
+          <QRCode value={link} size={220} ecl="L" color="#000000" backgroundColor="#FFFFFF" />
         </View>
         <View style={styles.actions}>
           <Button label={t('ajout.scanner')} icon={ScanLine} onPress={onScan} />

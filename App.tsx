@@ -15,7 +15,7 @@ import { chat } from './src/chat/manager';
 import { BottomBar, Tab } from './src/components/BottomBar';
 import { DialogHost, showDialog } from './src/components/dialog';
 import { ErrorBoundary, ErrorScreen } from './src/components/ErrorBoundary';
-import { deriveSharedSecret, getVerificationCode, Identity, parsePairingLink } from './src/crypto/pairing';
+import { deriveSharedSecret, getVerificationCode, Identity, PairingLink, parsePairingLink } from './src/crypto/pairing';
 import { AddContactScreen } from './src/screens/AddContactScreen';
 import { CameraScreen } from './src/screens/CameraScreen';
 import { ChatScreen } from './src/screens/chat/ChatScreen';
@@ -42,7 +42,8 @@ type Route =
   | { name: 'profile' }
   | { name: 'diagnostic' }
   | { name: 'customize'; publicKey: string }
-  | { name: 'contact'; publicKey: string }
+  // name : le pseudo lu dans le QR code ou le lien, proposé comme nom du contact.
+  | { name: 'contact'; publicKey: string; suggestedName?: string | null }
   | { name: 'chat'; publicKey: string };
 
 const BACK_EXIT_MS = 170;
@@ -147,12 +148,12 @@ function App() {
     else chat.stopAll();
   }, [identity, contacts, active]);
 
-  const openKey = (publicKey: string) => {
+  const openKey = ({ publicKey, name }: PairingLink) => {
     if (publicKey === identity?.publicKey) {
       showDialog(t('app.codeNonValide'), t('app.codePropre'));
       return;
     }
-    setRoute({ name: 'contact', publicKey });
+    setRoute({ name: 'contact', publicKey, suggestedName: name });
   };
 
   // Un lien pear://pair ouvert depuis une autre app arrive ici.
@@ -327,7 +328,7 @@ function App() {
       return (
         <ContactScreen
           key={publicKey}
-          initialName={saved?.name ?? ''}
+          initialName={saved?.name ?? current.suggestedName ?? ''}
           profile={getContactProfile(publicKey)}
           code={code}
           isNew={!saved}
@@ -336,7 +337,7 @@ function App() {
             updateContacts([...others, { publicKey, name }]);
             setRoute({ name: 'chat', publicKey });
           }}
-          onShowMyCode={() => setRoute({ name: 'add' })}
+          myPublicKey={identity.publicKey}
           onRemove={() => {
             deleteMessages(publicKey);
             updateContacts(others);

@@ -9,7 +9,10 @@ import {
 
 const KEY_BYTES = 32;
 // Une clé de 32 octets fait toujours 43 caractères en base64 URL.
-const PAIRING_LINK = /^pear:\/\/pair\?k=([A-Za-z0-9_-]{43})$/;
+// pear://pair?k=<clé>&n=<pseudo encodé>. Les anciens liens n'ont que k.
+const PAIRING_LINK = /^pear:\/\/pair\?k=([A-Za-z0-9_-]{43})(?:&n=([^&\s]{0,200}))?$/;
+// Le pseudo reste court dans le lien (et donc dans le QR code, qui reste facile à scanner).
+export const LINK_NAME_LENGTH = 20;
 
 // Les clés sont gardées en base64 : c'est du texte, facile à stocker et à mettre dans un lien.
 export type Identity = {
@@ -75,16 +78,22 @@ export function deriveMessageKey(secret: Uint8Array): Uint8Array {
   return crypto_kdf_derive_from_key(KEY_BYTES, 4, 'pearmsgs', secret);
 }
 
-export function buildPairingLink(publicKey: string): string {
-  return `pear://pair?k=${publicKey}`;
+// Seulement la clé publique et le pseudo : pas de photo (elle arrive après la connexion).
+export function buildPairingLink(publicKey: string, name?: string | null): string {
+  const short = [...(name ?? '').trim()].slice(0, LINK_NAME_LENGTH).join('');
+  return short ? `pear://pair?k=${publicKey}&n=${encodeURIComponent(short)}` : `pear://pair?k=${publicKey}`;
 }
 
-// Renvoie la clé publique contenue dans le lien, ou null si le lien n'est pas valide.
-export function parsePairingLink(text: string): string | null {
+export type PairingLink = { publicKey: string; name: string | null };
+
+// Renvoie la clé publique et le pseudo contenus dans le lien, ou null si le lien n'est pas valide.
+export function parsePairingLink(text: string): PairingLink | null {
   const match = text.trim().match(PAIRING_LINK);
   if (!match) return null;
   try {
-    return from_base64(match[1]).length === KEY_BYTES ? match[1] : null;
+    if (from_base64(match[1]).length !== KEY_BYTES) return null;
+    const name = match[2] ? [...decodeURIComponent(match[2]).trim()].slice(0, LINK_NAME_LENGTH).join('') : '';
+    return { publicKey: match[1], name: name || null };
   } catch {
     return null;
   }
