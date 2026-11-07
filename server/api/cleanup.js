@@ -8,6 +8,9 @@ const { getSetupError } = require('../lib/firebase');
 const EXPIRY_MS = 7 * 24 * 3600000;
 const MINUTE_MS = 60000;
 const TOKEN_EXPIRY_MS = 60 * 24 * 3600000;
+// Fichiers relayés : supprimés à 7 jours, et à 24 h s'ils n'ont jamais été envoyés en entier.
+const RELAY_EXPIRY_MS = 7 * 24 * 3600000;
+const RELAY_INCOMPLETE_MS = 24 * 3600000;
 
 module.exports = async (req, res) => {
   if (getSetupError()) return res.status(500).json({ error: 'Serveur mal configuré' });
@@ -28,6 +31,13 @@ module.exports = async (req, res) => {
     for (const [tag, entry] of Object.entries(entries || {})) {
       if (!entry || now - entry.at > TOKEN_EXPIRY_MS) updates[`tokens/${inboxId}/${tag}`] = null;
     }
+  }
+
+  const relay = (await database.ref('relay').once('value')).val() || {};
+  for (const [id, file] of Object.entries(relay)) {
+    const meta = file && file.meta;
+    const complete = meta && Object.keys(file.chunks || {}).length >= meta.chunks;
+    if (!meta || now - meta.at > RELAY_EXPIRY_MS || (!complete && now - meta.at > RELAY_INCOMPLETE_MS)) updates[`relay/${id}`] = null;
   }
 
   const minute = Math.floor(now / MINUTE_MS);

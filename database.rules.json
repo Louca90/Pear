@@ -61,6 +61,25 @@
           }
         }
       }
+    },
+    "relay": {
+      "$id": {
+        ".read": "auth != null && $id.matches(/^[A-Za-z0-9_-]{22}$/)",
+        ".write": "auth != null && !newData.exists() && $id.matches(/^[A-Za-z0-9_-]{22}$/)",
+        "meta": {
+          ".write": false
+        },
+        "chunks": {
+          "$n": {
+            ".write": "auth != null && data.parent().parent().child('meta/owner').val() === auth.uid && !data.exists() && $n.matches(/^[0-9]{1,2}$/)",
+            ".validate": "newData.isString() && newData.val().length <= 700000"
+          }
+        }
+      }
+    },
+    "relayUsage": {
+      ".read": false,
+      ".write": false
     }
   }
 }
