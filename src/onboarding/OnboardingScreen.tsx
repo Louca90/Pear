@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { ComponentRef, useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, AppState, BackHandler, Easing, KeyboardAvoidingView, Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { BatteryCharging, Bell, Camera, Check, ChevronRight, Download, LucideIcon } from 'lucide-react-native';
@@ -90,6 +90,9 @@ export function OnboardingScreen({ mode, initialStep, onDone }: Props) {
   const position = useRef(new Animated.Value(initialStep)).current;
   const content = useRef(new Animated.Value(0)).current;
   const finishing = useRef(new Animated.Value(0)).current;
+  // La poire défile avec le contenu : elle ne passe jamais sur le texte.
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const scroll = useRef<ComponentRef<typeof ScrollView>>(null);
   // Entrée de la poire au premier affichage : elle arrive de la gauche en tournant légèrement.
   const intro = useRef(new Animated.Value(initialStep === 0 ? 0 : 1)).current;
   useEffect(() => {
@@ -120,12 +123,15 @@ export function OnboardingScreen({ mode, initialStep, onDone }: Props) {
   // Chaque étape entre en fondu glissé, pendant que la poire rejoint sa place.
   useEffect(() => {
     content.setValue(0);
+    // Chaque étape repart du haut.
+    scroll.current?.scrollTo({ y: 0, animated: false });
+    scrollY.setValue(0);
     Animated.parallel([
       Animated.timing(position, { toValue: step, duration: MOVE_MS, easing: EASING, useNativeDriver: true }),
       Animated.timing(content, { toValue: 1, duration: FADE_MS, delay: 120, easing: EASING, useNativeDriver: true }),
     ]).start();
     if (mode === 'full') saveOnboardingStep(step);
-  }, [step, mode, position, content]);
+  }, [step, mode, position, content, scrollY]);
 
   const goTo = useCallback(
     (next: OnboardingStep) => {
@@ -179,13 +185,14 @@ export function OnboardingScreen({ mode, initialStep, onDone }: Props) {
   const afterPermissions = () => (mode === 'full' ? goTo(2) : finish());
 
   // La poire : une image de `width` de côté, dont le dessin occupe à peu près le centre.
-  // Bienvenue : énorme, sur la gauche, elle déborde de l'écran par le haut et le côté, un peu tournée.
+  // Bienvenue : énorme, dans l'angle en haut à gauche, elle déborde de l'écran, un peu tournée.
   // Ensuite : petite en haut au centre, puis au centre de l'écran pour ouvrir l'app.
-  const pearTranslateX = position.interpolate({ inputRange: [0, 1, 2, 3], outputRange: [-width * 0.42, 0, 0, 0] });
+  const pearTranslateX = position.interpolate({ inputRange: [0, 1, 2, 3], outputRange: [-width * 0.46, 0, 0, 0] });
   const pearTranslateY = position.interpolate({
     inputRange: [0, 1, 2, 3],
-    outputRange: [height * 0.26 - width / 2, top - width * 0.33, top - width * 0.33, height / 2 - width / 2 - top],
+    outputRange: [height * 0.17 - width / 2, top - width * 0.33, top - width * 0.33, height / 2 - width / 2 - top],
   });
+  const scrolled = Animated.multiply(scrollY, -1);
   const pearScale = position.interpolate({ inputRange: [0, 1, 2, 3], outputRange: [3, 0.36, 0.36, 0.7] });
   const pearRotate = position.interpolate({ inputRange: [0, 1, 2, 3], outputRange: ['-16deg', '0deg', '-10deg', '0deg'] });
   const introX = intro.interpolate({ inputRange: [0, 1], outputRange: [-width * 0.35, 0] });
@@ -209,6 +216,7 @@ export function OnboardingScreen({ mode, initialStep, onDone }: Props) {
           {
             opacity: intro,
             transform: [
+              { translateY: scrolled },
               { translateX: pearTranslateX },
               { translateX: introX },
               { translateY: pearTranslateY },
@@ -221,8 +229,11 @@ export function OnboardingScreen({ mode, initialStep, onDone }: Props) {
         ]}
       />
       <KeyboardAvoidingView behavior="padding" style={styles.flex}>
-        <ScrollView
-          contentContainerStyle={[styles.content, { paddingTop: step === 0 ? height * 0.6 : top + width * 0.36, paddingBottom: bottom + spacing.lg }]}
+        <Animated.ScrollView
+          ref={scroll}
+          onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
+          scrollEventThrottle={16}
+          contentContainerStyle={[styles.content, { paddingTop: step === 0 ? height * 0.52 : top + width * 0.36, paddingBottom: bottom + spacing.lg }]}
           keyboardShouldPersistTaps="handled"
         >
           <Animated.View style={[styles.flex, contentStyle]}>
@@ -293,7 +304,7 @@ export function OnboardingScreen({ mode, initialStep, onDone }: Props) {
               </View>
             )}
           </Animated.View>
-        </ScrollView>
+        </Animated.ScrollView>
       </KeyboardAvoidingView>
     </Animated.View>
   );
