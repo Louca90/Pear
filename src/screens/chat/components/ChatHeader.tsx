@@ -23,7 +23,9 @@ export function ChatHeader({ contactKey, name, onBack, onInfo, onCustomize }: Pr
   const streak = getStreak(contactKey);
   const photo = getContactProfile(contactKey).photo_uri;
   const { status, route } = chat.getLink(contactKey);
-  const subtitle = !chat.isOnline()
+  const subtitle = chat.isTyping(contactKey)
+    ? t('chat.ecrit')
+    : !chat.isOnline()
     ? t('chat.vousHorsLigne')
     : status === 'connected'
       ? route ? ROUTE[route] : t('chat.connecte')

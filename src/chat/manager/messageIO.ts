@@ -126,6 +126,21 @@ function receiveEvent(core: ChatCore, contact: string, data: Payload) {
   core.notify();
 }
 
+// « écrit… » : sans nouvelle au bout de ce délai (connexion coupée…), l'indicateur s'éteint seul.
+const TYPING_TTL_MS = 6000;
+
+function receiveTyping(core: ChatCore, contact: string, typing: boolean) {
+  if (typing) {
+    core.typingUntil.set(contact, Date.now() + TYPING_TTL_MS);
+    setTimeout(() => {
+      if ((core.typingUntil.get(contact) ?? 0) > Date.now()) return;
+      core.typingUntil.delete(contact);
+      core.notify();
+    }, TYPING_TTL_MS + 50);
+  } else core.typingUntil.delete(contact);
+  core.notify();
+}
+
 function receiveText(core: ChatCore, contact: string, data: Payload) {
   if (typeof data.id !== 'string' || typeof data.text !== 'string') return;
   // Il nous écrit de nouveau : s'il nous avait supprimé, il nous a rajouté.
@@ -141,6 +156,7 @@ function receiveText(core: ChatCore, contact: string, data: Payload) {
     created_at: Date.now(),
     reply_to: typeof data.reply_to === 'string' ? data.reply_to : null,
   });
+  core.typingUntil.delete(contact);
   acknowledge(core, contact, { id: data.id });
   flush(core, contact);
   const message = getMessage(data.id, contact);
@@ -179,6 +195,8 @@ export function receive(core: ChatCore, contact: string, received: unknown) {
     setStatus(data.id, contact, data.type === 'read' ? 'read' : 'delivered');
     deleteUpload(data.id, contact);
     core.notify();
+  } else if (data.type === 'typing') {
+    receiveTyping(core, contact, data.state === 'start');
   } else if (data.type === 'token' && typeof data.token === 'string' && data.token.length <= 4096) {
     setContactToken(contact, data.token);
   }

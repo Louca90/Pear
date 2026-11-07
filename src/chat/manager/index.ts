@@ -29,6 +29,8 @@ export { MAX_PROFILE_NAME_LENGTH, MAX_TEXT_LENGTH } from './types';
 export type { PickedFile } from './types';
 
 // Garde les connexions utiles tant que l'app est ouverte (voir strategy.ts), et prévient les écrans à chaque changement.
+const TYPING_EVERY_MS = 3000;
+
 class ChatManager extends ChatCore {
   // Ouvre les connexions des nouveaux contacts et ferme celles des contacts supprimés.
   sync(identity: Identity, contacts: Contact[]) {
@@ -228,6 +230,26 @@ class ChatManager extends ChatCore {
 
   isOnline() {
     return this.online;
+  }
+
+  isTyping(contact: string) {
+    return (this.typingUntil.get(contact) ?? 0) > Date.now();
+  }
+
+  // « écrit… » : seulement par la connexion directe (jamais push ni relais), jamais stocké, au plus une
+  // fois toutes les 3 secondes pendant la frappe, et un « arrêt » quand le brouillon est vidé ou envoyé.
+  sendTyping(contact: string, typing: boolean) {
+    const peer = this.links.get(contact)?.peer;
+    if (!peer?.isOpen()) return;
+    const now = Date.now();
+    if (typing) {
+      if (now - (this.typingSentAt.get(contact) ?? 0) < TYPING_EVERY_MS) return;
+      this.typingSentAt.set(contact, now);
+    } else {
+      if (!this.typingSentAt.has(contact)) return;
+      this.typingSentAt.delete(contact);
+    }
+    peer.send({ type: 'typing', state: typing ? 'start' : 'stop' });
   }
 
   // La conversation affichée à l'écran : ses messages comptent comme lus.

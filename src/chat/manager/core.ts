@@ -45,6 +45,9 @@ export class ChatCore {
   confirmedChunks = new Map<string, number>();
   incomingFiles = new Map<string, IncomingFile>();
   progress = new Map<string, number>();
+  // « écrit… » : jusqu'à quand le contact est considéré en train d'écrire, et notre dernier envoi.
+  typingUntil = new Map<string, number>();
+  typingSentAt = new Map<string, number>();
   lastProgressNotify = 0;
   // Les écritures sur le disque se font une par une, dans l'ordre d'arrivée des morceaux.
   writeQueue: Promise<void> = Promise.resolve();

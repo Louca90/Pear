@@ -134,6 +134,7 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
       scroll.followSent();
     }
     setDraft('');
+    chat.sendTyping(contactKey, false);
   };
 
   const confirmDelete = (message: Message) => {
@@ -366,7 +367,10 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
             <Composer
               name={name}
               draft={draft}
-              onChangeDraft={setDraft}
+              onChangeDraft={(text) => {
+                setDraft(text);
+                chat.sendTyping(contactKey, text.trim().length > 0);
+              }}
               replyingTo={replyingTo}
               editing={editing}
               onCancelMode={cancelComposerMode}

@@ -1,5 +1,5 @@
-import { ReactNode, useRef, useSyncExternalStore } from 'react';
-import { Animated, Image, Pressable, StyleProp, Text, View, ViewStyle } from 'react-native';
+import { ReactNode, useEffect, useRef, useSyncExternalStore } from 'react';
+import { Animated, Easing, Image, Pressable, StyleProp, Text, View, ViewStyle } from 'react-native';
 import { ArrowLeft, LucideIcon, User } from 'lucide-react-native';
 
 import { getInsets, subscribeInsets } from '../../modules/pear-native';
@@ -71,6 +71,26 @@ export function Avatar({ uri, size = 44 }: { uri?: string | null; size?: number 
   );
 }
 
+// Le sous-titre de l'en-tête (« Connecté », « écrit… ») change en fondu.
+function FadingSubtitle({ text }: { text: string }) {
+  const styles = useStyles();
+  const opacity = useRef(new Animated.Value(1)).current;
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    opacity.setValue(0);
+    Animated.timing(opacity, { toValue: 1, duration: 200, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+  }, [text, opacity]);
+  return (
+    <Animated.Text style={[styles.headerSubtitle, { opacity }]} numberOfLines={1}>
+      {text}
+    </Animated.Text>
+  );
+}
+
 export function Header({ title, subtitle, onBack, action, avatar, onTitlePress }: HeaderProps) {
   const colors = useColors();
   const styles = useStyles();
@@ -85,7 +105,7 @@ export function Header({ title, subtitle, onBack, action, avatar, onTitlePress }
         {avatar}
         <View style={styles.headerText}>
           <Text style={subtitle ? styles.headerTitleSmall : styles.headerTitle} numberOfLines={1}>{title}</Text>
-          {subtitle && <Text style={styles.headerSubtitle} numberOfLines={1}>{subtitle}</Text>}
+          {subtitle && <FadingSubtitle text={subtitle} />}
         </View>
       </Pressable>
       {action}
