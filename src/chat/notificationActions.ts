@@ -7,8 +7,20 @@ import { log } from '../log';
 // Appui sur une notification ou sur l'une de ses actions, app ouverte, en arrière-plan ou fermée.
 // « Répondre » envoie la réponse sans ouvrir l'app (par push si le contact n'est pas connecté).
 export async function handleNotificationEvent({ type, detail }: Event) {
-  if (type === EventType.PRESS && detail.notification?.data?.requests) {
-    setNotificationTarget(REQUESTS_TARGET);
+  const data = detail.notification?.data;
+  if (data?.requests) {
+    if (type === EventType.PRESS) setNotificationTarget(REQUESTS_TARGET);
+    else if (type === EventType.ACTION_PRESS && typeof data.key === 'string') {
+      // Accepter, refuser ou bloquer sans ouvrir l'app.
+      const action = detail.pressAction?.id;
+      try {
+        if (action === 'pair-accept') await chat.acceptRequestFromNotification(data.key);
+        else if (action === 'pair-decline') await chat.declineRequestFromNotification(data.key);
+        else if (action === 'pair-block') await chat.blockRequestFromNotification(data.key);
+      } catch (e) {
+        log.warn('action de demande', e);
+      }
+    }
     return;
   }
   const contact = detail.notification?.data?.contact;

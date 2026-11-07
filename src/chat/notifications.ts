@@ -51,19 +51,24 @@ export async function showMessageNotification(contact: string, name: string, pho
   });
 }
 
-// « X veut se pairer avec toi » : un appui ouvre la page Demandes.
+// « X veut se pairer avec toi » : un appui ouvre la page Demandes ; on peut aussi répondre directement.
 export async function showPairNotification(contact: string, name: string) {
   await ensureChannel();
   await notifee.displayNotification({
     id: `pair:${contact}`,
     title: t('demandes.notificationTitre', { nom: name || t('demandes.quelquun') }),
     body: t('demandes.notificationTexte'),
-    data: { requests: '1' },
+    data: { requests: '1', key: contact },
     android: {
       channelId: NOTIFICATION_CHANNEL_ID,
       visibility: AndroidVisibility.PRIVATE,
       smallIcon: NOTIFICATION_SMALL_ICON,
       pressAction: { id: 'default' },
+      actions: [
+        { title: t('demandes.accepter'), pressAction: { id: 'pair-accept' } },
+        { title: t('demandes.refuser'), pressAction: { id: 'pair-decline' } },
+        { title: t('demandes.bloquer'), pressAction: { id: 'pair-block' } },
+      ],
     },
   });
 }

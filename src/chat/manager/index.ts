@@ -3,8 +3,9 @@ import { randombytes_buf, to_base64 } from 'react-native-libsodium';
 
 import { Identity } from '../../crypto/pairing';
 import { PeerStatus, RouteType } from '../../network/peer';
-import { Contact, loadContacts, loadOrCreateIdentity } from '../../storage';
-import { addMessage, deleteMessage, deleteRelayIncoming, editMessage, getMessage, getRelayIncoming, markConversationRead, setConversationSetting, setIncomingStatus, setReaction } from '../database';
+import { Contact, loadContacts, loadOrCreateIdentity, saveContacts } from '../../storage';
+import { t } from '../../i18n';
+import { addMessage, deleteMessage, deleteRelayIncoming, editMessage, getMessage, getPendingRequests, getRelayIncoming, markConversationRead, setConversationSetting, setIncomingStatus, setReaction } from '../database';
 import { clearMessageNotification } from '../notifications';
 
 import { deleteRelay } from '../../network/relay';
@@ -139,6 +140,33 @@ class ChatManager extends ChatCore {
   }
 
   blockRequest(contact: string) {
+    blockPairing(this, contact);
+  }
+
+  // Depuis la notification d'une demande, app peut-être fermée : le contact est enregistré ici, avec
+  // le pseudo de la demande, puis l'autre téléphone est prévenu (par push s'il le faut).
+  async acceptRequestFromNotification(contact: string) {
+    await this.ensurePrepared();
+    const request = getPendingRequests().find((pending) => pending.from_key === contact);
+    if (!request) return;
+    const contacts = await loadContacts();
+    if (!contacts.some((saved) => saved.publicKey === contact)) {
+      const next = [...contacts, { publicKey: contact, name: request.name || t('app.contact') }];
+      await saveContacts(next);
+      this.names = new Map(next.map((saved) => [saved.publicKey, saved.name]));
+    }
+    acceptPairing(this, contact);
+    this.contactsChanged();
+    await deliverNow(this, contact);
+  }
+
+  async declineRequestFromNotification(contact: string) {
+    await this.ensurePrepared();
+    declinePairing(this, contact);
+  }
+
+  async blockRequestFromNotification(contact: string) {
+    await this.ensurePrepared();
     blockPairing(this, contact);
   }
 
