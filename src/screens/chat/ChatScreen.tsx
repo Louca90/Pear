@@ -24,7 +24,7 @@ import { Composer } from './components/Composer';
 import { ComposerFade } from './components/ComposerFade';
 import { MediaViewer, Viewing } from './components/MediaViewer';
 import { Bubble, markMessagesShown } from './components/MessageBubble';
-import { MessageSelection } from './components/MessageSelection';
+import { MessageSelection, metaRoomFor, selectionLayout } from './components/MessageSelection';
 import { NewMessagesButton } from './components/NewMessagesButton';
 import { PinnedBanner } from './components/PinnedBanner';
 import { ReactionsSheet } from './components/ReactionsSheet';
@@ -60,7 +60,7 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
   const [forwarding, setForwarding] = useState<Message | null>(null);
   const [showingReactions, setShowingReactions] = useState<Message | null>(null);
   const [viewing, setViewing] = useState<Viewing | null>(null);
-  const [selection, setSelection] = useState<{ message: Message; rect: Rect; origin: { y: number; height: number }; clip: { top: number; bottom: number }; position: GroupPosition } | null>(null);
+  const [selection, setSelection] = useState<{ message: Message; rect: Rect; origin: { y: number; height: number }; clip: { top: number; bottom: number }; position: GroupPosition; keepOriginal: boolean } | null>(null);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [editing, setEditing] = useState<Message | null>(null);
   const blurTarget = useRef<ViewRef>(null);
@@ -116,7 +116,13 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
       measure((rect) =>
         root.current?.measureInWindow((_x, y, _width, height) =>
           listArea.current?.measureInWindow((_listX, listY, _listWidth, listHeight) =>
-            setSelection({ message, rect, origin: { y, height }, clip: { top: listY, bottom: listY + listHeight }, position: groupPosition(messages, Math.max(0, messages.findIndex(({ id }) => id === message.id))) }),
+            {
+              const position = groupPosition(messages, Math.max(0, messages.findIndex(({ id }) => id === message.id)));
+              const clip = { top: listY, bottom: listY + listHeight };
+              const origin = { y, height };
+              const { tooLong } = selectionLayout(rect, origin, clip, actionsFor(message).length, metaRoomFor(position));
+              setSelection({ message, rect, origin, clip, position, keepOriginal: tooLong });
+            },
           ),
         ),
       );
@@ -334,7 +340,7 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
                   palettes={palettes}
                   pulse={pulsing?.id === item.id ? pulsing.token : undefined}
                   onJump={jumpTo}
-                  hidden={selection?.message.id === item.id}
+                  hidden={selection?.message.id === item.id && !selection.keepOriginal}
                   mediaHidden={viewing?.message.id === item.id}
                   onOpenFile={openFile}
                   onPrepareFile={prepareMedia}

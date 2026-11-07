@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { ReactNode, useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, Text, View } from 'react-native';
 import { Forward, Reply } from 'lucide-react-native';
 
@@ -50,7 +50,22 @@ type BubbleProps = {
   // Faux dans la sélection : la bulle se place exactement là où elle était, sans marge.
   spaced?: boolean;
   onShowReactions?: (message: Message) => void;
+  // Sélection : l'heure et les coches d'un message qui n'en montre pas (milieu d'un groupe) s'ouvrent
+  // avec cette valeur (0 → 1), au lieu d'apparaître d'un coup.
+  metaReveal?: Animated.Value;
 };
+
+// La ligne heure/coches qui s'ouvre : sa hauteur passe de 0 à sa taille réelle, en fondu.
+function RevealMeta({ value, children }: { value: Animated.Value; children: ReactNode }) {
+  const [height, setHeight] = useState(0);
+  return (
+    <Animated.View style={{ height: value.interpolate({ inputRange: [0, 1], outputRange: [0, height] }), opacity: value, overflow: 'hidden' }}>
+      <View style={{ position: 'absolute', left: 0, right: 0 }} onLayout={(event) => setHeight(event.nativeEvent.layout.height)}>
+        {children}
+      </View>
+    </Animated.View>
+  );
+}
 
 // Coins des bulles : grands partout, petits côté auteur là où la bulle touche sa voisine du groupe.
 const BIG_CORNER = 20;
@@ -75,7 +90,7 @@ export function markMessagesShown(ids: string[]) {
   for (const id of ids) shownIds.add(id);
 }
 
-export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, onOpenFile, onPrepareFile, onAcceptFile, onRefuseFile, onSelect, onDoubleTap, onReply, onJump, fit, position, avatar, spaced = true, onShowReactions }: BubbleProps) {
+export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, onOpenFile, onPrepareFile, onAcceptFile, onRefuseFile, onSelect, onDoubleTap, onReply, onJump, fit, position, avatar, spaced = true, onShowReactions, metaReveal }: BubbleProps) {
   const styles = useStyles();
   const colors = useColors();
   const container = useRef<ViewRef>(null);
@@ -137,6 +152,11 @@ export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, on
       </View>
     );
   }
+  const meta = bare ? (
+    <MessageMeta message={message} tone={palettes.hasWallpaper ? { text: colors.onMedia, muted: colors.onDarkMuted } : { text: colors.text, muted: colors.textMuted }} pill={palettes.hasWallpaper} />
+  ) : (
+    <MessageMeta message={message} tone={palette} />
+  );
   const place = position ?? 'single';
   const endsGroup = place === 'last' || place === 'single';
   // Espace avec la bulle du dessus : collée dans un groupe, aérée entre deux groupes.
@@ -202,11 +222,7 @@ export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, on
             <FileContent message={message} palette={palette} mediaHidden={mediaHidden} onOpen={(rect) => onOpenFile?.(message, rect)} onLongPress={select} onPrepare={onPrepareFile && (() => onPrepareFile(message))} onAccept={onAcceptFile && (() => onAcceptFile(message))} onRefuse={onRefuseFile && (() => onRefuseFile(message))} />
           )}
           {/* L'heure et l'état, une seule fois par groupe : sous le dernier message. */}
-          {!endsGroup ? null : bare ? (
-            <MessageMeta message={message} tone={palettes.hasWallpaper ? { text: colors.onMedia, muted: colors.onDarkMuted } : { text: colors.text, muted: colors.textMuted }} pill={palettes.hasWallpaper} />
-          ) : (
-            <MessageMeta message={message} tone={palette} />
-          )}
+          {endsGroup ? meta : metaReveal ? <RevealMeta value={metaReveal}>{meta}</RevealMeta> : null}
         </Pressable>
         {badge.shown && (
           <Animated.View style={badge.style}>

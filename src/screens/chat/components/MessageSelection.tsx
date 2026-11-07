@@ -18,6 +18,32 @@ import { t } from '../../../i18n';
 
 // Grossissement léger du message soulevé.
 const LIFT_SCALE = 1.03;
+// Place gardée sous un message de milieu de groupe pour sa ligne heure/coches, qui s'ouvre.
+const META_ROOM = 22;
+const META_MS = 200;
+
+// La disposition de la sélection, aussi utilisée par la conversation : un message trop long pour la
+// place disponible est montré dans un aperçu qui défile, et son original reste à sa place dessous.
+export function selectionLayout(rect: Rect, origin: { y: number }, clip: { top: number; bottom: number }, actionCount: number, metaRoom: number) {
+  const areaTop = clip.top - origin.y;
+  const areaBottom = clip.bottom - origin.y;
+  const menuHeight = actionCount * ACTION_HEIGHT + spacing.sm * 2;
+  const previewTop = areaTop + spacing.sm + REACTIONS_HEIGHT + spacing.sm;
+  const previewBottom = areaBottom - spacing.sm - menuHeight - SELECTION_GAP;
+  const needed = rect.height + metaRoom;
+  const previewHeight = Math.max(ACTION_HEIGHT, Math.min(needed, previewBottom - previewTop));
+  const startY = rect.y - origin.y;
+  return {
+    areaTop,
+    areaBottom,
+    previewHeight,
+    tooLong: needed > previewHeight,
+    startY,
+    targetY: Math.max(previewTop, Math.min(startY, previewBottom - previewHeight)),
+  };
+}
+
+export const metaRoomFor = (position: GroupPosition) => (position === 'first' || position === 'middle' ? META_ROOM : 0);
 
 type SelectionProps = {
   message: Message;
@@ -45,6 +71,8 @@ export function MessageSelection({ message, name, palettes, position, avatar, re
   const colors = useColors();
   const styles = useStyles();
   const progress = useRef(new Animated.Value(0)).current;
+  // Piloté en JS : il anime une hauteur (la ligne heure/coches qui s'ouvre).
+  const metaReveal = useRef(new Animated.Value(0)).current;
   const [pickerOpen, setPickerOpen] = useState(false);
   const closing = useRef(false);
   const mine = message.mine === 1;
@@ -52,6 +80,7 @@ export function MessageSelection({ message, name, palettes, position, avatar, re
   const dismiss = useRef((after?: () => void) => {
     if (closing.current) return;
     closing.current = true;
+    Animated.timing(metaReveal, { toValue: 0, duration: SELECTION_CLOSE_MS, easing: SELECTION_EASING, useNativeDriver: false }).start();
     Animated.timing(progress, { toValue: 0, duration: SELECTION_CLOSE_MS, easing: SELECTION_EASING, useNativeDriver: true }).start(() => {
       onClose();
       after?.();
@@ -60,7 +89,8 @@ export function MessageSelection({ message, name, palettes, position, avatar, re
 
   useEffect(() => {
     Animated.timing(progress, { toValue: 1, duration: SELECTION_OPEN_MS, easing: SELECTION_EASING, useNativeDriver: true }).start();
-  }, [progress]);
+    Animated.timing(metaReveal, { toValue: 1, duration: META_MS, delay: 60, easing: SELECTION_EASING, useNativeDriver: false }).start();
+  }, [progress, metaReveal]);
 
   // Le retour ferme la sélection sans quitter la conversation.
   useBackInterceptor(true, () => dismiss());
@@ -70,16 +100,7 @@ export function MessageSelection({ message, name, palettes, position, avatar, re
     dismiss(() => onReact(emoji));
   };
 
-  // La place disponible, en coordonnées de cette vue : réactions au-dessus, actions en dessous.
-  const areaTop = clip.top - origin.y;
-  const areaBottom = clip.bottom - origin.y;
-  const menuHeight = actions.length * ACTION_HEIGHT + spacing.sm * 2;
-  const previewTop = areaTop + spacing.sm + REACTIONS_HEIGHT + spacing.sm;
-  const previewBottom = areaBottom - spacing.sm - menuHeight - SELECTION_GAP;
-  const previewHeight = Math.max(ACTION_HEIGHT, Math.min(rect.height, previewBottom - previewTop));
-  const tooLong = rect.height > previewHeight;
-  const startY = rect.y - origin.y;
-  const targetY = Math.max(previewTop, Math.min(startY, previewBottom - previewHeight));
+  const { areaTop, areaBottom, previewHeight, tooLong, startY, targetY } = selectionLayout(rect, origin, clip, actions.length, metaRoomFor(position));
   const edge = mine ? styles.alignEnd : styles.alignStart;
 
   const appear = {
@@ -87,7 +108,7 @@ export function MessageSelection({ message, name, palettes, position, avatar, re
     transform: [{ scale: progress.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }) }],
   };
 
-  const bubble = <Bubble message={message} name={name} palettes={palettes} position={position} avatar={avatar} spaced={false} />;
+  const bubble = <Bubble message={message} name={name} palettes={palettes} position={position} avatar={avatar} spaced={false} metaReveal={metaReveal} />;
 
   return (
     <View style={StyleSheet.absoluteFill}>
@@ -104,12 +125,22 @@ export function MessageSelection({ message, name, palettes, position, avatar, re
           style={[
             styles.selected,
             {
-              top: startY - areaTop,
               height: previewHeight,
-              transform: [
-                { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [0, targetY - startY] }) },
-                { scale: progress.interpolate({ inputRange: [0, 1], outputRange: [1, LIFT_SCALE] }) },
-              ],
+              // Message court : il monte depuis sa place. Message long : son original reste dans la
+              // conversation et l'aperçu apparaît (puis disparaît) en fondu par-dessus, sans saut.
+              ...(tooLong
+                ? {
+                    top: targetY - areaTop,
+                    opacity: progress,
+                    transform: [{ scale: progress.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1] }) }],
+                  }
+                : {
+                    top: startY - areaTop,
+                    transform: [
+                      { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [0, targetY - startY] }) },
+                      { scale: progress.interpolate({ inputRange: [0, 1], outputRange: [1, LIFT_SCALE] }) },
+                    ],
+                  }),
             },
           ]}
         >
