@@ -279,6 +279,7 @@ class ChatManager extends ChatCore {
       created_at: Date.now(),
       reply_to: replyTo,
       forwarded: forwarded ? 1 : 0,
+      conn_session: this.sessionFor(contact),
     });
     this.afterSend(contact);
     flush(this, contact);

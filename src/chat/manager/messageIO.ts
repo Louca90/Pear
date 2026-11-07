@@ -159,6 +159,7 @@ function receiveText(core: ChatCore, contact: string, data: Payload) {
     created_at: Date.now(),
     reply_to: typeof data.reply_to === 'string' ? data.reply_to : null,
     forwarded: data.forwarded === true ? 1 : 0,
+    conn_session: core.sessionFor(contact),
   });
   core.typingUntil.delete(contact);
   acknowledge(core, contact, { id: data.id });

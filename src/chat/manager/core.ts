@@ -1,6 +1,7 @@
 import { Identity } from '../../crypto/pairing';
 
 import { IncomingFile, Link } from './types';
+import { SessionTracker } from '../grouping';
 
 // L'état partagé par les modules du manager. Seule la façade (index.ts) est utilisée par les écrans.
 export class ChatCore {
@@ -47,6 +48,8 @@ export class ChatCore {
   progress = new Map<string, number>();
   // « écrit… » : jusqu'à quand le contact est considéré en train d'écrire, et notre dernier envoi.
   typingUntil = new Map<string, number>();
+  // Sessions de connexion (regroupement des bulles, lot 8.13).
+  sessions = new SessionTracker();
   typingSentAt = new Map<string, number>();
   lastProgressNotify = 0;
   // Les écritures sur le disque se font une par une, dans l'ordre d'arrivée des morceaux.
@@ -74,6 +77,11 @@ export class ChatCore {
   // Les messages reçus ne comptent comme lus que si on regarde les derniers, pas en étant remonté.
   isReading(contact: string) {
     return this.openConversation === contact && this.atBottom;
+  }
+
+  // La session d'un message qui naît maintenant : connexion directe ouverte, ou à distance.
+  sessionFor(contact: string) {
+    return this.sessions.current(contact, this.links.get(contact)?.status === 'connected' ? 'direct' : 'remote');
   }
 
   notify() {

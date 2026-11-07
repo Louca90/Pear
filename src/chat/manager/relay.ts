@@ -128,6 +128,7 @@ export function receiveRelayOffer(core: ChatCore, contact: string, data: Payload
     kind,
     from_camera: data.camera === true ? 1 : 0,
     forwarded: data.forwarded === true ? 1 : 0,
+    conn_session: core.sessionFor(contact),
     file_uri: storedFile(id).uri,
     file_size: size,
     file_mime: typeof data.mime === 'string' ? data.mime.slice(0, 255) : null,

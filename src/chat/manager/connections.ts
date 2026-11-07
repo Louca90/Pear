@@ -33,6 +33,8 @@ export function connect(core: ChatCore, identity: Identity, contact: string) {
         link.status = status;
         if (status === 'connected') {
           core.lastActivity = Date.now();
+          // Nouvelle connexion directe : les messages qui suivent forment une nouvelle session.
+          core.sessions.forget(contact);
           shareToken(core, contact);
           flush(core, contact);
           maybeRekey(core, contact);

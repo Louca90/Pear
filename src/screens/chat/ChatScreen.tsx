@@ -8,8 +8,9 @@ import * as Haptics from 'expo-haptics';
 import * as Sharing from 'expo-sharing';
 import { Copy, Download, Forward, MessageCircle, Pencil, Pin, PinOff, Reply, Trash2 } from 'lucide-react-native';
 
-import { getContactRows, getConversationSettings, getMessages, getPeerState, getPinnedMessages, isBlocked, Message } from '../../chat/database';
+import { getContactProfile, getContactRows, getConversationSettings, getMessages, getPeerState, getPinnedMessages, isBlocked, Message } from '../../chat/database';
 import { exportCopy, formatSize, MAX_FILE_BYTES, saveToGallery, videoThumbnail } from '../../chat/files';
+import { groupPosition } from '../../chat/grouping';
 import { chat, PickedFile } from '../../chat/manager';
 import { showDialog } from '../../components/dialog';
 import { ContactPickerSheet } from '../../components/ContactPickerSheet';
@@ -84,6 +85,7 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
   // Relu seulement quand le moteur signale un changement, pas à chaque rafraîchissement de l'écran.
   const messages = useMemo(() => getMessages(contactKey), [contactKey, version]);
   const pinnedMessages = useMemo(() => getPinnedMessages(contactKey), [contactKey, version]);
+  const contactPhoto = useMemo(() => getContactProfile(contactKey).photo_uri, [contactKey, version]);
   // À l'ouverture, les messages déjà là ne font pas d'entrée ; seuls les suivants apparaissent en douceur.
   const openedWith = useRef<string | null>(null);
   if (openedWith.current !== contactKey) {
@@ -327,9 +329,11 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
                 list.current?.scrollToOffset({ offset: index * averageItemLength, animated: true });
                 setTimeout(() => list.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true }), JUMP_PULSE_DELAY_MS);
               }}
-              renderItem={({ item }) => (
+              renderItem={({ item, index }) => (
                 <Bubble
                   message={item}
+                  position={groupPosition(messages, index)}
+                  avatar={contactPhoto}
                   name={name}
                   palettes={palettes}
                   pulse={pulsing?.id === item.id ? pulsing.token : undefined}
@@ -487,10 +491,10 @@ const useLocalStyles = createStyles((colors) => ({
     color: colors.textMuted,
     textAlign: 'center',
   },
+  // L'espace entre les bulles vient de leur groupe (2 px dans un groupe, 10 px entre deux).
   list: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    gap: spacing.sm,
   },
 }));
 

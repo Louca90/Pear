@@ -17,6 +17,8 @@ import { isBareMedia, isMediaDeleted } from '../format';
 import { LikeBurst, useReactionAppear } from '../../../components/LikeAnimation';
 import { useDoubleTap } from '../hooks/useDoubleTap';
 import { useSwipeReply } from '../hooks/useSwipeReply';
+import { GroupPosition } from '../../../chat/grouping';
+import { Avatar } from '../../../components/ui';
 import { useChatStyles } from '../styles';
 import { Palettes, Rect, ViewRef } from '../types';
 
@@ -41,7 +43,25 @@ type BubbleProps = {
   onJump?: (id: string) => void;
   // Sélection d'un message très long : le texte se replie pour tenir à l'écran.
   fit?: TextFit;
+  // Place dans son groupe de bulles (lot 8.13) ; absente (sélection), la bulle est seule.
+  position?: GroupPosition;
+  // Photo du contact, à côté du dernier message reçu d'un groupe.
+  avatar?: string | null;
 };
+
+// Coins des bulles : grands partout, petits côté auteur là où la bulle touche sa voisine du groupe.
+const BIG_CORNER = 20;
+const SMALL_CORNER = 6;
+const GROUP_GAP = 2;
+const BETWEEN_GROUPS = 10;
+const AVATAR_SIZE = 28;
+
+function groupCorners(position: GroupPosition, mine: boolean) {
+  const side = mine ? 'Right' : 'Left';
+  const top = position === 'middle' || position === 'last' ? SMALL_CORNER : BIG_CORNER;
+  const bottom = position === 'middle' || position === 'first' ? SMALL_CORNER : BIG_CORNER;
+  return { borderRadius: BIG_CORNER, [`borderTop${side}Radius`]: top, [`borderBottom${side}Radius`]: bottom };
+}
 
 // Les messages déjà affichés : seuls ceux qui arrivent pendant que la conversation est ouverte
 // (envoyés ou reçus) font leur entrée, pas ceux qu'on retrouve en défilant.
@@ -52,7 +72,7 @@ export function markMessagesShown(ids: string[]) {
   for (const id of ids) shownIds.add(id);
 }
 
-export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, onOpenFile, onPrepareFile, onAcceptFile, onRefuseFile, onSelect, onDoubleTap, onReply, onJump, fit }: BubbleProps) {
+export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, onOpenFile, onPrepareFile, onAcceptFile, onRefuseFile, onSelect, onDoubleTap, onReply, onJump, fit, position, avatar }: BubbleProps) {
   const styles = useStyles();
   const colors = useColors();
   const container = useRef<ViewRef>(null);
@@ -107,14 +127,22 @@ export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, on
   const badge = useReactionAppear(reactions.length > 0);
 
   if (message.kind === 'wallpaper' || message.kind === 'system') {
-    return <SystemRow message={message} name={name} hasWallpaper={palettes.hasWallpaper} />;
+    return (
+      <View style={position && styles.systemSpacing}>
+        <SystemRow message={message} name={name} hasWallpaper={palettes.hasWallpaper} />
+      </View>
+    );
   }
+  const place = position ?? 'single';
+  const endsGroup = place === 'last' || place === 'single';
+  // Espace avec la bulle du dessus : collée dans un groupe, aérée entre deux groupes.
+  const spacingTop = position ? { marginTop: place === 'middle' || place === 'last' ? GROUP_GAP : BETWEEN_GROUPS } : null;
 
   return (
     <View
       ref={container}
       collapsable={false}
-      style={[styles.row, mine ? styles.rowMine : styles.rowTheirs, hidden && styles.hidden]}
+      style={[styles.row, mine ? styles.rowMine : [styles.rowTheirs, position && styles.withAvatar], spacingTop, hidden && styles.hidden]}
       {...swipeHandlers}
     >
       {onReply && (
@@ -135,6 +163,7 @@ export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, on
           <Reply size={18} color={colors.text} strokeWidth={1.75} />
         </Animated.View>
       )}
+      {!mine && position && <View style={styles.avatarSlot}>{endsGroup && <Avatar uri={avatar} size={AVATAR_SIZE} />}</View>}
       <Animated.View
         style={[
           mine ? styles.rowMine : styles.rowTheirs,
@@ -152,7 +181,7 @@ export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, on
           onPress={press}
           onLongPress={select}
           delayLongPress={LONG_PRESS_MS}
-          style={bare ? styles.bare : [styles.bubble, mine ? styles.mine : styles.theirs, { backgroundColor: palette.background }]}
+          style={bare ? styles.bare : [styles.bubble, groupCorners(place, mine), { backgroundColor: palette.background }]}
         >
           {message.forwarded === 1 && (
             <View style={[styles.forwarded, bare && styles.forwardedBare]}>
@@ -168,7 +197,8 @@ export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, on
           ) : (
             <FileContent message={message} palette={palette} mediaHidden={mediaHidden} onOpen={(rect) => onOpenFile?.(message, rect)} onLongPress={select} onPrepare={onPrepareFile && (() => onPrepareFile(message))} onAccept={onAcceptFile && (() => onAcceptFile(message))} onRefuse={onRefuseFile && (() => onRefuseFile(message))} />
           )}
-          {bare ? (
+          {/* L'heure et l'état, une seule fois par groupe : sous le dernier message. */}
+          {!endsGroup ? null : bare ? (
             <MessageMeta message={message} tone={palettes.hasWallpaper ? { text: colors.onMedia, muted: colors.onDarkMuted } : { text: colors.text, muted: colors.textMuted }} pill={palettes.hasWallpaper} />
           ) : (
             <MessageMeta message={message} tone={palette} />
@@ -257,6 +287,18 @@ const useLocalStyles = createStyles((colors) => ({
   },
   reactionEmoji: {
     fontSize: 14,
+  },
+  systemSpacing: {
+    marginTop: BETWEEN_GROUPS,
+  },
+  withAvatar: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 6,
+  },
+  avatarSlot: {
+    width: AVATAR_SIZE,
+    marginBottom: 2,
   },
   burstMine: {
     top: 4,

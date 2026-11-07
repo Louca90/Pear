@@ -64,6 +64,7 @@ export async function sendFile(core: ChatCore, contact: string, file: PickedFile
     file_mime: file.mime,
     from_camera: file.fromCamera ? 1 : 0,
     forwarded: file.forwarded ? 1 : 0,
+    conn_session: core.sessionFor(contact),
   });
   flush(core, contact);
   wakeIfNeeded(core, contact);
@@ -190,6 +191,7 @@ export function receiveFileOffer(core: ChatCore, contact: string, data: Payload)
       file_key: data.key,
       from_camera: data.camera === true ? 1 : 0,
       forwarded: data.forwarded === true ? 1 : 0,
+      conn_session: core.sessionFor(contact),
     });
     if (decision === 'ask') {
       const message = getMessage(data.id, contact);

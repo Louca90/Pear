@@ -52,6 +52,8 @@ export type Message = {
   from_camera?: number;
   // Transféré depuis une autre conversation.
   forwarded?: number;
+  // Session de connexion (regroupement des bulles) ; absente sur les anciens messages.
+  conn_session?: number | null;
 };
 
 export type NewMessage = Pick<Message, 'id' | 'contact' | 'mine' | 'text' | 'status' | 'created_at'> & Partial<Message>;
@@ -137,8 +139,8 @@ function openAndMigrate() {
 export function addMessage(message: NewMessage): boolean {
   // INSERT OR IGNORE : un message renvoyé après une coupure n'apparaît pas en double.
   const result = db().runSync(
-    `INSERT OR IGNORE INTO messages (id, contact, mine, text, status, created_at, kind, file_uri, file_size, file_mime, file_key, reply_to, from_camera, forwarded)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT OR IGNORE INTO messages (id, contact, mine, text, status, created_at, kind, file_uri, file_size, file_mime, file_key, reply_to, from_camera, forwarded, conn_session)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     message.id,
     message.contact,
     message.mine,
@@ -153,6 +155,7 @@ export function addMessage(message: NewMessage): boolean {
     message.reply_to ?? null,
     message.from_camera ?? 0,
     message.forwarded ?? 0,
+    message.conn_session ?? null,
   );
   return result.changes > 0;
 }

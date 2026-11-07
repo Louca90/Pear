@@ -164,6 +164,11 @@ const MIGRATIONS: Migration[] = [
     version: 8,
     up: (db) => addColumn(db, 'messages', 'forwarded', 'INTEGER NOT NULL DEFAULT 0'),
   },
+  {
+    // Lot 8.13 : session de connexion, pour regrouper les bulles envoyées d'une traite.
+    version: 9,
+    up: (db) => addColumn(db, 'messages', 'conn_session', 'INTEGER'),
+  },
 ];
 
 export const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
