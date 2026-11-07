@@ -28,6 +28,19 @@ const ASPECT_LABELS: Record<Aspect, TextKey> = {
   story: 'editeur.formatStory',
 };
 
+// L'icône d'un format : un cadre à ses proportions (en pointillés pour le format libre).
+const ASPECT_SHAPES: Record<Aspect, { width: number; height: number; dashed?: boolean }> = {
+  free: { width: 22, height: 16, dashed: true },
+  square: { width: 18, height: 18 },
+  portrait: { width: 16, height: 20 },
+  story: { width: 12, height: 21 },
+};
+
+function AspectIcon({ id, color }: { id: Aspect; color: string }) {
+  const shape = ASPECT_SHAPES[id];
+  return <View style={{ width: shape.width, height: shape.height, borderWidth: 2, borderRadius: 3, borderColor: color, borderStyle: shape.dashed ? 'dashed' : 'solid' }} />;
+}
+
 type Mode = 'move' | 'tl' | 'tr' | 'bl' | 'br' | 't' | 'b' | 'l' | 'r' | null;
 
 function vibrate() {
@@ -213,8 +226,15 @@ export function CropPanel({ uri, image, crop: initial, bottom, onDone }: Props) 
       <View style={[styles.bottomRow, { bottom: bottom + spacing.lg }]}>
         <View style={styles.aspects}>
           {ASPECTS.map(({ id }) => (
-            <Pressable key={id} onPress={() => chooseAspect(id)} accessibilityState={{ selected: aspect === id }} style={[styles.chip, aspect === id && styles.chipOn]}>
-              <Text style={[styles.chipLabel, aspect === id && { color: colors.text }]}>{t(ASPECT_LABELS[id])}</Text>
+            <Pressable
+              key={id}
+              onPress={() => chooseAspect(id)}
+              accessibilityRole="button"
+              accessibilityLabel={t(ASPECT_LABELS[id])}
+              accessibilityState={{ selected: aspect === id }}
+              style={[styles.chip, aspect === id && styles.chipOn]}
+            >
+              <AspectIcon id={id} color={aspect === id ? colors.text : colors.background} />
             </Pressable>
           ))}
         </View>
@@ -303,19 +323,15 @@ const useStyles = createMediaStyles((colors) => ({
     gap: spacing.sm,
   },
   chip: {
-    height: 36,
-    paddingHorizontal: spacing.md,
+    width: 48,
+    height: 44,
     borderRadius: radius.full,
     backgroundColor: 'rgba(255, 255, 255, 0.14)',
+    alignItems: 'center',
     justifyContent: 'center',
   },
   chipOn: {
     backgroundColor: colors.background,
-  },
-  chipLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.background,
   },
   reset: {
     height: 36,
