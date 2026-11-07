@@ -176,7 +176,6 @@ export function createMediaStyles<T extends NamedStyles<T>>(factory: (colors: Pa
 // --- Bulles ---
 
 // Couleurs proposées pour les bulles. Des aplats uniquement.
-export const BUBBLE_COLORS = ['#000000', '#3A3A3A', '#F5F5F5', '#FFFFFF', '#1F6F54', '#2F5D8A', '#A5473E', '#C98A1B', '#D8E8DF', '#DCE6F2', '#F4DEDA', '#F5E8C8'];
 
 export type BubblePalette = {
   background: string;

@@ -1,7 +1,7 @@
 import { ReactNode, useState, useSyncExternalStore } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { File, Paths } from 'expo-file-system';
-import { Bell, Check, ChevronRight, ImageMinus, Images, LucideIcon, User } from 'lucide-react-native';
+import { Bell, ChevronRight, ImageMinus, Images, LucideIcon, User } from 'lucide-react-native';
 
 import { getConversationSettings, setConversationSetting } from '../chat/database';
 import { chat, PickedFile } from '../chat/manager';
@@ -9,33 +9,17 @@ import { showDialog } from '../components/dialog';
 import { MediaPicker } from '../components/MediaPicker';
 import { resizeImage } from '../../modules/pear-native';
 import { log } from '../log';
-import { Button, Header, IconButton, Screen } from '../components/ui';
-import { BUBBLE_COLORS, bubblePalette, createStyles, radius, spacing, useColors } from '../theme';
+import { Button, Header, Screen } from '../components/ui';
+import { ColorWheel } from '../components/ColorWheel';
+import { SegmentedControl } from '../components/SegmentedControl';
+import { bubblePalette, createStyles, radius, spacing, useColors } from '../theme';
 import { t } from '../i18n';
 
 // Le fond voyage sur le réseau : une image moins lourde arrive plus vite, sans perte visible en plein écran.
 // Un fond n'a pas besoin de plus que la taille d'un écran.
 const WALLPAPER_MAX_SIZE = 2048;
 const WALLPAPER_QUALITY = 80;
-
-function ColorChoices({ selected, onPick }: { selected: string; onPick: (color: string) => void }) {
-  const styles = useStyles();
-  return (
-    <View style={styles.swatches}>
-      {BUBBLE_COLORS.map((color) => (
-        <IconButton
-          key={color}
-          onPress={() => onPick(color)}
-          label={t('perso.couleur', { couleur: color })}
-          hitSlop={0}
-          style={[styles.swatch, { backgroundColor: color }]}
-        >
-          {selected === color && <Check size={20} color={bubblePalette(color).text} strokeWidth={2} />}
-        </IconButton>
-      ))}
-    </View>
-  );
-}
+const WHEEL_SIZE = 200;
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   const styles = useStyles();
@@ -72,14 +56,18 @@ export function CustomizeScreen({ contactKey, name, onBack, onInfo, onNotificati
   const styles = useStyles();
   const [busy, setBusy] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
+  // La bulle que la roue colore, et la couleur qui suit le doigt avant d'être enregistrée.
+  const [target, setTarget] = useState<'my_bubble' | 'their_bubble'>('my_bubble');
+  const [draft, setDraft] = useState<string | null>(null);
   useSyncExternalStore(chat.subscribe, chat.getVersion);
 
   const settings = getConversationSettings(contactKey);
-  const mine = bubblePalette(settings.my_bubble ?? colors.bubbleMine);
-  const theirs = bubblePalette(settings.their_bubble ?? colors.bubbleTheirs);
+  const mine = bubblePalette((target === 'my_bubble' && draft) || (settings.my_bubble ?? colors.bubbleMine));
+  const theirs = bubblePalette((target === 'their_bubble' && draft) || (settings.their_bubble ?? colors.bubbleTheirs));
 
   const setColor = (column: 'my_bubble' | 'their_bubble', color: string) => {
     setConversationSetting(contactKey, column, color);
+    setDraft(null);
     chat.refresh();
   };
 
@@ -112,7 +100,7 @@ export function CustomizeScreen({ contactKey, name, onBack, onInfo, onNotificati
   return (
     <Screen>
       <Header title={t('perso.titre')} subtitle={name} onBack={onBack} />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} scrollEnabled={draft === null}>
         <View style={styles.preview}>
           {settings.wallpaper_uri && <Image source={{ uri: settings.wallpaper_uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />}
           <View style={[styles.previewBubble, styles.previewTheirs, { backgroundColor: theirs.background }]}>
@@ -124,10 +112,22 @@ export function CustomizeScreen({ contactKey, name, onBack, onInfo, onNotificati
         </View>
 
         <Section title={t('perso.bulles')}>
-          <Text style={styles.label}>{t('perso.mesBulles')}</Text>
-          <ColorChoices selected={mine.background} onPick={(color) => setColor('my_bubble', color)} />
-          <Text style={styles.label}>{t('perso.sesBulles')}</Text>
-          <ColorChoices selected={theirs.background} onPick={(color) => setColor('their_bubble', color)} />
+          <SegmentedControl
+            options={[
+              { value: 'my_bubble', label: t('perso.mesBulles') },
+              { value: 'their_bubble', label: t('perso.sesBulles') },
+            ]}
+            value={target}
+            onChange={setTarget}
+          />
+          <View style={styles.wheel}>
+            <ColorWheel
+              size={WHEEL_SIZE}
+              value={(target === 'my_bubble' ? mine : theirs).background}
+              onPreview={setDraft}
+              onChange={(color) => setColor(target, color)}
+            />
+          </View>
           <Text style={styles.hint}>{t('perso.couleursLocales')}</Text>
         </Section>
 
@@ -201,20 +201,8 @@ const useStyles = createStyles((colors) => ({
     fontSize: 14,
     color: colors.textMuted,
   },
-  swatches: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  swatch: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.full,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
+  wheel: {
+    marginVertical: spacing.md,
   },
   actions: {
     gap: spacing.sm,
