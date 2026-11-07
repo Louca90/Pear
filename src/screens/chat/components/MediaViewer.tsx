@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Animated, Dimensions, Image, Modal, PanResponder, Pressable, StyleSheet, View } from 'react-native';
 import { useEvent, useEventListener } from 'expo';
 import { useVideoPlayer, VideoPlayer, VideoView } from 'expo-video';
@@ -19,8 +19,14 @@ function VideoControls({ player }: { player: VideoPlayer }) {
   const styles = useStyles();
   const colors = useMediaColors();
   const bottom = useNavigationBarHeight();
-  const { isPlaying } = useEvent(player, 'playingChange', { isPlaying: player.playing, oldIsPlaying: false });
+  // L'état vient toujours du lecteur : relu à l'apparition (la lecture a pu démarrer juste avant qu'on
+  // écoute) puis à chaque événement, pour que le bouton ne reste jamais sur « pause » pendant la lecture.
+  const [isPlaying, setIsPlaying] = useState(player.playing);
   const { currentTime } = useEvent(player, 'timeUpdate', { currentTime: player.currentTime, currentLiveTimestamp: null, currentOffsetFromLive: null, bufferedPosition: 0 });
+  useEventListener(player, 'playingChange', ({ isPlaying: playing }) => setIsPlaying(playing));
+  useEventListener(player, 'timeUpdate', () => setIsPlaying(player.playing));
+  useEventListener(player, 'statusChange', () => setIsPlaying(player.playing));
+  useEffect(() => setIsPlaying(player.playing), [player]);
   const duration = player.duration;
   const position = duration > 0 ? Math.min(1, currentTime / duration) : 0;
   const toggle = () => (isPlaying ? player.pause() : player.play());
@@ -84,8 +90,19 @@ export function MediaViewer({ viewing: { message, rect, poster, size }, onClose 
     created.timeUpdateEventInterval = 0.25;
   });
 
+  // Lecture automatique à l'ouverture : si la vidéo n'était pas encore prête quand on a demandé la
+  // lecture, elle démarre dès qu'elle l'est (une seule fois : une pause de l'utilisateur est respectée).
+  const autoplay = useRef(false);
+  useEventListener(player, 'statusChange', ({ status }) => {
+    if (autoplay.current && status === 'readyToPlay' && !player.playing && !closingRef.current) player.play();
+  });
+  useEventListener(player, 'playingChange', ({ isPlaying }) => {
+    if (isPlaying) autoplay.current = false;
+  });
+
   const close = () => {
     if (closingRef.current) return;
+    autoplay.current = false;
     closingRef.current = true;
     if (isVideo) player.pause();
     setClosing(true);
@@ -102,7 +119,10 @@ export function MediaViewer({ viewing: { message, rect, poster, size }, onClose 
     Animated.timing(progress, { toValue: 1, duration: VIEWER_OPEN_MS, easing: VIEWER_EASING, useNativeDriver: false }).start(({ finished }) => {
       if (!finished || closingRef.current) return;
       setOpened(true);
-      if (isVideo) player.play();
+      if (isVideo) {
+        autoplay.current = true;
+        player.play();
+      }
     });
   };
 
