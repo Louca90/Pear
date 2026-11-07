@@ -1,5 +1,5 @@
 import { ComponentRef, useEffect, useRef, useState } from 'react';
-import { Animated, Dimensions, Easing, Image, Pressable, Text, View } from 'react-native';
+import { Animated, Easing, Image, Pressable, Text, View } from 'react-native';
 import { File as FsFile } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { File, Play } from 'lucide-react-native';
@@ -68,7 +68,10 @@ export function ContactMedia({ contactKey }: { contactKey: string }) {
   const fade = useRef(new Animated.Value(1)).current;
   const media = messages.filter((message) => message.kind === 'image' || message.kind === 'video');
   const files = messages.filter((message) => message.kind === 'file');
-  const tileSize = (Dimensions.get('window').width - spacing.lg * 2 - GAP * (COLUMNS - 1)) / COLUMNS;
+  // Mesurée sur la grille elle-même, arrondie vers le bas : trois cases tiennent toujours sur une ligne
+  // (avec la largeur de l'écran, un arrondi en trop renvoyait la troisième à la ligne).
+  const [gridWidth, setGridWidth] = useState(0);
+  const tileSize = Math.floor((gridWidth - GAP * (COLUMNS - 1)) / COLUMNS);
 
   const choose = (next: Kind) => {
     if (next === kind) return;
@@ -117,8 +120,8 @@ export function ContactMedia({ contactKey }: { contactKey: string }) {
         {shown.length === 0 ? (
           <Text style={styles.empty}>{kind === 'media' ? t('contact.aucunMedia') : t('contact.aucunFichier')}</Text>
         ) : kind === 'media' ? (
-          <View style={styles.grid}>
-            {media.map((message) => (
+          <View style={styles.grid} onLayout={({ nativeEvent }) => setGridWidth(nativeEvent.layout.width)}>
+            {tileSize > 0 && media.map((message) => (
               <Tile key={message.id} message={message} size={tileSize} onOpen={openMedia} />
             ))}
           </View>
@@ -168,9 +171,11 @@ const useStyles = createStyles((colors) => ({
     fontWeight: '600',
   },
   grid: {
+    alignSelf: 'stretch',
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: GAP,
+    columnGap: GAP,
+    rowGap: GAP,
   },
   tileBackground: {
     ...({ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 } as const),

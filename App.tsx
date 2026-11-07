@@ -5,7 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as Linking from 'expo-linking';
 import notifee from '@notifee/react-native';
 
-import { addBackListener, backHookAvailable, setBackMode } from './modules/pear-native';
+import { backHookAvailable, setBackMode } from './modules/pear-native';
 import { cleanupCache } from './src/chat/cleanup';
 import { handleNotificationEvent } from './src/chat/notificationActions';
 import { refreshRemoteConfig } from './src/remoteConfig';
@@ -39,7 +39,7 @@ import { UpdatedPopup } from './src/update/UpdatedPopup';
 import { checkForUpdate, isBlocking, useUpdateState } from './src/update/updates';
 import { UpdateScreen } from './src/update/UpdateScreen';
 import { log } from './src/log';
-import { interceptBack, hasBackInterceptor } from './src/navigation/backInterceptors';
+import { interceptBack } from './src/navigation/backInterceptors';
 import { t } from './src/i18n';
 
 type Route =
@@ -58,31 +58,23 @@ type Route =
   | { name: 'contact'; publicKey: string; suggestedName?: string | null }
   | { name: 'chat'; publicKey: string };
 
-// --- Retour en arrière ---
-// Chaque écran a sa valeur de geste g : 0 au repos, 1 au bout du glissé, 2 parti. La page qui part garde
-// la sienne (effacée) jusqu'à disparaître : rien n'est remis en place au changement d'écran.
-const BACK_EXIT_MS = 200;
-// Bouton retour maintenu (barre à 3 boutons) : Android n'envoie presque aucune progression. Si rien
-// n'arrive après ce délai, la page glisse seule vers un aperçu stable, puis attend le relâchement.
-const BACK_HOLD_DELAY_MS = 80;
-const BACK_PREVIEW = 0.7;
-const BACK_PREVIEW_MS = 240;
-const BACK_CANCEL_MS = 200;
+// --- Navigation ---
+// Animations fixes, sans suivre le doigt. Chaque écran a deux valeurs : enter (0 → 1 à son arrivée)
+// et g (0 → 1 quand il part). La page qui part garde la sienne jusqu'à disparaître : rien n'est remis
+// en place au changement d'écran, donc pas d'image de l'ancien écran.
+const ENTER_MS = 260;
+const EXIT_MS = 220;
 // Démarre vite et se pose doucement, sans dépasser : jamais de rebond.
-const BACK_EASING = Easing.bezier(0.2, 0.8, 0.2, 1);
-const BACK_PAGE_SHIFT = 24;
-// La page rejoint chaque nouvelle position du doigt en douceur, au lieu de sauter d'une valeur à l'autre.
-const BACK_FOLLOW_MS = 50;
-// Arrivée d'un nouvel écran : fondu et léger zoom, l'écran d'avant s'efface dessous.
-const ENTER_MS = 200;
+const NAV_EASING = Easing.bezier(0.2, 0.8, 0.2, 1);
+// La page arrive de la droite et repart vers la droite ; l'écran d'en dessous se décale un peu.
+const PAGE_SHIFT = 48;
+const UNDER_SHIFT = 24;
 // Glissement entre onglets : la page et l'onglet voisin suivent le doigt ; au-delà du seuil (ou d'un
 // geste rapide), le voisin finit de prendre la place.
 const TAB_SWIPE_RATIO = 0.3;
 const TAB_SETTLE_MS = 180;
 // Les bords restent au retour par geste d'Android.
 const TAB_EDGE = 28;
-// Coins arrondis des pages, comme ceux de l'écran : invisibles au repos, visibles quand la page se réduit.
-const PAGE_CORNER_RADIUS = 28;
 // Dans l'ordre de la barre du bas : le glissement horizontal passe de l'un à l'autre.
 const TAB_ROUTES: string[] = ['home', 'camera', 'contacts', 'profile'];
 // L'écran parent reste monté sous la page (prêt pour le retour) ; pas la caméra, qui allumerait le capteur.
@@ -90,7 +82,7 @@ const NOT_KEPT_UNDER = ['camera', 'scan'];
 // Délai avant de monter un parent qui ne l'était pas : la page qui vient d'arriver passe d'abord.
 const PARENT_MOUNT_DELAY_MS = 600;
 
-type PageMotion = { g: Animated.Value; edge: Animated.Value; enter: Animated.Value };
+type PageMotion = { g: Animated.Value; enter: Animated.Value };
 
 function sameDeps(a: unknown[], b: unknown[]) {
   return a.length === b.length && a.every((value, index) => value === b[index]);
@@ -127,7 +119,7 @@ function App() {
   const motionFor = (key: string, entering = false) => {
     let motion = motions.get(key);
     if (!motion) {
-      motion = { g: new Animated.Value(0), edge: new Animated.Value(1), enter: new Animated.Value(entering ? 0 : 1) };
+      motion = { g: new Animated.Value(0), enter: new Animated.Value(entering ? 0 : 1) };
       motions.set(key, motion);
     }
     return motion;
@@ -136,7 +128,6 @@ function App() {
   const mountedKeys = useRef(new Set<string>([currentKey]));
   const [parentReady, setParentReady] = useState(false);
   const exiting = useRef(false);
-  const gestureStarted = useRef(false);
   // Les valeurs à jour pour les fonctions créées une seule fois (écouteurs, navigation).
   const nav = useRef<{ route: Route; parent: Route | null }>({ route, parent: null });
   const tabDrag = useRef(new Animated.Value(0)).current;
@@ -258,6 +249,8 @@ function App() {
   // Le bouton retour d'Android revient à l'écran précédent au lieu de quitter l'app.
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      // Un élément ouvert dans la page (sélection…) se ferme d'abord.
+      if (interceptBack()) return true;
       const parent = parentOf(route);
       if (!parent) return false;
       setRoute(parent);
@@ -266,10 +259,9 @@ function App() {
     return () => subscription.remove();
   }, [route, contacts]);
 
-  // Sur l'accueil, Android montre lui-même l'aperçu pour quitter. L'appareil photo n'a pas d'aperçu.
+  // Sur l'accueil, Android montre lui-même l'aperçu pour quitter ; ailleurs, le retour est l'animation de Pear.
   useEffect(() => {
-    // Entre deux onglets, pas d'aperçu : la barre du bas reste en place et son rond glisse vers l'accueil.
-    const mode = blocked || onboarding ? 'default' : route.name === 'home' ? 'system' : TAB_ROUTES.includes(route.name) ? 'default' : 'app';
+    const mode = blocked || onboarding ? 'default' : route.name === 'home' ? 'system' : 'default';
     setBackMode(mode).catch((e) => log.warn('retour', e));
   }, [route.name, blocked, onboarding]);
 
@@ -325,20 +317,15 @@ function App() {
     }),
   ).current;
 
-  const sawProgress = useRef(false);
-  const holdTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-
-  // Retour animé vers le parent : la page se réduit et s'efface, le parent (déjà monté) prend la place.
+  // Retour animé vers le parent : la page repart vers la droite en s'effaçant, le parent (déjà monté)
+  // reprend sa place.
   const animateBack = useRef(() => {
     const parent = nav.current.parent;
     if (!parent || exiting.current) return;
     exiting.current = true;
-    clearTimeout(holdTimer.current);
     const { g } = motionFor(routeKey(nav.current.route));
-    g.stopAnimation();
-    Animated.timing(g, { toValue: 2, duration: BACK_EXIT_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start(() => {
+    Animated.timing(g, { toValue: 1, duration: EXIT_MS, easing: NAV_EASING, useNativeDriver: true }).start(() => {
       exiting.current = false;
-      gestureStarted.current = false;
       setRouteState(parent);
     });
   }).current;
@@ -356,7 +343,6 @@ function App() {
     const betweenTabs = TAB_ROUTES.includes(current.name) && TAB_ROUTES.includes(next.name);
     const parent = nav.current.parent;
     if (!betweenTabs && parent && routeKey(parent) === nextKey && mountedKeys.current.has(nextKey)) {
-      motionFor(routeKey(current)).edge.setValue(1);
       animateBack();
       return;
     }
@@ -371,58 +357,12 @@ function App() {
   // et le parent sera monté dessous (prêt pour le retour) après un court délai.
   useEffect(() => {
     const { enter } = motionFor(currentKey);
-    Animated.timing(enter, { toValue: 1, duration: ENTER_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    Animated.timing(enter, { toValue: 1, duration: ENTER_MS, easing: NAV_EASING, useNativeDriver: true }).start();
     for (const key of [...motions.keys()]) if (!mountedKeys.current.has(key)) motions.delete(key);
     setParentReady(false);
     const timer = setTimeout(() => setParentReady(true), PARENT_MOUNT_DELAY_MS);
     return () => clearTimeout(timer);
   }, [currentKey]);
-
-  // Le geste de retour d'Android : aucun changement d'état React pendant le glissé, tout est animé
-  // en natif (pas de saccade). Un élément ouvert dans la page (sélection…) se ferme d'abord.
-  useEffect(() => {
-    const subscription = addBackListener(({ type, progress, fromRight }) => {
-      const { parent } = nav.current;
-      const motion = motionFor(routeKey(nav.current.route));
-      if (type === 'started') {
-        if (!parent || exiting.current || hasBackInterceptor()) return;
-        gestureStarted.current = true;
-        sawProgress.current = false;
-        motion.g.stopAnimation();
-        motion.g.setValue(0);
-        // Le côté du geste, fixé avant la première image : la page part tout de suite du bon côté.
-        motion.edge.setValue(fromRight ? -1 : 1);
-        if (!mountedKeys.current.has(routeKey(parent))) setParentReady(true);
-        holdTimer.current = setTimeout(() => {
-          if (!sawProgress.current) {
-            Animated.timing(motion.g, { toValue: BACK_PREVIEW, duration: BACK_PREVIEW_MS, easing: BACK_EASING, useNativeDriver: true }).start();
-          }
-        }, BACK_HOLD_DELAY_MS);
-      } else if (type === 'progress') {
-        if (!gestureStarted.current) return;
-        if (!sawProgress.current) {
-          sawProgress.current = true;
-          clearTimeout(holdTimer.current);
-          motion.g.stopAnimation();
-        }
-        Animated.timing(motion.g, { toValue: progress, duration: BACK_FOLLOW_MS, easing: Easing.linear, useNativeDriver: true }).start();
-      } else if (type === 'cancelled') {
-        clearTimeout(holdTimer.current);
-        gestureStarted.current = false;
-        motion.g.stopAnimation();
-        Animated.timing(motion.g, { toValue: 0, duration: BACK_CANCEL_MS, easing: BACK_EASING, useNativeDriver: true }).start();
-      } else if (interceptBack()) {
-        // Le retour a fermé quelque chose dans la page : elle revient à sa place.
-        clearTimeout(holdTimer.current);
-        gestureStarted.current = false;
-        Animated.timing(motion.g, { toValue: 0, duration: BACK_CANCEL_MS, easing: BACK_EASING, useNativeDriver: true }).start();
-      } else if (parent) {
-        if (!gestureStarted.current) motion.edge.setValue(1);
-        animateBack();
-      }
-    });
-    return () => subscription.remove();
-  }, []);
 
   const contactKey = route.name === 'contact' ? route.publicKey : null;
 
@@ -694,11 +634,8 @@ function App() {
                 StyleSheet.absoluteFill,
                 isParent
                   ? {
-                      opacity: Animated.add(
-                        top.g.interpolate({ inputRange: [0, 1, 2], outputRange: [0.4, 0.85, 1] }),
-                        top.enter.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
-                      ),
-                      transform: [{ scale: top.g.interpolate({ inputRange: [0, 1, 2], outputRange: [0.94, 0.97, 1] }) }],
+                      // Se décale un peu à gauche quand la page arrive, revient quand elle repart.
+                      transform: [{ translateX: Animated.multiply(top.enter, top.g.interpolate({ inputRange: [0, 1], outputRange: [-UNDER_SHIFT, 0] })) }],
                     }
                   : styles.hidden,
               ]}
@@ -714,15 +651,16 @@ function App() {
             {...tabSwipe.panHandlers}
             style={[
               StyleSheet.absoluteFill,
-              !TAB_ROUTES.includes(layer.name) && styles.page,
               {
-                opacity: Animated.multiply(
-                  top.g.interpolate({ inputRange: [0, 1, 2], outputRange: [1, 1, 0] }),
-                  top.enter,
-                ),
+                // Arrive de la droite en fondu ; au retour, repart vers la droite en s'effaçant.
+                opacity: Animated.multiply(top.enter, top.g.interpolate({ inputRange: [0, 1], outputRange: [1, 0] })),
                 transform: [
-                  { translateX: Animated.add(Animated.multiply(top.g.interpolate({ inputRange: [0, 1, 2], outputRange: [0, BACK_PAGE_SHIFT, BACK_PAGE_SHIFT] }), top.edge), tabDrag) },
-                  { scale: Animated.multiply(top.g.interpolate({ inputRange: [0, 1, 2], outputRange: [1, 0.92, 0.88] }), top.enter.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1] })) },
+                  {
+                    translateX: Animated.add(
+                      Animated.add(top.enter.interpolate({ inputRange: [0, 1], outputRange: [PAGE_SHIFT, 0] }), top.g.interpolate({ inputRange: [0, 1], outputRange: [0, PAGE_SHIFT] })),
+                      tabDrag,
+                    ),
+                  },
                 ],
               },
             ]}
@@ -788,10 +726,6 @@ const useStyles = createStyles((colors) => ({
   },
   hidden: {
     opacity: 0,
-  },
-  page: {
-    borderRadius: PAGE_CORNER_RADIUS,
-    overflow: 'hidden',
   },
   center: {
     flex: 1,
