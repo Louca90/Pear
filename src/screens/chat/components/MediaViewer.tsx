@@ -69,6 +69,20 @@ function VideoControls({ player }: { player: VideoPlayer }) {
   );
 }
 
+// Zoom : pincer de 1× à 5×, double appui (photo) pour 2,5× puis retour, déplacement limité aux bords.
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 5;
+const DOUBLE_TAP_ZOOM = 2.5;
+const DOUBLE_TAP_MS = 280;
+const TAP_SLOP = 8;
+const ZOOM_MS = 240;
+// Élan au relâché : la distance parcourue pendant ce temps à la vitesse du doigt.
+const INERTIA_MS = 220;
+
+type Point = { x: number; y: number };
+const distance = (a: { pageX: number; pageY: number }, b: { pageX: number; pageY: number }) => Math.hypot(a.pageX - b.pageX, a.pageY - b.pageY);
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
 export type Viewing = { message: Message; rect: Rect; poster: string; size: { width: number; height: number } };
 
 // Le cadre passe en douceur du carré de la conversation au format réel du média : l'image, recadrée
@@ -100,9 +114,46 @@ export function MediaViewer({ viewing: { message, rect, poster, size }, onClose 
     if (isPlaying) autoplay.current = false;
   });
 
+  // Zoom et déplacement (pilotés en JS, comme le reste de la visionneuse).
+  const zoom = useRef(new Animated.Value(1)).current;
+  const pan = useRef(new Animated.ValueXY()).current;
+  const zoomNow = useRef(1);
+  const panNow = useRef<Point>({ x: 0, y: 0 });
+  const panStart = useRef<Point>({ x: 0, y: 0 });
+  const pinch = useRef<{ distance: number; zoom: number } | null>(null);
+  const lastTap = useRef(0);
+  const fitted = useRef({ width: 0, height: 0 });
+
+  // Jusqu'où on peut déplacer le média zoomé sans voir au-delà de ses bords.
+  const clampPan = (point: Point, level = zoomNow.current): Point => {
+    const maxX = Math.max(0, (fitted.current.width * level - width) / 2);
+    const maxY = Math.max(0, (fitted.current.height * level - height) / 2);
+    return { x: clamp(point.x, -maxX, maxX), y: clamp(point.y, -maxY, maxY) };
+  };
+  const setPan = (point: Point) => {
+    panNow.current = point;
+    pan.setValue(point);
+  };
+  const setZoom = (level: number) => {
+    zoomNow.current = level;
+    zoom.setValue(level);
+    setPan(clampPan(panNow.current, level));
+  };
+  const animateZoom = (level: number, target: Point) => {
+    const next = clampPan(target, level);
+    zoomNow.current = level;
+    panNow.current = next;
+    Animated.parallel([
+      Animated.timing(zoom, { toValue: level, duration: ZOOM_MS, easing: VIEWER_EASING, useNativeDriver: false }),
+      Animated.timing(pan, { toValue: next, duration: ZOOM_MS, easing: VIEWER_EASING, useNativeDriver: false }),
+    ]).start();
+  };
+  const zoomed = () => zoomNow.current > 1.01;
+
   const close = () => {
     if (closingRef.current) return;
     autoplay.current = false;
+    if (zoomed()) animateZoom(1, { x: 0, y: 0 });
     closingRef.current = true;
     if (isVideo) player.pause();
     setClosing(true);
@@ -130,16 +181,66 @@ export function MediaViewer({ viewing: { message, rect, poster, size }, onClose 
   const settleDrag = () =>
     Animated.timing(drag, { toValue: { x: 0, y: 0 }, duration: VIEWER_CANCEL_MS, easing: VIEWER_EASING, useNativeDriver: false }).start();
 
-  const pan = useRef(
+  // Les gestes : deux doigts pincent (zoom), un doigt déplace le média zoomé ; sinon un glissé vers le
+  // bas ferme. Zoomé, la fermeture par glissé est désactivée. Le double appui zoome sur une photo
+  // (sur une vidéo, l'appui sert à lecture/pause).
+  const gestures = useRef({ clampPan, setPan, setZoom, animateZoom, zoomed, isVideo });
+  gestures.current = { clampPan, setPan, setZoom, animateZoom, zoomed, isVideo };
+  const responder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_event, gesture) => gesture.dy > VIEWER_DRAG_START && gesture.dy > Math.abs(gesture.dx),
-      onPanResponderMove: (_event, gesture) => drag.setValue({ x: gesture.dx, y: Math.max(0, gesture.dy) }),
-      onPanResponderRelease: (_event, gesture) => {
+      onStartShouldSetPanResponderCapture: (event) => event.nativeEvent.touches.length >= 2,
+      onMoveShouldSetPanResponderCapture: (event, gesture) =>
+        event.nativeEvent.touches.length >= 2 || (gestures.current.zoomed() && Math.hypot(gesture.dx, gesture.dy) > TAP_SLOP / 2),
+      onMoveShouldSetPanResponder: (_event, gesture) => gestures.current.zoomed() || (gesture.dy > VIEWER_DRAG_START && gesture.dy > Math.abs(gesture.dx)),
+      onPanResponderGrant: () => {
+        pinch.current = null;
+        panStart.current = { ...panNow.current };
+      },
+      onPanResponderMove: (event, gesture) => {
+        const { touches } = event.nativeEvent;
+        const g = gestures.current;
+        if (touches.length >= 2) {
+          const spread = distance(touches[0], touches[1]);
+          if (!pinch.current) pinch.current = { distance: spread, zoom: zoomNow.current };
+          g.setZoom(clamp((pinch.current.zoom * spread) / pinch.current.distance, MIN_ZOOM, MAX_ZOOM));
+          return;
+        }
+        // Un doigt levé après un pincement : on attend le relâché, sans sauter.
+        if (pinch.current) return;
+        if (g.zoomed()) {
+          g.setPan(g.clampPan({ x: panStart.current.x + gesture.dx, y: panStart.current.y + gesture.dy }));
+          return;
+        }
+        drag.setValue({ x: gesture.dx, y: Math.max(0, gesture.dy) });
+      },
+      onPanResponderRelease: (event, gesture) => {
+        const g = gestures.current;
+        const wasPinch = pinch.current !== null;
+        pinch.current = null;
+        if (g.zoomed() || wasPinch) {
+          if (zoomNow.current < 1.05) g.animateZoom(1, { x: 0, y: 0 });
+          else g.animateZoom(zoomNow.current, { x: panNow.current.x + gesture.vx * INERTIA_MS, y: panNow.current.y + gesture.vy * INERTIA_MS });
+          return;
+        }
+        if (Math.abs(gesture.dx) < TAP_SLOP && Math.abs(gesture.dy) < TAP_SLOP) {
+          settleDrag();
+          const now = Date.now();
+          if (!g.isVideo && now - lastTap.current < DOUBLE_TAP_MS) {
+            lastTap.current = 0;
+            // Zoom vers l'endroit touché.
+            const { pageX, pageY } = event.nativeEvent;
+            g.animateZoom(DOUBLE_TAP_ZOOM, { x: (width / 2 - pageX) * (DOUBLE_TAP_ZOOM - 1), y: (height / 2 - pageY) * (DOUBLE_TAP_ZOOM - 1) });
+          } else lastTap.current = now;
+          return;
+        }
         if (gesture.dy > VIEWER_CLOSE_DISTANCE || gesture.vy > VIEWER_CLOSE_SPEED) latestClose.current();
         else settleDrag();
       },
-      onPanResponderTerminate: () => settleDrag(),
+      onPanResponderTerminate: () => {
+        pinch.current = null;
+        settleDrag();
+      },
     }),
   ).current;
 
@@ -147,6 +248,7 @@ export function MediaViewer({ viewing: { message, rect, poster, size }, onClose 
   const fit = Math.min(width / size.width, height / size.height);
   const finalWidth = size.width * fit;
   const finalHeight = size.height * fit;
+  fitted.current = { width: finalWidth, height: finalHeight };
   const between = (from: number, to: number) => progress.interpolate({ inputRange: [0, 1], outputRange: [from, to] });
 
   const dragRange = { inputRange: [0, height / 2], extrapolate: 'clamp' as const };
@@ -157,7 +259,7 @@ export function MediaViewer({ viewing: { message, rect, poster, size }, onClose 
     <Modal visible transparent animationType="none" onRequestClose={close} onShow={startOpening} statusBarTranslucent navigationBarTranslucent>
       <Animated.View style={[StyleSheet.absoluteFill, styles.viewerBackground, { opacity: dimming }]} />
       {/* collapsable : sans contrôles vidéo, cette vue doit exister pour recevoir le doigt sur une photo. */}
-      <View collapsable={false} style={StyleSheet.absoluteFill} {...pan.panHandlers}>
+      <View collapsable={false} style={StyleSheet.absoluteFill} {...responder.panHandlers}>
         <Animated.View
           pointerEvents="none"
           style={[
@@ -171,6 +273,8 @@ export function MediaViewer({ viewing: { message, rect, poster, size }, onClose 
             },
           ]}
         >
+          <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ translateX: pan.x }, { translateY: pan.y }] }]}>
+          <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ scale: zoom }] }]}>
           <Animated.View
             style={[
               styles.viewerFrame,
@@ -194,6 +298,8 @@ export function MediaViewer({ viewing: { message, rect, poster, size }, onClose 
                 onFirstFrameRender={() => setFrameReady(true)}
               />
             )}
+          </Animated.View>
+          </Animated.View>
           </Animated.View>
         </Animated.View>
         {isVideo && opened && !closing && (
