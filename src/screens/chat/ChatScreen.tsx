@@ -400,6 +400,7 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
               replyingTo={replyingTo}
               editing={editing}
               onCancelMode={cancelComposerMode}
+              onJump={jumpTo}
               onSend={send}
               input={input}
               keyboardOpen={keyboardOpen}

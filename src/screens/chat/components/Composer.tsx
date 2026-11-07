@@ -1,8 +1,8 @@
-import { ComponentRef, RefObject } from 'react';
-import { Animated, StyleSheet, Text, TextInput, View } from 'react-native';
-import { ArrowUp, Check, ChevronUp, Lock, Mic, Paperclip, Pencil, Reply, Trash2, X } from 'lucide-react-native';
+import { ComponentRef, RefObject, useMemo } from 'react';
+import { Animated, StyleSheet, TextInput, View } from 'react-native';
+import { ArrowUp, Check, ChevronUp, Lock, Mic, Paperclip, Trash2 } from 'lucide-react-native';
 
-import { describeMessage, Message } from '../../../chat/database';
+import { Message } from '../../../chat/database';
 import { MAX_TEXT_LENGTH } from '../../../chat/manager';
 import { IconButton, useNavigationBarHeight } from '../../../components/ui';
 import { createStyles, radius, spacing, useColors } from '../../../theme';
@@ -10,6 +10,7 @@ import { createStyles, radius, spacing, useColors } from '../../../theme';
 import { VOICE_CANCEL_DISTANCE, VOICE_LOCK_DISTANCE } from '../constants';
 import { useVoiceRecorder } from '../hooks/useVoiceRecorder';
 import { useChatStyles } from '../styles';
+import { ComposerModeCard } from './ComposerModeCard';
 import { RecordingRow } from './RecordingRow';
 import { t } from '../../../i18n';
 
@@ -20,6 +21,7 @@ type Props = {
   replyingTo: Message | null;
   editing: Message | null;
   onCancelMode: () => void;
+  onJump: (id: string) => void;
   onSend: () => void;
   input: RefObject<ComponentRef<typeof TextInput> | null>;
   keyboardOpen: boolean;
@@ -38,6 +40,7 @@ export function Composer({
   replyingTo,
   editing,
   onCancelMode,
+  onJump,
   onSend,
   input,
   keyboardOpen,
@@ -54,24 +57,16 @@ export function Composer({
   // Le micro devient progressivement une poubelle, au fil du glissé vers la gauche.
   const trashAmount = voice.dragX.interpolate({ inputRange: [-VOICE_CANCEL_DISTANCE, -VOICE_CANCEL_DISTANCE * 0.2], outputRange: [1, 0], extrapolate: 'clamp' });
 
+  const mode = useMemo(
+    () => (editing ? { kind: 'edit' as const, message: editing } : replyingTo ? { kind: 'reply' as const, message: replyingTo } : null),
+    [editing, replyingTo],
+  );
+
   return (
     <View style={styles.composerArea}>
       {/* Comble l'espace qui peut rester entre la saisie et le clavier (ou le bas de l'écran) : le fond d'écran n'y transparaît plus. */}
       <View pointerEvents="none" style={styles.composerUnderlay} />
-      {(replyingTo || editing) && (
-        <View style={styles.composerMode}>
-          {editing ? <Pencil size={20} color={colors.text} strokeWidth={1.75} /> : <Reply size={20} color={colors.text} strokeWidth={1.75} />}
-          <View style={styles.flex}>
-            <Text style={styles.composerModeTitle} numberOfLines={1}>
-              {editing ? t('chat.modifierMessage') : t('chat.repondreA', { nom: replyingTo?.mine === 1 ? t('chat.vousMeme') : name })}
-            </Text>
-            <Text style={styles.composerModeText} numberOfLines={1}>{describeMessage((editing ?? replyingTo)!)}</Text>
-          </View>
-          <IconButton onPress={onCancelMode} label={t('commun.annuler')}>
-            <X size={20} color={colors.text} strokeWidth={1.75} />
-          </IconButton>
-        </View>
-      )}
+      <ComposerModeCard mode={mode} name={name} onCancel={onCancelMode} onJump={onJump} />
       <View style={[styles.composer, { paddingBottom: keyboardOpen ? spacing.sm : bottom + spacing.sm }]}>
         {voice.phase !== 'idle' ? (
           <RecordingRow seconds={voice.seconds} locked={voice.phase === 'locked'} dragX={voice.dragX} onDiscard={voice.discard} />

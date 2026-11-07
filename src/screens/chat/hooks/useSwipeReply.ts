@@ -27,7 +27,9 @@ export function useSwipeReply(message: Message, mine: boolean, onReply?: (messag
       onPanResponderTerminationRequest: () => false,
       onPanResponderMove: (_event, gesture) => {
         const { direction } = latest.current;
-        const distance = Math.max(0, Math.min(SWIPE_MAX, gesture.dx * direction));
+        // Libre jusqu'au seuil, puis freiné : la bulle résiste de plus en plus jusqu'au maximum.
+        const raw = Math.max(0, gesture.dx * direction);
+        const distance = raw <= SWIPE_REPLY ? raw : Math.min(SWIPE_MAX, SWIPE_REPLY + (raw - SWIPE_REPLY) * 0.35);
         swipe.setValue(distance * direction);
         const reached = distance >= SWIPE_REPLY;
         if (reached !== armed.current) {
