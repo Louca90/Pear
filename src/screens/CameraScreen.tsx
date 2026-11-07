@@ -1,5 +1,5 @@
 import { ComponentRef, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Linking, Modal, PanResponder, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, Easing, Linking, Modal, PanResponder, StyleSheet, Text, View } from 'react-native';
 import { CameraType, CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import { File, Paths } from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
@@ -34,8 +34,7 @@ const PHOTO_JPEG_QUALITY = 82;
 const DOUBLE_TAP_MS = 300;
 const FLIP_SWIPE_DISTANCE = 70;
 const FLIP_TAP_DISTANCE = 10;
-// Place de la barre d'envoi sous les filtres de l'éditeur.
-const REVIEW_SEND_SPACE = 52 + spacing.lg + spacing.md;
+const REVIEW_CONTROLS_MS = 180;
 
 type Capture = { uri: string; kind: 'image' | 'video'; takenAt: number };
 
@@ -64,6 +63,12 @@ function CaptureReview({ capture, contacts, onDiscard, onSent }: ReviewProps) {
   const [saved, setSaved] = useState(false);
   const editor = useRef<MediaEditorHandle>(null);
   const [preparing, setPreparing] = useState(false);
+  // Un outil de l'éditeur ouvert en bas (réglages) : les boutons de l'écran s'effacent.
+  const [toolOpen, setToolOpen] = useState(false);
+  const controls = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    Animated.timing(controls, { toValue: toolOpen ? 0 : 1, duration: REVIEW_CONTROLS_MS, easing: Easing.bezier(0.2, 0.8, 0.2, 1), useNativeDriver: true }).start();
+  }, [toolOpen, controls]);
 
   const finalUri = async () => {
     setPreparing(true);
@@ -105,18 +110,18 @@ function CaptureReview({ capture, contacts, onDiscard, onSent }: ReviewProps) {
   return (
     <Modal visible animationType="fade" onRequestClose={() => (picking ? setPicking(false) : onDiscard())} statusBarTranslucent navigationBarTranslucent>
       <View style={styles.review}>
-        <MediaEditor ref={editor} uri={capture.uri} kind={capture.kind} takenAt={capture.takenAt} bottomSpace={bottom + REVIEW_SEND_SPACE} />
-        <View style={[styles.topControls, { top: topInset + spacing.md }]}>
+        <MediaEditor ref={editor} uri={capture.uri} kind={capture.kind} takenAt={capture.takenAt} onToolChange={setToolOpen} />
+        <Animated.View pointerEvents={toolOpen ? 'none' : 'box-none'} style={[styles.topControls, { top: topInset + spacing.md, opacity: controls }]}>
           <IconButton onPress={onDiscard} label={t('camera.jeter')} style={styles.roundControl}>
             <X size={24} color={colors.background} strokeWidth={1.75} />
           </IconButton>
           <IconButton onPress={save} disabled={saved} label={saved ? t('camera.enregistre') : t('camera.enregistrerGalerie')} style={styles.roundControl}>
             {saved ? <Check size={24} color={colors.background} strokeWidth={2} /> : <Download size={24} color={colors.background} strokeWidth={1.75} />}
           </IconButton>
-        </View>
-        <View style={[styles.reviewSend, { bottom: bottom + spacing.lg }]}>
+        </Animated.View>
+        <Animated.View pointerEvents={toolOpen ? 'none' : 'box-none'} style={[styles.reviewSend, { bottom: bottom + spacing.lg, opacity: controls }]}>
           <Button label={t('camera.envoyerA')} icon={Send} variant="secondary" onPress={() => setPicking(true)} />
-        </View>
+        </Animated.View>
 
         {picking && (
           <ContactPickerSheet title={t('camera.envoyerA')} contacts={contacts} onSend={send} onClose={() => setPicking(false)} />

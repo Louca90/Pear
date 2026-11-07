@@ -16,12 +16,16 @@ import androidx.activity.OnBackPressedCallback
 import androidx.annotation.OptIn
 import androidx.core.content.FileProvider
 import androidx.core.view.WindowInsetsCompat
+import androidx.media3.common.C
 import androidx.media3.common.Effect
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
+import androidx.media3.common.audio.SpeedProvider
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.effect.BitmapOverlay
+import androidx.media3.effect.DefaultVideoFrameProcessor
 import androidx.media3.effect.OverlayEffect
+import androidx.media3.effect.RgbMatrix
 import androidx.media3.effect.TextureOverlay
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.DefaultEncoderFactory
@@ -36,6 +40,8 @@ import expo.modules.kotlin.Promise
 import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import expo.modules.kotlin.records.Field
+import expo.modules.kotlin.records.Record
 import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
@@ -45,6 +51,18 @@ import java.security.MessageDigest
 private const val DOWNLOAD_TIMEOUT_MS = 20_000
 private const val DOWNLOAD_PROGRESS_MS = 250L
 private const val APK_MIME = "application/vnd.android.package-archive"
+
+// Les retouches d'une vidéo, envoyées depuis l'éditeur. Sans valeur : rien ne change.
+class VideoEdit : Record {
+  @Field var overlayUri: String? = null
+  // 4 × 4 par colonnes, appliquée à (R, G, B, 1).
+  @Field var matrix: List<Double>? = null
+  @Field var startMs: Double? = null
+  @Field var endMs: Double? = null
+  @Field var mute: Boolean = false
+  @Field var speed: Double = 1.0
+  @Field var bitrate: Int = 4_000_000
+}
 
 @OptIn(UnstableApi::class)
 class PearNativeModule : Module() {
@@ -229,9 +247,18 @@ class PearNativeModule : Module() {
     // Le débit vient de src/config.ts : le même que l'appareil photo, l'incrustation ne fait pas regonfler la vidéo.
     AsyncFunction("burnOverlay") { videoUri: String, overlayUri: String, bitrate: Int, promise: Promise ->
       try {
-        burnOverlay(videoUri, overlayUri, bitrate, promise)
+        editVideo(videoUri, VideoEdit().also { it.overlayUri = overlayUri; it.bitrate = bitrate }, promise)
       } catch (e: Exception) {
         promise.reject("ERR_PEAR_VIDEO", e.message ?: "Incrustation impossible", e)
+      }
+    }.runOnQueue(Queues.MAIN)
+
+    // Toutes les retouches d'une vidéo en un passage : couleurs (matrice), calque, découpe, son, vitesse.
+    AsyncFunction("editVideo") { videoUri: String, edit: VideoEdit, promise: Promise ->
+      try {
+        editVideo(videoUri, edit, promise)
+      } catch (e: Exception) {
+        promise.reject("ERR_PEAR_VIDEO", e.message ?: "Retouche impossible", e)
       }
     }.runOnQueue(Queues.MAIN)
   }
@@ -336,41 +363,70 @@ class PearNativeModule : Module() {
     activity.startActivity(intent)
   }
 
-  private fun burnOverlay(videoUri: String, overlayUri: String, bitrate: Int, promise: Promise) {
+  private fun editVideo(videoUri: String, edit: VideoEdit, promise: Promise) {
     val context = appContext.reactContext ?: throw IllegalStateException("L'app n'est pas prête.")
     val videoPath = Uri.parse(videoUri).path ?: throw IllegalArgumentException("Vidéo introuvable.")
-    val overlayPath = Uri.parse(overlayUri).path ?: throw IllegalArgumentException("Calque introuvable.")
+    val overlayPath = edit.overlayUri?.let { Uri.parse(it).path ?: throw IllegalArgumentException("Calque introuvable.") }
 
-    val (width, height) = displayedSize(videoPath)
-    val decoded = BitmapFactory.decodeFile(overlayPath) ?: throw IllegalArgumentException("Calque illisible.")
-    val overlay = Bitmap.createScaledBitmap(decoded, width, height, true)
+    val effects = mutableListOf<Effect>()
+    // Les couleurs d'abord : le texte et les dessins du calque gardent les leurs.
+    edit.matrix?.let { values ->
+      if (values.size != 16) throw IllegalArgumentException("Matrice de couleur invalide.")
+      val matrix = FloatArray(16) { values[it].toFloat() }
+      effects.add(object : RgbMatrix {
+        override fun getMatrix(presentationTimeUs: Long, useHdr: Boolean) = matrix
+      })
+    }
+    overlayPath?.let { path ->
+      val (width, height) = displayedSize(videoPath)
+      val decoded = BitmapFactory.decodeFile(path) ?: throw IllegalArgumentException("Calque illisible.")
+      val overlay = Bitmap.createScaledBitmap(decoded, width, height, true)
+      effects.add(OverlayEffect(listOf<TextureOverlay>(BitmapOverlay.createStaticBitmapOverlay(overlay))))
+    }
 
-    val edited = EditedMediaItem.Builder(MediaItem.fromUri(videoUri))
-      .setEffects(Effects(emptyList(), listOf<Effect>(OverlayEffect(listOf<TextureOverlay>(BitmapOverlay.createStaticBitmapOverlay(overlay))))))
+    val clipping = MediaItem.ClippingConfiguration.Builder()
+      .setStartPositionMs(edit.startMs?.toLong() ?: 0L)
+      .setEndPositionMs(edit.endMs?.toLong() ?: C.TIME_END_OF_SOURCE)
       .build()
+    val item = MediaItem.Builder().setUri(videoUri).setClippingConfiguration(clipping).build()
+    val edited = EditedMediaItem.Builder(item)
+      .setEffects(Effects(emptyList(), effects))
+      .setRemoveAudio(edit.mute)
+    if (edit.speed != 1.0) {
+      val speed = edit.speed.toFloat()
+      edited.setSpeed(object : SpeedProvider {
+        override fun getSpeed(timeUs: Long) = speed
+        override fun getNextSpeedChangeTimeUs(timeUs: Long) = C.TIME_UNSET
+      })
+    }
 
     val output = File(context.cacheDir, "edited-${System.currentTimeMillis()}.mp4")
     val encoder = DefaultEncoderFactory.Builder(context)
-      .setRequestedVideoEncoderSettings(VideoEncoderSettings.Builder().setBitrate(bitrate).build())
+      .setRequestedVideoEncoderSettings(VideoEncoderSettings.Builder().setBitrate(edit.bitrate).build())
+      .build()
+    // Couleurs traitées telles qu'enregistrées (sans passer en lumière linéaire), comme l'aperçu SVG.
+    val frames = DefaultVideoFrameProcessor.Factory.Builder()
+      .setSdrWorkingColorSpace(DefaultVideoFrameProcessor.WORKING_COLOR_SPACE_ORIGINAL)
       .build()
 
     Transformer.Builder(context)
       .setVideoMimeType(MimeTypes.VIDEO_H264)
       .setEncoderFactory(encoder)
+      .setVideoFrameProcessorFactory(frames)
       .addListener(object : Transformer.Listener {
         override fun onCompleted(composition: Composition, exportResult: ExportResult) {
-          File(overlayPath).delete()
+          overlayPath?.let { File(it).delete() }
           promise.resolve(Uri.fromFile(output).toString())
         }
 
         override fun onError(composition: Composition, exportResult: ExportResult, exportException: ExportException) {
-          File(overlayPath).delete()
+          overlayPath?.let { File(it).delete() }
           output.delete()
-          promise.reject("ERR_PEAR_VIDEO", exportException.message ?: "Incrustation impossible", exportException)
+          promise.reject("ERR_PEAR_VIDEO", exportException.message ?: "Retouche impossible", exportException)
         }
       })
       .build()
-      .start(edited, output.absolutePath)
+      .start(edited.build(), output.absolutePath)
   }
 
   // La taille telle qu'on la voit : une vidéo filmée en portrait est souvent stockée couchée.

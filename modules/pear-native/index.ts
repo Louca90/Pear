@@ -5,9 +5,12 @@ import { log } from '../../src/log';
 export type BackEvent = { type: 'started' | 'progress' | 'cancelled' | 'invoked'; progress: number; fromRight: boolean };
 export type DownloadProgress = { received: number; total: number };
 export type Insets = { top: number; bottom: number };
+// Les retouches d'une vidéo (lot 10). matrix : 4 × 4 par colonnes, appliquée à (R, G, B, 1).
+export type VideoEdit = { overlayUri?: string; matrix?: number[]; startMs?: number; endMs?: number; mute?: boolean; speed?: number; bitrate: number };
 
 declare class PearNativeModule extends NativeModule<{ onBack: (event: BackEvent) => void; onDownloadProgress: (event: DownloadProgress) => void; onInsetsChange: (event: Insets) => void }> {
   burnOverlay(videoUri: string, overlayUri: string, bitrate: number): Promise<string>;
+  editVideo?(videoUri: string, edit: VideoEdit): Promise<string>;
   navigationBarHeight(): number | null;
   systemInsets(): Insets | null;
   watchInsets(): Promise<void>;
@@ -99,6 +102,13 @@ export function installApk(fileUri: string) {
 // Incruste une image transparente dans toute la vidéo, sur le téléphone. Renvoie le nouveau fichier.
 export function burnOverlay(videoUri: string, overlayUri: string, bitrate: number) {
   return PearNative.burnOverlay(videoUri, overlayUri, bitrate);
+}
+
+// Un APK d'avant le lot 10 ne sait que poser le calque : les autres retouches sont alors ignorées.
+export function editVideo(videoUri: string, edit: VideoEdit): Promise<string> {
+  if (PearNative.editVideo) return PearNative.editVideo(videoUri, edit);
+  log.warn('vidéo', 'APK sans editVideo : seul le calque est appliqué');
+  return edit.overlayUri ? PearNative.burnOverlay(videoUri, edit.overlayUri, edit.bitrate) : Promise.resolve(videoUri);
 }
 
 // En attendant de pouvoir lire les vraies valeurs : la barre d'état courante et la barre à 3 boutons, la plus haute.
