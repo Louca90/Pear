@@ -15,7 +15,7 @@ export function Toast({ text, token }: { text: string; token: number }) {
   useEffect(() => {
     progress.setValue(0);
     Animated.sequence([
-      Animated.spring(progress, { toValue: 1, useNativeDriver: true, damping: 16, stiffness: 240 }),
+      Animated.spring(progress, { toValue: 1, useNativeDriver: true, overshootClamping: true, damping: 16, stiffness: 240 }),
       Animated.delay(TOAST_VISIBLE_MS),
       Animated.timing(progress, { toValue: 0, duration: 180, useNativeDriver: true }),
     ]).start();

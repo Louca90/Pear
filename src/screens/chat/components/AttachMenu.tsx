@@ -24,7 +24,7 @@ export function AttachMenu({ open, progress, onPhotos, onFile }: AttachMenuProps
   useEffect(() => {
     if (open) {
       setMounted(true);
-      Animated.spring(progress, { toValue: 1, useNativeDriver: true, damping: 15, stiffness: 240 }).start();
+      Animated.spring(progress, { toValue: 1, useNativeDriver: true, overshootClamping: true, damping: 15, stiffness: 240 }).start();
     } else {
       Animated.timing(progress, { toValue: 0, duration: ATTACH_CLOSE_MS, useNativeDriver: true }).start(({ finished }) => {
         if (finished) setMounted(false);

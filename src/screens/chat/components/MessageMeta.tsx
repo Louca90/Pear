@@ -28,7 +28,7 @@ export function MessageMeta({ message, tone, pill }: { message: Message; tone: M
     lastStatus.current = message.status;
     Animated.sequence([
       Animated.timing(pop, { toValue: message.status === 'read' ? 1.9 : 1.4, duration: 140, useNativeDriver: true }),
-      Animated.spring(pop, { toValue: 1, useNativeDriver: true, damping: 8, stiffness: 240 }),
+      Animated.spring(pop, { toValue: 1, useNativeDriver: true, overshootClamping: true, damping: 8, stiffness: 240 }),
     ]).start();
   }, [message.status, pop]);
 

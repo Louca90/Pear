@@ -18,7 +18,7 @@ export function useSwipeReply(message: Message, mine: boolean, onReply?: (messag
   latest.current = { message, onReply, direction: mine ? -1 : 1 };
   const reset = () => {
     armed.current = false;
-    Animated.spring(swipe, { toValue: 0, useNativeDriver: true, damping: 18, stiffness: 260 }).start();
+    Animated.spring(swipe, { toValue: 0, useNativeDriver: true, overshootClamping: true, damping: 18, stiffness: 260 }).start();
   };
   const swipeResponder = useRef(
     PanResponder.create({

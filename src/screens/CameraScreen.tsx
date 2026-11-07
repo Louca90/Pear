@@ -223,7 +223,7 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
     [],
   );
 
-  const animateShutter = (toValue: number) => Animated.spring(shutterScale, { toValue, useNativeDriver: true, damping: 12, stiffness: 300 }).start();
+  const animateShutter = (toValue: number) => Animated.spring(shutterScale, { toValue, useNativeDriver: true, overshootClamping: true, damping: 12, stiffness: 300 }).start();
 
   const resetFilming = () => {
     wantsVideo.current = false;
@@ -236,7 +236,7 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
     setLocked(false);
     setFilming(false);
     animateShutter(1);
-    Animated.spring(shutterX, { toValue: 0, useNativeDriver: true, damping: 16, stiffness: 240 }).start();
+    Animated.spring(shutterX, { toValue: 0, useNativeDriver: true, overshootClamping: true, damping: 16, stiffness: 240 }).start();
   };
 
   const startRecording = () => {
@@ -307,7 +307,7 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
       if (reached !== overLock.current) {
         overLock.current = reached;
         if (reached) vibrate();
-        Animated.spring(lockHover, { toValue: reached ? 1.35 : 1, useNativeDriver: true, damping: 12, stiffness: 300 }).start();
+        Animated.spring(lockHover, { toValue: reached ? 1.35 : 1, useNativeDriver: true, overshootClamping: true, damping: 12, stiffness: 300 }).start();
       }
     },
     up: () => {
@@ -322,8 +322,8 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
         setLocked(true);
         vibrate();
         Animated.parallel([
-          Animated.spring(shutterX, { toValue: 0, useNativeDriver: true, damping: 16, stiffness: 240 }),
-          Animated.spring(lockProgress, { toValue: 1, useNativeDriver: true, damping: 14, stiffness: 220 }),
+          Animated.spring(shutterX, { toValue: 0, useNativeDriver: true, overshootClamping: true, damping: 16, stiffness: 240 }),
+          Animated.spring(lockProgress, { toValue: 1, useNativeDriver: true, overshootClamping: true, damping: 14, stiffness: 220 }),
         ]).start();
       } else {
         stopFilming();

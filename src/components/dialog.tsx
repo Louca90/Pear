@@ -42,7 +42,7 @@ function DialogBox({ dialog }: { dialog: Dialog }) {
   const closing = useRef(false);
 
   useEffect(() => {
-    Animated.spring(progress, { toValue: 1, useNativeDriver: true, damping: 16, stiffness: 240 }).start();
+    Animated.spring(progress, { toValue: 1, useNativeDriver: true, overshootClamping: true, damping: 16, stiffness: 240 }).start();
   }, [progress]);
 
   const close = (after?: () => void) => {

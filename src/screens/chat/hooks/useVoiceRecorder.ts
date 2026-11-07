@@ -31,7 +31,7 @@ export function useVoiceRecorder(onRecorded: (uri: string, seconds: number) => v
   };
 
   const settle = (value: Animated.Value, toValue: number) =>
-    Animated.spring(value, { toValue, useNativeDriver: true, damping: 15, stiffness: 240 }).start();
+    Animated.spring(value, { toValue, useNativeDriver: true, overshootClamping: true, damping: 15, stiffness: 240 }).start();
 
   useEffect(() => {
     if (phase === 'idle') return;

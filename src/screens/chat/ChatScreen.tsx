@@ -21,7 +21,7 @@ import { ChatHeader } from './components/ChatHeader';
 import { Composer } from './components/Composer';
 import { ComposerFade } from './components/ComposerFade';
 import { MediaViewer, Viewing } from './components/MediaViewer';
-import { Bubble } from './components/MessageBubble';
+import { Bubble, markMessagesShown } from './components/MessageBubble';
 import { MessageSelection } from './components/MessageSelection';
 import { NewMessagesButton } from './components/NewMessagesButton';
 import { Toast } from './components/Toast';
@@ -80,6 +80,12 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
 
   // Relu seulement quand le moteur signale un changement, pas à chaque rafraîchissement de l'écran.
   const messages = useMemo(() => getMessages(contactKey), [contactKey, version]);
+  // À l'ouverture, les messages déjà là ne font pas d'entrée ; seuls les suivants apparaissent en douceur.
+  const openedWith = useRef<string | null>(null);
+  if (openedWith.current !== contactKey) {
+    openedWith.current = contactKey;
+    markMessagesShown(messages.map(({ id }) => id));
+  }
   const scroll = useChatScroll(list, messages, preview);
   const settings = getConversationSettings(contactKey);
   const palettes: Palettes = {

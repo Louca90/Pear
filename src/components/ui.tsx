@@ -44,7 +44,7 @@ type IconButtonProps = {
 // Bouton à icône : il se tasse sous le doigt et revient avec un petit rebond.
 export function IconButton({ onPress, label, disabled, hitSlop = 12, style, children }: IconButtonProps) {
   const scale = useRef(new Animated.Value(1)).current;
-  const animate = (toValue: number) => Animated.spring(scale, { toValue, useNativeDriver: true, damping: 12, stiffness: 320 }).start();
+  const animate = (toValue: number) => Animated.spring(scale, { toValue, useNativeDriver: true, overshootClamping: true, damping: 12, stiffness: 320 }).start();
   return (
     <Pressable
       onPress={onPress}
@@ -131,7 +131,7 @@ export function Button({ label, icon: Icon, onPress, variant = 'primary' }: Butt
   const primary = variant === 'primary';
   const foreground = primary ? colors.background : colors.text;
   const scale = useRef(new Animated.Value(1)).current;
-  const animate = (toValue: number) => Animated.spring(scale, { toValue, useNativeDriver: true, damping: 14, stiffness: 320 }).start();
+  const animate = (toValue: number) => Animated.spring(scale, { toValue, useNativeDriver: true, overshootClamping: true, damping: 14, stiffness: 320 }).start();
   return (
     <Pressable onPress={onPress} onPressIn={() => animate(0.95)} onPressOut={() => animate(1)}>
       <Animated.View style={[styles.button, primary ? styles.primary : styles.secondary, { transform: [{ scale }] }]}>

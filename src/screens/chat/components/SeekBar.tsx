@@ -25,7 +25,7 @@ export function SeekBar({ position, color, trackColor, label, onSeek }: SeekBarP
   const trackWidth = Math.max(0, width - SEEK_THUMB_SIZE);
   const shown = dragging ?? position;
 
-  const growThumb = (toValue: number) => Animated.spring(thumb, { toValue, useNativeDriver: true, damping: 12, stiffness: 320 }).start();
+  const growThumb = (toValue: number) => Animated.spring(thumb, { toValue, useNativeDriver: true, overshootClamping: true, damping: 12, stiffness: 320 }).start();
 
   const seekTo = (pageX: number) => {
     if (trackWidth <= 0) return;

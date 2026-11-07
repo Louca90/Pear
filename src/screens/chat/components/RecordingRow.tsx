@@ -29,7 +29,7 @@ export function RecordingRow({ seconds, locked, dragX, onDiscard }: { seconds: n
   }, [pulse]);
 
   useEffect(() => {
-    Animated.spring(lockAppear, { toValue: locked ? 1 : 0, useNativeDriver: true, damping: 12, stiffness: 240 }).start();
+    Animated.spring(lockAppear, { toValue: locked ? 1 : 0, useNativeDriver: true, overshootClamping: true, damping: 12, stiffness: 240 }).start();
   }, [locked, lockAppear]);
 
   return (

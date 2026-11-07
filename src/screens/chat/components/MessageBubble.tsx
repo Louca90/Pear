@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Animated, Pressable, Text, View } from 'react-native';
+import { Animated, Easing, Pressable, Text, View } from 'react-native';
 import { Reply } from 'lucide-react-native';
 
 import { Message } from '../../../chat/database';
@@ -41,6 +41,15 @@ type BubbleProps = {
   fit?: TextFit;
 };
 
+// Les messages déjà affichés : seuls ceux qui arrivent pendant que la conversation est ouverte
+// (envoyés ou reçus) font leur entrée, pas ceux qu'on retrouve en défilant.
+const shownIds = new Set<string>();
+const POP_MS = 240;
+
+export function markMessagesShown(ids: string[]) {
+  for (const id of ids) shownIds.add(id);
+}
+
 export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, onOpenFile, onPrepareFile, onAcceptFile, onRefuseFile, onSelect, onDoubleTap, onReply, onJump, fit }: BubbleProps) {
   const styles = useStyles();
   const colors = useColors();
@@ -50,12 +59,21 @@ export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, on
   const palette = mine ? palettes.mine : palettes.theirs;
   const reactions = [message.their_reaction, message.my_reaction].filter(Boolean);
   const scale = useRef(new Animated.Value(1)).current;
+  const pop = useRef(new Animated.Value(shownIds.has(message.id) ? 1 : 0)).current;
 
+  // Arrivée : fondu, légère montée et zoom de 96 % à 100 %, sans rebond.
+  useEffect(() => {
+    if (shownIds.has(message.id)) return;
+    shownIds.add(message.id);
+    Animated.timing(pop, { toValue: 1, duration: POP_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+  }, [message.id, pop]);
+
+  // Message rejoint (citation, épinglé) : il grossit un peu puis revient doucement.
   useEffect(() => {
     if (!pulse) return;
     Animated.sequence([
-      Animated.timing(scale, { toValue: 1.08, duration: 160, useNativeDriver: true }),
-      Animated.spring(scale, { toValue: 1, useNativeDriver: true, damping: 12, stiffness: 200 }),
+      Animated.timing(scale, { toValue: 1.06, duration: 160, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(scale, { toValue: 1, duration: 260, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
     ]).start();
   }, [pulse, scale]);
 
@@ -98,7 +116,19 @@ export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, on
           <Reply size={18} color={colors.text} strokeWidth={1.75} />
         </Animated.View>
       )}
-      <Animated.View style={[mine ? styles.rowMine : styles.rowTheirs, { transform: [{ translateX: swipe }, { scale }] }]}>
+      <Animated.View
+        style={[
+          mine ? styles.rowMine : styles.rowTheirs,
+          {
+            opacity: pop,
+            transform: [
+              { translateX: swipe },
+              { translateY: pop.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) },
+              { scale: Animated.multiply(scale, pop.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] })) },
+            ],
+          },
+        ]}
+      >
         <Pressable
           onPress={press}
           onLongPress={select}
