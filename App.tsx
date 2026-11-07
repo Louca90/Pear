@@ -53,6 +53,14 @@ type Route =
   | { name: 'chat'; publicKey: string };
 
 const BACK_EXIT_MS = 170;
+// Bouton retour maintenu (barre à 3 boutons) : Android n'envoie presque aucune progression. Si rien
+// n'arrive après ce délai, la page glisse seule vers un aperçu stable, puis attend le relâchement.
+const BACK_HOLD_DELAY_MS = 80;
+const BACK_PREVIEW = 0.7;
+const BACK_PREVIEW_MS = 240;
+const BACK_CANCEL_MS = 220;
+// Démarre vite et se pose doucement, sans dépasser : jamais de rebond.
+const BACK_EASING = Easing.bezier(0.2, 0.8, 0.2, 1);
 // Si le retour a seulement fermé quelque chose dans la page, celle-ci revient à sa place après ce délai.
 const BACK_SETTLE_MS = 250;
 const BACK_PAGE_SHIFT = 20;
@@ -202,11 +210,16 @@ function App() {
 
   // Sur l'accueil, Android montre lui-même l'aperçu pour quitter. L'appareil photo n'a pas d'aperçu.
   useEffect(() => {
-    const mode = blocked ? 'default' : route.name === 'home' ? 'system' : route.name === 'camera' ? 'default' : 'app';
+    // Entre deux onglets, pas d'aperçu : la barre du bas reste en place et son rond glisse vers l'accueil.
+    const mode = blocked ? 'default' : route.name === 'home' ? 'system' : TAB_ROUTES.includes(route.name) ? 'default' : 'app';
     setBackMode(mode).catch((e) => log.warn('retour', e));
   }, [route.name, blocked]);
 
+  const sawProgress = useRef(false);
+  const holdTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+
   const resetBackGesture = useRef(() => {
+    clearTimeout(holdTimer.current);
     gestureStarted.current = false;
     backGesture.setValue(0);
     setPeek(null);
@@ -224,14 +237,30 @@ function App() {
         const parent = latestParent.current();
         if (!parent) return;
         gestureStarted.current = true;
+        sawProgress.current = false;
         backGesture.setValue(0);
         setPeek({ route: parent, direction: fromRight ? -1 : 1 });
+        holdTimer.current = setTimeout(() => {
+          if (!sawProgress.current) {
+            Animated.timing(backGesture, { toValue: BACK_PREVIEW, duration: BACK_PREVIEW_MS, easing: BACK_EASING, useNativeDriver: true }).start();
+          }
+        }, BACK_HOLD_DELAY_MS);
       } else if (type === 'progress') {
+        // Geste de balayage : la page suit le doigt. L'aperçu automatique s'arrête s'il avait commencé.
+        if (!sawProgress.current) {
+          sawProgress.current = true;
+          clearTimeout(holdTimer.current);
+          backGesture.stopAnimation();
+        }
         backGesture.setValue(progress);
       } else if (type === 'cancelled') {
-        Animated.spring(backGesture, { toValue: 0, useNativeDriver: true, damping: 18, stiffness: 260 }).start(resetBackGesture);
+        clearTimeout(holdTimer.current);
+        backGesture.stopAnimation();
+        Animated.timing(backGesture, { toValue: 0, duration: BACK_CANCEL_MS, easing: BACK_EASING, useNativeDriver: true }).start(resetBackGesture);
       } else if (gestureStarted.current) {
-        Animated.timing(backGesture, { toValue: 2, duration: BACK_EXIT_MS, useNativeDriver: true }).start(() => {
+        clearTimeout(holdTimer.current);
+        backGesture.stopAnimation();
+        Animated.timing(backGesture, { toValue: 2, duration: BACK_EXIT_MS, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(() => {
           completeBack().catch((e) => log.warn('retour', e));
           setTimeout(resetBackGesture, BACK_SETTLE_MS);
         });

@@ -197,9 +197,13 @@ const useStyles = createStyles((colors) => ({
     backgroundColor: colors.elevated,
     boxShadow: `0px 8px 28px ${colors.shadow}`,
   },
+  // Centrée sur la zone de l'icône (plus petite que la photo) : la photo tombe pile au milieu du rond.
   photoSlot: {
-    width: ICON_SIZE + 4,
-    height: ICON_SIZE + 4,
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     alignItems: 'center',
     justifyContent: 'center',
   },
