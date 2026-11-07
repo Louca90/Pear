@@ -18,6 +18,7 @@ import { acceptFile, closeIncomingFiles, dropIncomingFile, refuseFile, sendFile 
 import { AFTER_SEND_MS, PickedFile, WAKE_CHECK_MS } from './types';
 import { contactForTag, receivePush } from './incoming';
 import { reconcile } from './strategy';
+import { acceptPairing, blockPairing, declinePairing, requestPairing, startPairing, syncPairRequests } from './pairing';
 import { deliverNow, settlePushAcks, wakeIfNeeded } from './wake';
 import { notifyMessage } from './notify';
 
@@ -49,6 +50,10 @@ class ChatManager extends ChatCore {
     }
     this.markOpenConversationRead();
     this.names.forEach((_, contact) => shareProfile(this, contact));
+    if (!this.pairingStarted) {
+      this.pairingStarted = true;
+      startPairing(this, contacts.filter((contact) => contact.pending).map((contact) => contact.publicKey)).catch((e) => log.warn('demandes de pairing', e));
+    }
     this.notify();
   }
 
@@ -58,8 +63,12 @@ class ChatManager extends ChatCore {
     this.names = new Map(contacts.map((contact) => [contact.publicKey, contact.name]));
   }
 
-  // Un push reçu (« msg » : message chiffré ; « wake » : réveil). Attend l'envoi des accusés.
+  // Un push reçu (« msg » : message chiffré ; « pair » : demande ; « wake » : réveil). Attend la fin.
   async handlePush(data: { [key: string]: unknown } | undefined) {
+    if (data?.type === 'pair') {
+      await syncPairRequests(this);
+      return;
+    }
     receivePush(this, data);
     await settlePushAcks(this);
   }
@@ -98,6 +107,34 @@ class ChatManager extends ChatCore {
     clearMessageNotification(contact);
     flush(this, contact);
     this.notify();
+  }
+
+  // --- Pairing à sens unique ---
+
+  onContactsChanged(listener: () => void) {
+    this.contactsListeners.add(listener);
+    return () => {
+      this.contactsListeners.delete(listener);
+    };
+  }
+
+  // Après avoir enregistré un contact scanné : la demande part vers sa boîte.
+  requestPairing(contact: string) {
+    requestPairing(this, contact).catch((e) => log.warn('demande de pairing', e));
+  }
+
+  // L'écran a déjà enregistré le contact (sync) : on prévient l'autre téléphone.
+  acceptRequest(contact: string) {
+    acceptPairing(this, contact);
+    this.notify();
+  }
+
+  declineRequest(contact: string) {
+    declinePairing(this, contact);
+  }
+
+  blockRequest(contact: string) {
+    blockPairing(this, contact);
   }
 
   stopAll() {

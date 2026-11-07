@@ -10,7 +10,7 @@ import { cleanupCache } from './src/chat/cleanup';
 import { handleNotificationEvent } from './src/chat/notificationActions';
 import { refreshRemoteConfig } from './src/remoteConfig';
 import { deleteMessages, getContactProfile, openDatabase } from './src/chat/database';
-import { clearNotificationTarget, setNotificationTarget, useNotificationTarget } from './src/chat/notificationTarget';
+import { clearNotificationTarget, REQUESTS_TARGET, setNotificationTarget, useNotificationTarget } from './src/chat/notificationTarget';
 import { chat } from './src/chat/manager';
 import { BottomBar, Tab } from './src/components/BottomBar';
 import { DialogHost, showDialog } from './src/components/dialog';
@@ -22,7 +22,10 @@ import { ChatScreen } from './src/screens/chat/ChatScreen';
 import { ContactScreen } from './src/screens/ContactScreen';
 import { CustomizeScreen } from './src/screens/CustomizeScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
+import { BlockedScreen } from './src/screens/BlockedScreen';
 import { DiagnosticScreen } from './src/screens/DiagnosticScreen';
+import { RequestsScreen } from './src/screens/RequestsScreen';
+import { SettingsScreen } from './src/screens/SettingsScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { ScannerScreen } from './src/screens/ScannerScreen';
 import { Contact, hasIdentity, loadContacts, loadOrCreateIdentity, saveContacts } from './src/storage';
@@ -41,6 +44,9 @@ type Route =
   | { name: 'scan' }
   | { name: 'profile' }
   | { name: 'diagnostic' }
+  | { name: 'settings' }
+  | { name: 'blocked' }
+  | { name: 'requests' }
   | { name: 'customize'; publicKey: string }
   // name : le pseudo lu dans le QR code ou le lien, proposé comme nom du contact.
   | { name: 'contact'; publicKey: string; suggestedName?: string | null }
@@ -50,7 +56,7 @@ const BACK_EXIT_MS = 170;
 // Si le retour a seulement fermé quelque chose dans la page, celle-ci revient à sa place après ce délai.
 const BACK_SETTLE_MS = 250;
 const BACK_PAGE_SHIFT = 20;
-const TAB_ROUTES: string[] = ['add', 'home', 'camera'];
+const TAB_ROUTES: string[] = ['add', 'home', 'camera', 'profile'];
 
 export default function Root() {
   return (
@@ -137,6 +143,10 @@ function App() {
   useEffect(() => {
     if (!notificationTarget || !identity) return;
     clearNotificationTarget();
+    if (notificationTarget === REQUESTS_TARGET) {
+      setRoute({ name: 'requests' });
+      return;
+    }
     const known = contacts.some((contact) => contact.publicKey === notificationTarget);
     setRoute(known ? { name: 'chat', publicKey: notificationTarget } : { name: 'home' });
   }, [notificationTarget, identity, contacts]);
@@ -172,7 +182,8 @@ function App() {
   const parentOf = (current: Route): Route | null => {
     if (current.name === 'home') return null;
     if (current.name === 'scan') return { name: 'add' };
-    if (current.name === 'diagnostic') return { name: 'profile' };
+    if (current.name === 'diagnostic' || current.name === 'blocked') return { name: 'settings' };
+    if (current.name === 'settings') return { name: 'profile' };
     if (current.name === 'customize') return { name: 'chat', publicKey: current.publicKey };
     if (current.name === 'contact' && isSaved(current.publicKey)) return { name: 'chat', publicKey: current.publicKey };
     return { name: 'home' };
@@ -250,6 +261,17 @@ function App() {
     }
   }, [code]);
 
+  // Une demande acceptée de l'autre côté (ou des scans croisés) change la liste sans passer par l'écran.
+  useEffect(
+    () =>
+      chat.onContactsChanged(() => {
+        loadContacts()
+          .then(setContacts)
+          .catch((e) => log.warn('contacts', e));
+      }),
+    [],
+  );
+
   const updateContacts = (next: Contact[]) => {
     setContacts(next);
     saveContacts(next).catch((e) => showDialog(t('app.enregistrementImpossible'), String(e)));
@@ -291,10 +313,36 @@ function App() {
       );
     }
     if (current.name === 'profile') {
-      return <ProfileScreen onBack={() => setRoute({ name: 'home' })} onDiagnostic={() => setRoute({ name: 'diagnostic' })} />;
+      return <ProfileScreen onSettings={() => setRoute({ name: 'settings' })} />;
+    }
+    if (current.name === 'settings') {
+      return (
+        <SettingsScreen
+          onBack={() => setRoute({ name: 'profile' })}
+          onDiagnostic={() => setRoute({ name: 'diagnostic' })}
+          onBlocked={() => setRoute({ name: 'blocked' })}
+        />
+      );
     }
     if (current.name === 'diagnostic') {
-      return <DiagnosticScreen onBack={() => setRoute({ name: 'profile' })} />;
+      return <DiagnosticScreen onBack={() => setRoute({ name: 'settings' })} />;
+    }
+    if (current.name === 'blocked') {
+      return <BlockedScreen onBack={() => setRoute({ name: 'settings' })} />;
+    }
+    if (current.name === 'requests') {
+      return (
+        <RequestsScreen
+          identity={identity}
+          onBack={() => setRoute({ name: 'home' })}
+          onAccept={(publicKey, name) => {
+            // Le contact est enregistré d'abord : le message « accepté » part vers un contact connu.
+            const others = contacts.filter((contact) => contact.publicKey !== publicKey);
+            updateContacts([...others, { publicKey, name }]);
+            chat.acceptRequest(publicKey);
+          }}
+        />
+      );
     }
     if (current.name === 'customize') {
       const publicKey = current.publicKey;
@@ -314,6 +362,7 @@ function App() {
           key={publicKey}
           contactKey={publicKey}
           name={contacts.find((contact) => contact.publicKey === publicKey)?.name ?? t('app.contact')}
+          pending={contacts.find((contact) => contact.publicKey === publicKey)?.pending ?? false}
           onBack={() => setRoute({ name: 'home' })}
           onInfo={() => setRoute({ name: 'contact', publicKey })}
           onCustomize={() => setRoute({ name: 'customize', publicKey })}
@@ -334,7 +383,10 @@ function App() {
           isNew={!saved}
           onBack={() => backFromContact(publicKey)}
           onSave={(name) => {
-            updateContacts([...others, { publicKey, name }]);
+            // Un nouveau contact attend que l'autre accepte la demande ; un contact connu reste tel quel.
+            const pending = saved ? saved.pending : true;
+            updateContacts([...others, { publicKey, name, ...(pending ? { pending: true } : {}) }]);
+            if (!saved) chat.requestPairing(publicKey);
             setRoute({ name: 'chat', publicKey });
           }}
           myPublicKey={identity.publicKey}
@@ -351,7 +403,7 @@ function App() {
         contacts={contacts}
         onAdd={() => setRoute({ name: 'add' })}
         onOpen={(contact) => setRoute({ name: 'chat', publicKey: contact.publicKey })}
-        onProfile={() => setRoute({ name: 'profile' })}
+        onRequests={() => setRoute({ name: 'requests' })}
       />
     );
   };

@@ -1,6 +1,7 @@
 import { AppState } from 'react-native';
 
 import {
+  activateContact,
   addMessage,
   deleteMessage,
   deleteOldAvatars,
@@ -29,6 +30,8 @@ import { log } from '../../log';
 // Appelée pour ce qui arrive en direct comme pour ce qui arrive dans un push.
 export function receiveRatchet(core: ChatCore, contact: string, envelope: unknown) {
   const text = decryptIncoming(core, contact, envelope);
+  // Un message authentique de ce contact prouve qu'il nous a enregistré : la demande est acceptée.
+  if (activateContact(contact)) core.contactsChanged();
   const message = asPayload(JSON.parse(text));
   if (message && !isSupportedVersion(message)) {
     // L'id du message (s'il existe) évite d'afficher l'avertissement deux fois pour un même envoi.
@@ -79,6 +82,9 @@ function receiveEvent(core: ChatCore, contact: string, data: Payload) {
     if (original?.kind === 'image' || original?.kind === 'video') {
       addSystemMessage(contact, 0, `saved:${original.kind}:${original.mine === 1 ? 'yours' : 'theirs'}`, data.eventId.slice(0, MAX_SAVED_ID_LENGTH));
     }
+  } else if (data.action === 'accepted') {
+    // Notre demande de pairing est acceptée : le contact passe d'« en attente » à actif.
+    if (activateContact(contact)) core.contactsChanged();
   } else if (data.action === 'profile') {
     setContactProfileField(contact, 'name', typeof data.name === 'string' ? data.name.slice(0, MAX_PROFILE_NAME_LENGTH) : null);
     if (data.hasPhoto === false) {

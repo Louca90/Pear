@@ -137,6 +137,8 @@ export const fr = {
     autorisee: 'Autorisée',
     aAutoriser: 'À autoriser dans les réglages',
     apercuMaj: 'Voir l\'écran de mise à jour (debug)',
+    enregistrement: 'Enregistrement…',
+    enregistre: 'Enregistré',
   },
   perso: {
     couleur: 'Couleur {couleur}',
@@ -293,5 +295,27 @@ export const fr = {
   qr: {
     titre: 'Mon code',
     aide: 'Ton contact le scanne avec Pear pour t\'ajouter.',
+  },
+  demandes: {
+    titre: 'Demandes',
+    cloche: '{n} demandes en attente',
+    quelquun: 'Quelqu\'un',
+    notificationTitre: '{nom} veut se pairer avec toi',
+    notificationTexte: 'Ouvre Pear pour accepter ou refuser.',
+    codeAide: 'Comparez ce code avec l\'autre personne : il doit être identique.',
+    accepter: 'Accepter',
+    refuser: 'Refuser',
+    bloquer: 'Bloquer',
+    aucune: 'Aucune demande',
+    aucuneAide: 'Quand quelqu\'un scanne ton code, sa demande apparaît ici.',
+    enAttente: 'En attente d\'acceptation',
+    enAttenteAide: 'Tu pourras écrire à {nom} dès qu\'il aura accepté ta demande.',
+  },
+  reglages: {
+    notifications: 'Notifications',
+    confidentialite: 'Confidentialité',
+    bloques: 'Contacts bloqués',
+    aucunBloque: 'Personne n\'est bloqué.',
+    debloquer: 'Débloquer',
   },
 };

@@ -36,6 +36,8 @@ import { t } from '../../i18n';
 type Props = {
   contactKey: string;
   name: string;
+  // Notre demande d'ajout n'est pas encore acceptée : on ne peut pas encore écrire.
+  pending: boolean;
   onBack: () => void;
   onInfo: () => void;
   onCustomize: () => void;
@@ -43,7 +45,7 @@ type Props = {
   preview?: boolean;
 };
 
-export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, preview }: Props) {
+export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustomize, preview }: Props) {
   const styles = useStyles();
   const colors = useColors();
   const [draft, setDraft] = useState('');
@@ -330,22 +332,29 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
             onFile={pickDocument}
           />
           </View>
-          <Composer
-            name={name}
-            draft={draft}
-            onChangeDraft={setDraft}
-            replyingTo={replyingTo}
-            editing={editing}
-            onCancelMode={cancelComposerMode}
-            onSend={send}
-            input={input}
-            keyboardOpen={keyboardOpen}
-            attachOpen={attachOpen}
-            attachProgress={attachProgress}
-            onToggleAttach={() => setAttachOpen(!attachOpen)}
-            onVoiceRecorded={(uri, seconds) => sendPicked({ uri, name: `vocal-${seconds}s.m4a`, size: 0, mime: 'audio/mp4', kind: 'audio' })}
-            onVoiceTooShort={() => setToast({ text: t('chat.maintenirMicro'), token: Date.now() })}
-          />
+          {pending ? (
+            <View style={styles.pendingBar}>
+              <Text style={styles.pendingTitle}>{t('demandes.enAttente')}</Text>
+              <Text style={styles.pendingText}>{t('demandes.enAttenteAide', { nom: name })}</Text>
+            </View>
+          ) : (
+            <Composer
+              name={name}
+              draft={draft}
+              onChangeDraft={setDraft}
+              replyingTo={replyingTo}
+              editing={editing}
+              onCancelMode={cancelComposerMode}
+              onSend={send}
+              input={input}
+              keyboardOpen={keyboardOpen}
+              attachOpen={attachOpen}
+              attachProgress={attachProgress}
+              onToggleAttach={() => setAttachOpen(!attachOpen)}
+              onVoiceRecorded={(uri, seconds) => sendPicked({ uri, name: `vocal-${seconds}s.m4a`, size: 0, mime: 'audio/mp4', kind: 'audio' })}
+              onVoiceTooShort={() => setToast({ text: t('chat.maintenirMicro'), token: Date.now() })}
+            />
+          )}
         </KeyboardAvoidingView>
       </BlurTargetView>
       {selection && (
@@ -369,6 +378,24 @@ export function ChatScreen({ contactKey, name, onBack, onInfo, onCustomize, prev
 }
 
 const useLocalStyles = createStyles((colors) => ({
+  pendingBar: {
+    gap: 2,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.lg,
+    backgroundColor: colors.background,
+  },
+  pendingTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.text,
+    textAlign: 'center',
+  },
+  pendingText: {
+    fontSize: 14,
+    color: colors.textMuted,
+    textAlign: 'center',
+  },
   wallpaper: {
     ...StyleSheet.absoluteFill,
     // S'arrête derrière la saisie (opaque) : collé au bord, l'arrondi des tailles laissait voir une ligne

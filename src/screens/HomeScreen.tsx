@@ -2,10 +2,11 @@ import { useSyncExternalStore } from 'react';
 import { FlatList, Text, View } from 'react-native';
 import { Flame, Plus, Users } from 'lucide-react-native';
 
-import { describeMessage, getContactProfile, getLastMessage, getStreak } from '../chat/database';
+import { describeMessage, getContactProfile, getLastMessage, getPendingRequests, getStreak } from '../chat/database';
 import { chat } from '../chat/manager';
 import { useBottomBarSpace } from '../components/BottomBar';
-import { Avatar, Button, Header, IconButton, RowPressable, Screen } from '../components/ui';
+import { RequestsBell } from '../components/RequestsBell';
+import { Avatar, Button, Header, RowPressable, Screen } from '../components/ui';
 import { Contact } from '../storage';
 import { createStyles, radius, spacing, useColors } from '../theme';
 import { t } from '../i18n';
@@ -14,20 +15,17 @@ type Props = {
   contacts: Contact[];
   onAdd: () => void;
   onOpen: (contact: Contact) => void;
-  onProfile: () => void;
+  onRequests: () => void;
 };
 
-export function HomeScreen({ contacts, onAdd, onOpen, onProfile }: Props) {
+export function HomeScreen({ contacts, onAdd, onOpen, onRequests }: Props) {
   const colors = useColors();
   const styles = useStyles();
   useSyncExternalStore(chat.subscribe, chat.getVersion);
   const barSpace = useBottomBarSpace();
 
-  const profileButton = (
-    <IconButton onPress={onProfile} label={t('accueil.monProfil')}>
-      <Avatar uri={chat.getMyProfile().photo} size={32} />
-    </IconButton>
-  );
+  // Le profil est un onglet : en haut à droite, la cloche des demandes d'ajout.
+  const profileButton = <RequestsBell count={getPendingRequests().length} onPress={onRequests} />;
 
   if (contacts.length === 0) {
     return (

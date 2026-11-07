@@ -3,6 +3,8 @@ import { useSyncExternalStore } from 'react';
 // La conversation visée par la dernière notification touchée. L'appui peut arriver avant que l'écran
 // soit prêt (app fermée ou en arrière-plan) : il est mémorisé ici, puis App l'ouvre dès qu'elle peut.
 let target: string | null = null;
+// Cible particulière : la page des demandes d'ajout.
+export const REQUESTS_TARGET = '#requests';
 const listeners = new Set<() => void>();
 
 export function setNotificationTarget(contact: unknown) {

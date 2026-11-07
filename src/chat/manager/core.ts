@@ -27,6 +27,9 @@ export class ChatCore {
   wakeTimer?: ReturnType<typeof setInterval>;
   version = 0;
   listeners = new Set<() => void>();
+  // Prévenus quand la liste des contacts change sans passer par l'écran (demande acceptée).
+  contactsListeners = new Set<() => void>();
+  pairingStarted = false;
   online = true;
   offlineTimer?: ReturnType<typeof setTimeout>;
   watching = false;
@@ -52,6 +55,11 @@ export class ChatCore {
   };
 
   getVersion = () => this.version;
+
+  contactsChanged() {
+    this.contactsListeners.forEach((listener) => listener());
+    this.notify();
+  }
 
   // Garde (ou fait ouvrir, au prochain tri des connexions) la connexion avec ce contact pendant `ms`.
   keepConnected(contact: string, ms: number) {

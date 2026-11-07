@@ -11,6 +11,8 @@ import { log } from './log';
 export type Contact = {
   publicKey: string;
   name: string;
+  // Notre demande n'a pas encore été acceptée : on ne peut pas encore lui écrire.
+  pending?: boolean;
 };
 
 // Vrai si une identité existait déjà avant ce lancement.
@@ -31,11 +33,11 @@ export async function loadOrCreateIdentity(): Promise<Identity> {
 // Contacts : dans pear.db. Les anciennes versions les gardaient en un seul bloc JSON dans le SecureStore.
 export async function loadContacts(): Promise<Contact[]> {
   await migrateLegacyContacts();
-  return getContactRows().map((row) => ({ publicKey: row.public_key, name: row.name }));
+  return getContactRows().map((row) => ({ publicKey: row.public_key, name: row.name, ...(row.state === 'pending' ? { pending: true } : {}) }));
 }
 
 export async function saveContacts(contacts: Contact[]): Promise<void> {
-  replaceContactRows(contacts.map((contact) => ({ public_key: contact.publicKey, name: contact.name })));
+  replaceContactRows(contacts.map((contact) => ({ public_key: contact.publicKey, name: contact.name, state: contact.pending ? 'pending' : 'active' })));
 }
 
 // Recopie l'ancienne liste, relit pour vérifier, et ne supprime l'ancienne copie qu'ensuite. Si l'app

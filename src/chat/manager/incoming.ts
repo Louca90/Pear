@@ -2,6 +2,7 @@ import { openPushEnvelope, splitPushPayload } from '../pushPayload';
 
 import { ChatCore } from './core';
 import { receiveRatchet } from './messageIO';
+import { syncPairRequests } from './pairing';
 import { pushKeysFor } from './secure';
 import { log } from '../../log';
 
@@ -24,6 +25,10 @@ export function contactForTag(core: ChatCore, tag: unknown): string | null {
 // Un push « msg » : le message chiffré est déchiffré, enregistré et notifié tout de suite, sans
 // connexion directe. Un doublon (déjà reçu en direct) est refusé par le ratchet : rien ne change.
 export function receivePush(core: ChatCore, data: PushData) {
+  if (data?.type === 'pair') {
+    syncPairRequests(core).catch((e) => log.warn('demandes de pairing', e));
+    return;
+  }
   if (data?.type !== 'msg') return;
   const parts = splitPushPayload(data.payload);
   if (!parts) return;

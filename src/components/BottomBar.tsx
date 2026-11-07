@@ -1,20 +1,22 @@
-import { useEffect, useRef } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
+import { useEffect, useRef, useSyncExternalStore } from 'react';
+import { Animated, Easing, Image, Pressable, StyleSheet, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { Camera, LucideIcon, MessageCircle, QrCode } from 'lucide-react-native';
+import { Camera, LucideIcon, MessageCircle, QrCode, User } from 'lucide-react-native';
 import { Circle } from 'react-native-svg';
 
+import { chat } from '../chat/manager';
 import { createStyles, radius, spacing, useColors } from '../theme';
 import { useNavigationBarHeight } from './ui';
 import { log } from '../log';
 import { t } from '../i18n';
 
-export type Tab = 'add' | 'home' | 'camera';
+export type Tab = 'add' | 'home' | 'camera' | 'profile';
 
 const TABS: { tab: Tab; icon: LucideIcon; label: string }[] = [
   { tab: 'add', icon: QrCode, label: t('onglets.monCode') },
   { tab: 'home', icon: MessageCircle, label: t('onglets.messages') },
   { tab: 'camera', icon: Camera, label: t('onglets.appareilPhoto') },
+  { tab: 'profile', icon: User, label: t('profil.titre') },
 ];
 
 const SLOT_WIDTH = 76;
@@ -22,6 +24,10 @@ const SLOT_HEIGHT = 60;
 const BAR_PADDING = 6;
 const ICON_SIZE = 26;
 const KICK_MS = 520;
+const SLIDE_MS = 300;
+// Glisse vite puis se pose doucement, sans dépasser l'onglet.
+const SLIDE_EASING = Easing.bezier(0.2, 0.8, 0.2, 1);
+const PHOTO_SIZE = 30;
 
 // La place que les écrans laissent libre sous leur contenu, pour que la barre flottante ne le cache pas.
 export function useBottomBarSpace() {
@@ -33,6 +39,7 @@ function kickTransform(tab: Tab, kick: Animated.Value) {
   const range = (outputRange: number[]) => kick.interpolate({ inputRange: [0, 0.3, 0.65, 1], outputRange });
   const turn = (outputRange: string[]) => kick.interpolate({ inputRange: [0, 0.3, 0.65, 1], outputRange });
   if (tab === 'add') return [{ scale: range([1, 0.8, 1.14, 1]) }, { rotate: turn(['0deg', '-8deg', '6deg', '0deg']) }];
+  if (tab === 'profile') return [{ scale: range([1, 0.86, 1, 1]) }];
   if (tab === 'home') return [{ translateY: range([0, -7, 1, 0]) }, { rotate: turn(['0deg', '-14deg', '7deg', '0deg']) }];
   return [{ scale: range([1, 0.72, 1.16, 1]) }];
 }
@@ -79,6 +86,24 @@ function FilledDetails({ tab }: { tab: Tab }) {
   return null;
 }
 
+// L'onglet Profil montre ma photo (ou une silhouette), cerclée quand l'onglet est choisi.
+function ProfileIcon({ fill }: { fill: Animated.Value }) {
+  const colors = useColors();
+  const styles = useStyles();
+  useSyncExternalStore(chat.subscribe, chat.getVersion);
+  const photo = chat.getMyProfile().photo;
+  return (
+    <View style={styles.photoSlot}>
+      {photo ? (
+        <Image source={{ uri: photo }} style={styles.photo} />
+      ) : (
+        <User size={ICON_SIZE - 4} color={colors.text} strokeWidth={1.75} />
+      )}
+      <Animated.View pointerEvents="none" style={[styles.photoRing, { opacity: fill }]} />
+    </View>
+  );
+}
+
 function TabButton({ tab, icon: Icon, label, active, onPress }: { tab: Tab; icon: LucideIcon; label: string; active: boolean; onPress: () => void }) {
   const colors = useColors();
   const styles = useStyles();
@@ -106,15 +131,21 @@ function TabButton({ tab, icon: Icon, label, active, onPress }: { tab: Tab; icon
   return (
     <Pressable onPress={press} accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected: active }} style={styles.slot}>
       <Animated.View style={[styles.icon, { transform: kickTransform(tab, kick) }]}>
-        <Animated.View style={[StyleSheet.absoluteFill, { opacity: fill.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }]}>
-          <Icon size={ICON_SIZE} color={colors.onDarkTrack} strokeWidth={1.75} />
-        </Animated.View>
-        <Animated.View style={[StyleSheet.absoluteFill, styles.filled, { opacity: fill }]}>
-          <Icon size={ICON_SIZE} color={colors.text} fill={colors.text} strokeWidth={1.75}>
-            <FilledDetails tab={tab} />
-          </Icon>
-          <KickDetail tab={tab} kick={kick} />
-        </Animated.View>
+        {tab === 'profile' ? (
+          <ProfileIcon fill={fill} />
+        ) : (
+          <>
+            <Animated.View style={[StyleSheet.absoluteFill, { opacity: fill.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }]}>
+              <Icon size={ICON_SIZE} color={colors.onDarkTrack} strokeWidth={1.75} />
+            </Animated.View>
+            <Animated.View style={[StyleSheet.absoluteFill, styles.filled, { opacity: fill }]}>
+              <Icon size={ICON_SIZE} color={colors.text} fill={colors.text} strokeWidth={1.75}>
+                <FilledDetails tab={tab} />
+              </Icon>
+              <KickDetail tab={tab} kick={kick} />
+            </Animated.View>
+          </>
+        )}
       </Animated.View>
     </Pressable>
   );
@@ -128,7 +159,7 @@ export function BottomBar({ active, onChange }: { active: Tab; onChange: (tab: T
   const position = useRef(new Animated.Value(activeIndex)).current;
 
   useEffect(() => {
-    Animated.spring(position, { toValue: activeIndex, useNativeDriver: true, damping: 17, stiffness: 190, mass: 0.9 }).start();
+    Animated.timing(position, { toValue: activeIndex, duration: SLIDE_MS, easing: SLIDE_EASING, useNativeDriver: true }).start();
   }, [activeIndex, position]);
 
   return (
@@ -165,6 +196,25 @@ const useStyles = createStyles((colors) => ({
     borderRadius: radius.full,
     backgroundColor: colors.elevated,
     boxShadow: `0px 8px 28px ${colors.shadow}`,
+  },
+  photoSlot: {
+    width: ICON_SIZE + 4,
+    height: ICON_SIZE + 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photo: {
+    width: PHOTO_SIZE,
+    height: PHOTO_SIZE,
+    borderRadius: PHOTO_SIZE / 2,
+  },
+  photoRing: {
+    position: 'absolute',
+    width: PHOTO_SIZE + 4,
+    height: PHOTO_SIZE + 4,
+    borderRadius: (PHOTO_SIZE + 4) / 2,
+    borderWidth: 2,
+    borderColor: colors.text,
   },
   indicator: {
     position: 'absolute',

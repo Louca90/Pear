@@ -57,6 +57,8 @@ export type OutboxEvent = {
 };
 
 const BACKUP_SUFFIX = '.bak';
+// Une demande de pairing expire au bout de 7 jours, comme sur le serveur.
+const REQUEST_EXPIRY_MS = 7 * 24 * 3600 * 1000;
 
 let instance: SQLiteDatabase | null = null;
 
@@ -222,10 +224,65 @@ export function getPendingIncomingBytes(contact: string): number {
 }
 
 // Contacts, dans l'ordre où ils ont été ajoutés (src/storage.ts garde la même interface qu'avant).
-export type ContactRow = { public_key: string; name: string };
+// pending : on a envoyé une demande, le contact ne l'a pas encore acceptée.
+export type ContactRow = { public_key: string; name: string; state?: 'active' | 'pending' };
 
 export function getContactRows(): ContactRow[] {
-  return db().getAllSync<ContactRow>("SELECT public_key, name FROM contacts WHERE state = 'active' ORDER BY created_at, rowid");
+  return db().getAllSync<ContactRow>("SELECT public_key, name, state FROM contacts WHERE state IN ('active', 'pending') ORDER BY created_at, rowid");
+}
+
+// Le contact a accepté notre demande (ou nous a ajouté de son côté).
+export function activateContact(contact: string): boolean {
+  return db().runSync("UPDATE contacts SET state = 'active' WHERE public_key = ? AND state = 'pending'", contact).changes > 0;
+}
+
+export function getContactState(contact: string): 'active' | 'pending' | null {
+  return db().getFirstSync<{ state: 'active' | 'pending' }>('SELECT state FROM contacts WHERE public_key = ?', contact)?.state ?? null;
+}
+
+// --- Demandes de pairing reçues ---
+
+export type PairingRequest = { id: string; from_key: string; name: string; at: number };
+
+// Renvoie false si une demande de cette clé attendait déjà (on garde la plus récente).
+export function addPairingRequest(request: PairingRequest) {
+  db().runSync("DELETE FROM pairing_requests WHERE from_key = ? AND state = 'pending'", request.from_key);
+  db().runSync("INSERT OR REPLACE INTO pairing_requests (id, from_key, name, at, state) VALUES (?, ?, ?, ?, 'pending')", request.id, request.from_key, request.name, request.at);
+}
+
+// Les demandes en attente de moins de 7 jours, les plus récentes d'abord.
+export function getPendingRequests(): PairingRequest[] {
+  return db().getAllSync<PairingRequest>(
+    "SELECT id, from_key, name, at FROM pairing_requests WHERE state = 'pending' AND at > ? ORDER BY at DESC",
+    Date.now() - REQUEST_EXPIRY_MS,
+  );
+}
+
+export function setRequestState(fromKey: string, state: 'accepted' | 'declined') {
+  db().runSync("UPDATE pairing_requests SET state = ? WHERE from_key = ? AND state = 'pending'", state, fromKey);
+}
+
+// --- Clés bloquées ---
+
+export function blockKey(key: string) {
+  db().runSync('INSERT OR REPLACE INTO blocked_keys (key, at) VALUES (?, ?)', key, Date.now());
+}
+
+export function unblockKey(key: string) {
+  db().runSync('DELETE FROM blocked_keys WHERE key = ?', key);
+}
+
+export function isBlocked(key: string) {
+  return db().getFirstSync('SELECT 1 FROM blocked_keys WHERE key = ?', key) !== null;
+}
+
+export type BlockedKey = { key: string; at: number; name: string | null };
+
+// Avec le pseudo de la dernière demande reçue de cette clé, pour reconnaître qui on a bloqué.
+export function getBlockedKeys(): BlockedKey[] {
+  return db().getAllSync<BlockedKey>(
+    'SELECT b.key, b.at, (SELECT name FROM pairing_requests WHERE from_key = b.key ORDER BY at DESC LIMIT 1) AS name FROM blocked_keys b ORDER BY b.at DESC',
+  );
 }
 
 // Remplace la liste entière en gardant la date d'ajout (et l'épinglage) des contacts déjà connus.
@@ -237,10 +294,11 @@ export function replaceContactRows(contacts: ContactRow[]) {
     const now = Date.now();
     contacts.forEach((contact, index) => {
       database.runSync(
-        'INSERT INTO contacts (public_key, name, created_at) VALUES (?, ?, ?) ON CONFLICT(public_key) DO UPDATE SET name = excluded.name',
+        'INSERT INTO contacts (public_key, name, created_at, state) VALUES (?, ?, ?, ?) ON CONFLICT(public_key) DO UPDATE SET name = excluded.name, state = excluded.state',
         contact.public_key,
         contact.name,
         now + index,
+        contact.state ?? 'active',
       );
     });
   });

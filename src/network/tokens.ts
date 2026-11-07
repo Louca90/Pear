@@ -20,7 +20,7 @@ const REPUBLISH_MS = 30 * 24 * 3600000;
 
 type Inbox = { inboxId: string; uid: string; serverKey: string };
 
-async function currentUser() {
+export async function currentUser() {
   const auth = getAuth();
   return auth.currentUser ?? (await signInAnonymously(auth)).user;
 }

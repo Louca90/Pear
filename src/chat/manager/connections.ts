@@ -77,7 +77,7 @@ export function watch(core: ChatCore) {
   // App ouverte : les pushs arrivent ici. Un message qui n'a pas pu passer en direct s'affiche quand même.
   onMessage(messaging, (message) => {
     recordPush(String(message.data?.type ?? 'wake'));
-    if (message.data?.type === 'msg') receivePush(core, message.data);
+    if (message.data?.type === 'msg' || message.data?.type === 'pair') receivePush(core, message.data);
     else retryAll(core);
   });
   onTokenRefresh(messaging, (token) => setMyToken(core, token));

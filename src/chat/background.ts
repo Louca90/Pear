@@ -20,7 +20,7 @@ export async function handleWake(message: { data?: { [key: string]: unknown } })
 
   const [identity, contacts] = await Promise.all([loadOrCreateIdentity(), loadContacts()]);
   chat.prepare(identity, contacts);
-  if (message.data?.type === 'msg') {
+  if (message.data?.type === 'msg' || message.data?.type === 'pair') {
     await chat.handlePush(message.data);
     return;
   }

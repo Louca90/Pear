@@ -1,54 +1,31 @@
-import { useEffect, useState } from 'react';
-import { AppState, KeyboardAvoidingView, Linking, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { KeyboardAvoidingView, ScrollView, Text, TextInput, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { Bell, Camera, Check, ChevronRight, Download, ImageMinus, RefreshCw, ShieldCheck, Stethoscope } from 'lucide-react-native';
-
-import { appVersionCode, appVersionName } from '../../modules/pear-native';
+import { Camera, Check, ImageMinus, Settings } from 'lucide-react-native';
 
 import { chat, MAX_PROFILE_NAME_LENGTH } from '../chat/manager';
+import { useBottomBarSpace } from '../components/BottomBar';
 import { showDialog } from '../components/dialog';
-import { SegmentedControl } from '../components/SegmentedControl';
 import { Avatar, Button, Header, IconButton, Screen } from '../components/ui';
-import { createStyles, radius, setThemePreference, spacing, ThemePreference, useColors, useThemePreference } from '../theme';
-import { checkForUpdate, getInstallPermission, previewUpdateScreen, requestInstallPermission, useUpdateState } from '../update/updates';
+import { createStyles, radius, spacing, useColors } from '../theme';
 import { PROFILE_PHOTO_QUALITY } from '../config';
 import { t } from '../i18n';
 
-const THEMES: { value: ThemePreference; label: string }[] = [
-  { value: 'auto', label: t('profil.themeAuto') },
-  { value: 'light', label: t('profil.themeClair') },
-  { value: 'dark', label: t('profil.themeSombre') },
-];
+// Le libellé « Enregistré » reste affiché un instant après l'enregistrement.
+const SAVED_MS = 1600;
 
-export function ProfileScreen({ onBack, onDiagnostic }: { onBack: () => void; onDiagnostic: () => void }) {
+// L'onglet Profil : ma photo et mon nom, tels que mes contacts les voient. Les réglages sont derrière
+// le bouton en haut à droite.
+export function ProfileScreen({ onSettings }: { onSettings: () => void }) {
   const colors = useColors();
   const styles = useStyles();
-  const theme = useThemePreference();
+  const barSpace = useBottomBarSpace();
   const saved = chat.getMyProfile();
   const [name, setName] = useState(saved.name ?? '');
   const [photo, setPhoto] = useState(saved.photo);
-  const [saving, setSaving] = useState(false);
-  const update = useUpdateState();
-  const [canInstall, setCanInstall] = useState(getInstallPermission);
-
-  // L'autorisation se donne dans les réglages d'Android : on la relit au retour dans l'app.
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', (next) => {
-      if (next === 'active') setCanInstall(getInstallPermission());
-    });
-    return () => subscription.remove();
-  }, []);
-
-  const updateStatus =
-    update.status === 'checking'
-      ? t('profil.recherche')
-      : update.status === 'available'
-        ? t('profil.versionDispo', { version: update.release?.version ?? '' })
-        : update.status === 'upToDate'
-          ? t('profil.aJour')
-          : update.status === 'offline'
-            ? t('profil.githubInjoignable')
-            : null;
+  const [state, setState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
 
   const pickPhoto = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: PROFILE_PHOTO_QUALITY, allowsEditing: true, aspect: [1, 1] });
@@ -57,21 +34,29 @@ export function ProfileScreen({ onBack, onDiagnostic }: { onBack: () => void; on
   };
 
   const save = async () => {
-    setSaving(true);
+    setState('saving');
     try {
       await chat.saveProfile(name.trim(), photo);
-      onBack();
+      setState('saved');
+      timer.current = setTimeout(() => setState('idle'), SAVED_MS);
     } catch (e) {
       showDialog(t('commun.enregistrementImpossible'), String(e));
-      setSaving(false);
+      setState('idle');
     }
   };
 
   return (
     <Screen>
-      <Header title={t('profil.titre')} onBack={onBack} />
+      <Header
+        title={t('profil.titre')}
+        action={
+          <IconButton onPress={onSettings} label={t('profil.parametres')}>
+            <Settings size={24} color={colors.text} strokeWidth={1.75} />
+          </IconButton>
+        }
+      />
       <KeyboardAvoidingView behavior="padding" style={styles.flex}>
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: barSpace }]} keyboardShouldPersistTaps="handled">
           <IconButton onPress={pickPhoto} label={t('profil.choisirPhoto')} hitSlop={0} style={styles.photo}>
             <Avatar uri={photo} size={112} />
             <View style={styles.photoBadge}>
@@ -96,49 +81,12 @@ export function ProfileScreen({ onBack, onDiagnostic }: { onBack: () => void; on
           />
           <Text style={styles.hint}>{t('profil.confidentialite')}</Text>
 
-          <Button label={saving ? 'Enregistrement...' : t('commun.enregistrer')} icon={Check} onPress={save} />
+          <Button
+            label={state === 'saving' ? t('profil.enregistrement') : state === 'saved' ? t('profil.enregistre') : t('commun.enregistrer')}
+            icon={Check}
+            onPress={save}
+          />
 
-          <Text style={[styles.label, styles.section]}>{t('profil.parametres')}</Text>
-          <Pressable onPress={() => Linking.openSettings()} style={({ pressed }) => [styles.setting, pressed && styles.pressed]}>
-            <Bell size={20} color={colors.text} strokeWidth={1.75} />
-            <Text style={styles.settingLabel}>{t('commun.notifications')}</Text>
-            <ChevronRight size={20} color={colors.textMuted} strokeWidth={1.75} />
-          </Pressable>
-          <Pressable onPress={onDiagnostic} style={({ pressed }) => [styles.setting, styles.settingGap, pressed && styles.pressed]}>
-            <Stethoscope size={20} color={colors.text} strokeWidth={1.75} />
-            <Text style={styles.settingLabel}>{t('diag.ouvrir')}</Text>
-            <ChevronRight size={20} color={colors.textMuted} strokeWidth={1.75} />
-          </Pressable>
-
-          <Text style={[styles.label, styles.section]}>{t('profil.apparence')}</Text>
-          <SegmentedControl options={THEMES} value={theme} onChange={setThemePreference} />
-
-          <Text style={[styles.label, styles.section]}>{t('profil.misesAJour')}</Text>
-          <View style={styles.rows}>
-            <Pressable onPress={() => checkForUpdate(true)} style={({ pressed }) => [styles.setting, pressed && styles.pressed]}>
-              <RefreshCw size={20} color={colors.text} strokeWidth={1.75} />
-              <View style={styles.settingText}>
-                <Text style={styles.settingLabel}>{t('profil.rechercherMaj')}</Text>
-                <Text style={styles.settingDetail}>
-                  {t('commun.version')} {appVersionName() ?? '?'} ({appVersionCode() ?? '?'}){updateStatus ? ` · ${updateStatus}` : ''}
-                </Text>
-              </View>
-            </Pressable>
-            <Pressable onPress={requestInstallPermission} style={({ pressed }) => [styles.setting, pressed && styles.pressed]}>
-              <ShieldCheck size={20} color={colors.text} strokeWidth={1.75} />
-              <View style={styles.settingText}>
-                <Text style={styles.settingLabel}>{t('profil.installationMaj')}</Text>
-                <Text style={styles.settingDetail}>{canInstall ? t('profil.autorisee') : t('profil.aAutoriser')}</Text>
-              </View>
-              <ChevronRight size={20} color={colors.textMuted} strokeWidth={1.75} />
-            </Pressable>
-            {__DEV__ && update.status === 'available' && (
-              <Pressable onPress={() => previewUpdateScreen(true)} style={({ pressed }) => [styles.setting, pressed && styles.pressed]}>
-                <Download size={20} color={colors.text} strokeWidth={1.75} />
-                <Text style={styles.settingLabel}>{t('profil.apercuMaj')}</Text>
-              </Pressable>
-            )}
-          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </Screen>
@@ -185,9 +133,6 @@ const useStyles = createStyles((colors) => ({
     color: colors.textMuted,
     marginBottom: spacing.sm,
   },
-  section: {
-    marginTop: spacing.lg,
-  },
   input: {
     height: 52,
     borderRadius: radius.md,
@@ -202,36 +147,5 @@ const useStyles = createStyles((colors) => ({
     fontSize: 14,
     color: colors.textMuted,
     marginBottom: spacing.lg,
-  },
-  setting: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    minHeight: 52,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-  },
-  settingLabel: {
-    flex: 1,
-    fontSize: 16,
-    color: colors.text,
-  },
-  settingText: {
-    flex: 1,
-  },
-  settingDetail: {
-    fontSize: 13,
-    color: colors.textMuted,
-  },
-  rows: {
-    gap: spacing.sm,
-  },
-  settingGap: {
-    marginTop: spacing.sm,
-  },
-  pressed: {
-    opacity: 0.6,
   },
 }));
