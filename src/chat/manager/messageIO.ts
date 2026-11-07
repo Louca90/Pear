@@ -1,7 +1,5 @@
 import { AppState } from 'react-native';
 
-import { ratchetDecrypt } from '../../crypto/ratchet';
-import { saveRatchet } from '../../storage';
 import {
   addMessage,
   deleteMessage,
@@ -21,7 +19,7 @@ import { CHUNK_BYTES, isValidFileId } from '../files';
 import { ChatCore } from './core';
 import { notifyMessage } from './notify';
 import { addSystemMessage, flush } from './outbox';
-import { loadOrCreateRatchet } from './secure';
+import { decryptIncoming, receiveRekey, receiveRekeyAck } from './sessions';
 import { queuePushAck } from './wake';
 import { dropIncomingFile, receiveFileOffer, setProgress, streamFile } from './transfers';
 import { AFTER_ACTIVITY_MS, asPayload, isCount, isSupportedVersion, UPDATE_REQUIRED, MAX_PROFILE_NAME_LENGTH, MAX_REACTION_LENGTH, MAX_SAVED_ID_LENGTH, MAX_TEXT_LENGTH, Payload } from './types';
@@ -30,8 +28,7 @@ import { log } from '../../log';
 // L'état n'est enregistré que si le message est authentique : un message forgé ne change rien.
 // Appelée pour ce qui arrive en direct comme pour ce qui arrive dans un push.
 export function receiveRatchet(core: ChatCore, contact: string, envelope: unknown) {
-  const { state, text } = ratchetDecrypt(loadOrCreateRatchet(core, contact), envelope);
-  saveRatchet(contact, state);
+  const text = decryptIncoming(core, contact, envelope);
   const message = asPayload(JSON.parse(text));
   if (message && !isSupportedVersion(message)) {
     // L'id du message (s'il existe) évite d'afficher l'avertissement deux fois pour un même envoi.
@@ -44,6 +41,8 @@ export function receiveRatchet(core: ChatCore, contact: string, envelope: unknow
   else if (message?.type === 'message') receiveText(core, contact, message);
   else if (message?.type === 'event') receiveEvent(core, contact, message);
   else if (message?.type === 'acks') receiveAcks(core, contact, message);
+  else if (message?.type === 'rekey') receiveRekey(core, contact, message);
+  else if (message?.type === 'rekey-ack') receiveRekeyAck(core, contact, message);
 }
 
 // Confirme la réception : en direct si la connexion est ouverte, sinon par push.

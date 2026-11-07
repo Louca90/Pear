@@ -277,6 +277,10 @@ export function getRatchetRow(contact: string): string | null {
   return db().getFirstSync<{ state: string }>('SELECT state FROM ratchets WHERE contact = ?', contact)?.state ?? null;
 }
 
+export function deleteRatchetRow(contact: string) {
+  db().runSync('DELETE FROM ratchets WHERE contact = ?', contact);
+}
+
 export function setRatchetRow(contact: string, state: string) {
   db().runSync('INSERT OR REPLACE INTO ratchets (contact, state, updated_at) VALUES (?, ?, ?)', contact, state, Date.now());
 }

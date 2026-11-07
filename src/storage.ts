@@ -2,7 +2,8 @@ import * as SecureStore from 'expo-secure-store';
 
 import { createIdentity, Identity } from './crypto/pairing';
 import type { RatchetState } from './crypto/ratchet';
-import { getContactRows, getRatchetRow, replaceContactRows, setRatchetRow } from './chat/database';
+import type { EphemeralKeys } from './crypto/rekey';
+import { deleteRatchetRow, getContactRows, getRatchetRow, replaceContactRows, setRatchetRow } from './chat/database';
 import { openLocal, sealLocal } from './chat/db/localCrypto';
 import { CONTACTS_KEY, IDENTITY_KEY, RATCHET_PREFIX } from './config';
 import { log } from './log';
@@ -68,7 +69,9 @@ export function loadRatchet(contact: string): RatchetState | null {
   const cached = ratchets.get(contact);
   if (cached) return cached;
   const row = getRatchetRow(contact);
-  const state = row ? (JSON.parse(openLocal(row, RATCHET_CONTEXT)) as RatchetState) : migrateLegacyRatchet(contact);
+  // Les sessions de secours (`contact.pending`, `contact.previous`) n'ont jamais existé dans le SecureStore.
+  const legacy = () => (contact.includes('.') ? null : migrateLegacyRatchet(contact));
+  const state = row ? (JSON.parse(openLocal(row, RATCHET_CONTEXT)) as RatchetState) : legacy();
   if (state) ratchets.set(contact, state);
   return state;
 }
@@ -76,6 +79,24 @@ export function loadRatchet(contact: string): RatchetState | null {
 export function saveRatchet(contact: string, state: RatchetState) {
   setRatchetRow(contact, sealLocal(JSON.stringify(state), RATCHET_CONTEXT));
   ratchets.set(contact, state);
+}
+
+export function deleteRatchet(key: string) {
+  deleteRatchetRow(key);
+  ratchets.delete(key);
+}
+
+// Clé éphémère proposée à un contact, en attendant sa réponse (passage en session v2).
+const EPHEMERAL_CONTEXT = 'pear-ephemeral-store-v1';
+
+export function loadEphemeral(contact: string): EphemeralKeys | null {
+  const row = getRatchetRow(`${contact}.eph`);
+  return row ? (JSON.parse(openLocal(row, EPHEMERAL_CONTEXT)) as EphemeralKeys) : null;
+}
+
+export function saveEphemeral(contact: string, keys: EphemeralKeys | null) {
+  if (keys) setRatchetRow(`${contact}.eph`, sealLocal(JSON.stringify(keys), EPHEMERAL_CONTEXT));
+  else deleteRatchetRow(`${contact}.eph`);
 }
 
 // Les anciennes versions gardaient l'état dans le SecureStore : il est recopié dans pear.db, relu pour

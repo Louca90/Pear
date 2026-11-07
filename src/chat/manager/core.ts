@@ -14,6 +14,8 @@ export class ChatCore {
   // Messages et événements déjà partis par push : on ne les renvoie pas tant que l'app tourne. Ils
   // repartiront en direct à la prochaine connexion (l'autre téléphone ignore les doublons).
   pushed = new Set<string>();
+  // Dernière proposition de session v2 à chaque contact.
+  rekeyAttempts = new Map<string, number>();
   // Jusqu'à quand garder la connexion avec chaque contact (envoi, réception récente).
   keepUntil = new Map<string, number>();
   // Dernière lecture du token publié par chaque contact.
