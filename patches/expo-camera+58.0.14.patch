@@ -1,8 +1,20 @@
 diff --git a/node_modules/expo-camera/android/src/main/java/expo/modules/camera/ExpoCameraView.kt b/node_modules/expo-camera/android/src/main/java/expo/modules/camera/ExpoCameraView.kt
-index a676d64..039064e 100644
+index a676d64..f1c8741 100644
 --- a/node_modules/expo-camera/android/src/main/java/expo/modules/camera/ExpoCameraView.kt
 +++ b/node_modules/expo-camera/android/src/main/java/expo/modules/camera/ExpoCameraView.kt
-@@ -548,11 +548,25 @@ class ExpoCameraView(
+@@ -134,8 +134,11 @@ class ExpoCameraView(
+   private var glSurfaceTexture: SurfaceTexture? = null
+   private var isRecording = false
+ 
++  // Pear : TextureView plutôt que SurfaceView, pour que les filtres de vue d'Android (filtres de
++  // couleur en direct, choisis avant la prise) s'appliquent aussi à l'aperçu.
+   private var previewView = PreviewView(context).apply {
+     elevation = 0f
++    implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+   }
+   private val scope = CoroutineScope(
+     Dispatchers.Main + SupervisorJob() + CoroutineExceptionHandler { _, throwable ->
+@@ -548,11 +551,25 @@ class ExpoCameraView(
          }
        } else {
          addUseCase(videoCapture)

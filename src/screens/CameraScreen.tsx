@@ -15,6 +15,9 @@ import { useBottomBarSpace } from '../components/BottomBar';
 import { showDialog } from '../components/dialog';
 import { ContactPickerSheet } from '../components/ContactPickerSheet';
 import { MediaEditor, MediaEditorHandle } from '../components/MediaEditor';
+import { FilteredView } from '../components/editor/FilteredView';
+import { FilterStrip, FilterSwatch } from '../components/editor/FilterStrip';
+import { FilterId, NO_ADJUSTMENTS, stepsOf } from '../components/editor/filters';
 import { Button, IconButton, useInsets, useNavigationBarHeight } from '../components/ui';
 import { Contact } from '../storage';
 import { createMediaStyles, radius, spacing, useMediaColors } from '../theme';
@@ -36,7 +39,8 @@ const FLIP_SWIPE_DISTANCE = 70;
 const FLIP_TAP_DISTANCE = 10;
 const REVIEW_CONTROLS_MS = 180;
 
-type Capture = { uri: string; kind: 'image' | 'video'; takenAt: number };
+// filter : le filtre choisi avant la prise, repris par l'éditeur (il ne touche pas encore au fichier).
+type Capture = { uri: string; kind: 'image' | 'video'; takenAt: number; filter: FilterId };
 
 function vibrate() {
   Haptics.selectionAsync().catch((e) => log.warn('vibration', e));
@@ -110,7 +114,7 @@ function CaptureReview({ capture, contacts, onDiscard, onSent }: ReviewProps) {
   return (
     <Modal visible animationType="fade" onRequestClose={() => (picking ? setPicking(false) : onDiscard())} statusBarTranslucent navigationBarTranslucent>
       <View style={styles.review}>
-        <MediaEditor ref={editor} uri={capture.uri} kind={capture.kind} takenAt={capture.takenAt} onToolChange={setToolOpen} />
+        <MediaEditor ref={editor} uri={capture.uri} kind={capture.kind} takenAt={capture.takenAt} initialFilter={capture.filter} onToolChange={setToolOpen} />
         <Animated.View pointerEvents={toolOpen ? 'none' : 'box-none'} style={[styles.topControls, { top: topInset + spacing.md, opacity: controls }]}>
           <IconButton onPress={onDiscard} label={t('camera.jeter')} style={styles.roundControl}>
             <X size={24} color={colors.background} strokeWidth={1.75} />
@@ -157,6 +161,10 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
   const [locked, setLocked] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [capture, setCapture] = useState<Capture | null>(null);
+  // Le filtre en direct, appliqué à l'aperçu ; lu par une référence quand la vidéo se termine.
+  const [liveFilter, setLiveFilter] = useState<FilterId>('none');
+  const liveFilterRef = useRef(liveFilter);
+  liveFilterRef.current = liveFilter;
   const camera = useRef<ComponentRef<typeof CameraView>>(null);
   const barSpace = useBottomBarSpace();
 
@@ -220,7 +228,7 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
     camera.current
       .recordAsync()
       .then((video) => {
-        if (video?.uri) setCapture({ uri: video.uri, kind: 'video', takenAt: Date.now() });
+        if (video?.uri) setCapture({ uri: video.uri, kind: 'video', takenAt: Date.now(), filter: liveFilterRef.current });
       })
       .catch((e) => {
         log.warn('vidéo', e);
@@ -256,7 +264,7 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
         log.warn('réduction de la photo', e);
         return photo.uri;
       });
-      setCapture({ uri, kind: 'image', takenAt: Date.now() });
+      setCapture({ uri, kind: 'image', takenAt: Date.now(), filter: liveFilterRef.current });
     } catch (e) {
       showDialog(t('camera.photoNonPrise'), String(e));
     }
@@ -373,6 +381,7 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
       {/* Sur l'image de la caméra, la barre d'Android passe en clair pour rester visible. */}
       <NavigationBar style="light" />
       {cameraPermission?.granted && (
+        <FilteredView steps={stepsOf(liveFilter, NO_ADJUSTMENTS)} style={StyleSheet.absoluteFill}>
         <CameraView
           ref={camera}
           style={StyleSheet.absoluteFill}
@@ -384,6 +393,7 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
           enableTorch={flashOn && filming}
           mute={!microphonePermission?.granted}
         />
+        </FilteredView>
       )}
 
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.flipFade, { opacity: flipFade }]} />
@@ -409,13 +419,17 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
 
       {/* La hauteur ne change jamais : le bouton reste sous le doigt quand la barre du bas s'efface. */}
       <View pointerEvents="box-none" style={[styles.shutterRow, { bottom: barSpace }]}>
+        <FilterStrip value={liveFilter} hidden={filming} onChange={setLiveFilter} />
         <Animated.View
           {...shutter.panHandlers}
           accessibilityRole="button"
           accessibilityLabel={locked ? t('camera.arreterVideo') : t('camera.declencheur')}
           style={[styles.shutter, filming && styles.shutterFilming, { transform: [{ translateX: shutterX }, { scale: shutterScale }] }]}
         >
-          <Animated.View style={[styles.shutterInner, { opacity: lockProgress.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }]} />
+          <Animated.View style={[styles.shutterInner, { opacity: lockProgress.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }]}>
+            {/* Le filtre choisi se voit au cœur du déclencheur, comme une lentille sur Snap. */}
+            {liveFilter !== 'none' && <FilterSwatch id={liveFilter} size={SHUTTER_SIZE - 22} />}
+          </Animated.View>
           {filming && (
             <Animated.View
               style={[
@@ -538,6 +552,7 @@ const useStyles = createMediaStyles((colors) => ({
     width: SHUTTER_SIZE - 22,
     height: SHUTTER_SIZE - 22,
     borderRadius: radius.full,
+    overflow: 'hidden',
     backgroundColor: colors.background,
   },
   stopIcon: {

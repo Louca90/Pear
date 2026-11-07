@@ -8,6 +8,8 @@ Fichier : `android/src/main/java/expo/modules/camera/ExpoCameraView.kt`.
 
 - **Pourquoi** : en mode vidéo, expo-camera n'attache pas la capture photo. Pear prend aussi des photos depuis ce mode (appareil photo unique, appui court = photo, appui long = vidéo) : le patch ajoute la capture photo à la session vidéo.
 - Certains téléphones refusent photo et vidéo en même temps (`IllegalArgumentException` de CameraX) : le patch se replie alors sur la vidéo seule au lieu de planter.
+- L'aperçu passe en `TextureView` (`PreviewView.ImplementationMode.COMPATIBLE`) au lieu d'une `SurfaceView` : Android ne sait pas appliquer un filtre de vue à une `SurfaceView`, et les filtres de couleur en direct de l'appareil photo (lot 10) en ont besoin.
+- Pour refaire ce patch sous Windows : sortir d'abord `android/build` et `android/.gradle` de `node_modules/expo-camera` (chemins trop longs pour git), puis lancer `npx patch-package expo-camera` avec `core.autocrlf=false`.
 - Ce code Kotlin modifié doit être compilé : d'où `expo.autolinking.android.buildFromSource: ["expo-camera"]` dans `package.json` (sans ça, Gradle prendrait la version précompilée, sans le patch).
 - À revérifier à chaque mise à jour d'expo-camera ; voir aussi le lot 11 (CameraX natif) qui pourrait le rendre inutile.
 

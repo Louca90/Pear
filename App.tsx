@@ -41,6 +41,7 @@ import { checkForUpdate, isBlocking, useUpdateState } from './src/update/updates
 import { UpdateScreen } from './src/update/UpdateScreen';
 import { log } from './src/log';
 import { interceptBack } from './src/navigation/backInterceptors';
+import { isTabSwipeLocked } from './src/components/tabSwipeLock';
 import { t } from './src/i18n';
 
 type Route =
@@ -291,7 +292,8 @@ function App() {
   };
 
   const isTabSwipe = ({ dx, dy, x0 }: { dx: number; dy: number; x0: number }) =>
-    TAB_ROUTES.includes(latestRouteName.current) && x0 > TAB_EDGE && x0 < screenWidth - TAB_EDGE && Math.abs(dx) > 24 && Math.abs(dx) > Math.abs(dy) * 2;
+    TAB_ROUTES.includes(latestRouteName.current) &&
+    !isTabSwipeLocked() && x0 > TAB_EDGE && x0 < screenWidth - TAB_EDGE && Math.abs(dx) > 24 && Math.abs(dx) > Math.abs(dy) * 2;
 
   const settleTab = (toValue: number, then: () => void) =>
     Animated.timing(tabDrag, { toValue, duration: TAB_SETTLE_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start(then);

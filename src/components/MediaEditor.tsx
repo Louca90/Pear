@@ -5,7 +5,7 @@ import { File, Paths } from 'expo-file-system';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { getThumbnailAsync } from 'expo-video-thumbnails';
 import { Check, SlidersHorizontal, Type } from 'lucide-react-native';
-import Svg, { ClipPath, Defs, FeColorMatrix, Filter, G, Image as SvgImage, Rect, Text as SvgText } from 'react-native-svg';
+import Svg, { Defs, FeColorMatrix, Filter, G, Image as SvgImage, Rect, Text as SvgText } from 'react-native-svg';
 
 import { editVideo } from '../../modules/pear-native';
 import { VIDEO_BITRATE } from '../config';
@@ -14,9 +14,8 @@ import { IconButton, useInsets, useNavigationBarHeight } from './ui';
 import { log } from '../log';
 import { AdjustPanel } from './editor/AdjustPanel';
 import { ColorMatrix, isIdentity, toMedia3 } from './editor/colorMatrix';
-import { Adjustments, FilterId, matrixOf, neighborOf, NO_ADJUSTMENTS, presetOf, Step, stepsOf, tintsOf, viewFiltersOf } from './editor/filters';
-
-const AnimatedRect = Animated.createAnimatedComponent(Rect);
+import { FilteredView } from './editor/FilteredView';
+import { Adjustments, FilterId, matrixOf, neighborOf, NO_ADJUSTMENTS, presetOf, stepsOf } from './editor/filters';
 
 const CAPTION_FONT = 20;
 const CAPTION_LINE_HEIGHT = 28;
@@ -31,7 +30,7 @@ const SWIPE_START = 12;
 // Lâché après ce tiers de l'écran, ou lancé assez vite, le filtre voisin s'installe.
 const SWIPE_COMMIT = 0.3;
 const SWIPE_FLING = 0.5;
-// Vidéo (pas d'aperçu pendant le glissé) : distance pour passer au filtre voisin.
+// Vidéo (une seule vue vidéo, pas d'aperçu pendant le glissé) : distance pour passer au filtre voisin.
 const VIDEO_SWIPE_DISTANCE = 50;
 const SWIPE_MS = 220;
 const EASING = Easing.bezier(0.2, 0.8, 0.2, 1);
@@ -72,45 +71,64 @@ function ShadowedText({ x, y, size, weight, children }: { x: number; y: number; 
   );
 }
 
-// L'aperçu d'une vidéo : React Native applique lui-même les filtres de couleur à la vue (mêmes
-// formules que la matrice du fichier final), puis les voiles se posent par-dessus.
-function EditorVideo({ uri, steps }: { uri: string; steps: Step[] }) {
+type Stamp = ReturnType<typeof formatStamp>;
+
+// L'heure (et la date) des filtres Heure et Date, dessinées pareil à l'écran et dans le fichier.
+function StampMarks({ kind, stamp, width, height }: { kind: 'time' | 'date' | undefined; stamp: Stamp; width: number; height: number }) {
+  if (!kind) return null;
+  return (
+    <>
+      <ShadowedText x={width / 2} y={height * 0.42} size={72} weight="600">{stamp.time}</ShadowedText>
+      {kind === 'date' && <ShadowedText x={width / 2} y={height * 0.42 + 36} size={20} weight="400">{stamp.date}</ShadowedText>}
+    </>
+  );
+}
+
+function CaptionMarks({ lines, top, width, bandHeight }: { lines: string[]; top: number; width: number; bandHeight: number }) {
+  const colors = useMediaColors();
+  if (lines.length === 0) return null;
+  return (
+    <G y={top}>
+      <Rect width={width} height={bandHeight} fill={colors.overlay} />
+      {lines.map((line, index) => (
+        <SvgText key={index} x={width / 2} y={CAPTION_PADDING + CAPTION_LINE_HEIGHT * index + CAPTION_FONT} fontSize={CAPTION_FONT} fill={colors.background} textAnchor="middle">
+          {line}
+        </SvgText>
+      ))}
+    </G>
+  );
+}
+
+function EditorVideo({ uri }: { uri: string }) {
   const player = useVideoPlayer(uri, (created) => {
     created.loop = true;
     created.play();
   });
-  const filters = viewFiltersOf(steps);
-  return (
-    <>
-      <View style={[StyleSheet.absoluteFill, filters.length > 0 && { filter: filters }]}>
-        <VideoView player={player} style={StyleSheet.absoluteFill} contentFit="contain" nativeControls={false} surfaceType="textureView" />
-      </View>
-      {tintsOf(steps).map((tint, index) => (
-        <View key={index} pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: tint.color, opacity: tint.opacity }]} />
-      ))}
-    </>
-  );
+  return <VideoView player={player} style={StyleSheet.absoluteFill} contentFit="contain" nativeControls={false} surfaceType="textureView" />;
 }
 
 type Props = {
   uri: string;
   kind: 'image' | 'video';
   takenAt: number;
+  // Le filtre choisi dans l'appareil photo avant la prise.
+  initialFilter?: FilterId;
   // Un outil occupe le bas de l'écran (réglages) : l'écran parent range ses boutons.
   onToolChange?: (open: boolean) => void;
   ref: Ref<MediaEditorHandle>;
 };
 
-// Tout est dessiné dans un même SVG. Une photo y est dessinée aussi, avec sa matrice de couleur. Une
-// vidéo passe dessous : le SVG, transparent, devient alors le calque que Media3 incruste, et Media3
-// applique la même matrice à toute la vidéo.
-export function MediaEditor({ uri, kind, takenAt, onToolChange, ref }: Props) {
+// À l'écran, tout passe par les filtres de vue (carte graphique) : le glissé reste fluide. Le fichier
+// final sort d'un SVG caché dessous, qui reçoit la matrice exacte au moment d'enregistrer : photo
+// filtrée avec ses marques, ou, pour une vidéo, le calque transparent que Media3 incruste pendant
+// qu'il applique la même matrice à toute la vidéo.
+export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onToolChange, ref }: Props) {
   const colors = useMediaColors();
   const styles = useStyles();
   const { top: topInset } = useInsets();
   const navigationBar = useNavigationBarHeight();
   const [size, setSize] = useState<{ width: number; height: number } | null>(null);
-  const [filter, setFilter] = useState<FilterId>('none');
+  const [filter, setFilter] = useState<FilterId>(initialFilter);
   const [adjustments, setAdjustments] = useState<Adjustments>(NO_ADJUSTMENTS);
   const [adjusting, setAdjusting] = useState(false);
   const [caption, setCaption] = useState('');
@@ -163,30 +181,50 @@ export function MediaEditor({ uri, kind, takenAt, onToolChange, ref }: Props) {
   const stamp = formatStamp(takenAt);
 
   const steps = stepsOf(filter, adjustments);
-  const matrix = matrixOf(steps);
   const neighbor = swipeDirection !== 0 ? neighborOf(filter, swipeDirection) : null;
-  const neighborMatrix = neighbor ? matrixOf(stepsOf(neighbor, adjustments)) : null;
+
+  // L'export : le SVG caché ne reçoit sa matrice qu'à ce moment-là (sinon il se redessinerait à chaque
+  // geste), puis il est lu deux images plus tard, une fois dessiné.
+  const [exportMatrix, setExportMatrix] = useState<ColorMatrix | null>(null);
+  const [exportToken, setExportToken] = useState(0);
+  const exportDone = useRef<((base64: string) => void) | null>(null);
+  useEffect(() => {
+    if (!exportToken) return;
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        if (!canvas.current) return;
+        canvas.current.toDataURL((base64: string) => exportDone.current?.(base64));
+      }),
+    );
+  }, [exportToken]);
+
+  const snapshot = (matrix: ColorMatrix | null) =>
+    new Promise<string>((resolve, reject) => {
+      if (!canvas.current) {
+        reject(new Error("L'image n'est pas prête."));
+        return;
+      }
+      exportDone.current = (base64) => {
+        exportDone.current = null;
+        const edited = new File(Paths.cache, `edited-${Date.now()}.png`);
+        Promise.resolve(edited.write(base64, { encoding: 'base64' }))
+          .then(() => resolve(edited.uri))
+          .catch(reject);
+      };
+      setExportMatrix(matrix);
+      setExportToken(Date.now());
+    });
 
   useImperativeHandle(ref, () => ({
-    flatten: () => {
+    flatten: async () => {
+      const matrix = matrixOf(steps);
       const colored = !isIdentity(matrix);
       const stamped = !!presetOf(filter).stamp;
-      if (!colored && !stamped && !caption) return Promise.resolve(uri);
-      // Vidéo sans calque : seules les couleurs changent.
-      if (kind === 'video' && !stamped && !caption) return editVideo(uri, { matrix: toMedia3(matrix), bitrate: VIDEO_BITRATE });
-      return new Promise((resolve, reject) => {
-        if (!canvas.current) {
-          reject(new Error("L'image n'est pas prête."));
-          return;
-        }
-        canvas.current.toDataURL((base64: string) => {
-          const edited = new File(Paths.cache, `edited-${Date.now()}.png`);
-          Promise.resolve(edited.write(base64, { encoding: 'base64' }))
-            .then(() => (kind === 'video' ? editVideo(uri, { overlayUri: edited.uri, matrix: colored ? toMedia3(matrix) : undefined, bitrate: VIDEO_BITRATE }) : edited.uri))
-            .then(resolve)
-            .catch(reject);
-        });
-      });
+      if (!colored && !stamped && !caption) return uri;
+      if (kind === 'image') return snapshot(colored ? matrix : null);
+      // Vidéo : le calque seulement s'il y a quelque chose à poser dessus.
+      const overlayUri = stamped || caption ? await snapshot(null) : undefined;
+      return editVideo(uri, { overlayUri, matrix: colored ? toMedia3(matrix) : undefined, bitrate: VIDEO_BITRATE });
     },
   }));
 
@@ -194,7 +232,7 @@ export function MediaEditor({ uri, kind, takenAt, onToolChange, ref }: Props) {
   const settling = useRef(false);
   const settleSwipe = (direction: 1 | -1, commit: boolean) => {
     settling.current = true;
-    Animated.timing(reveal, { toValue: commit ? 1 : 0, duration: SWIPE_MS, easing: EASING, useNativeDriver: false }).start(() => {
+    Animated.timing(reveal, { toValue: commit ? 1 : 0, duration: SWIPE_MS, easing: EASING, useNativeDriver: true }).start(() => {
       settling.current = false;
       if (commit) setFilter((current) => neighborOf(current, direction));
       setSwipeDirection(0);
@@ -271,65 +309,73 @@ export function MediaEditor({ uri, kind, takenAt, onToolChange, ref }: Props) {
     setDraft(null);
   };
 
-  // Une couche : la photo (avec sa matrice, sauf si elle ne change rien) et l'heure ou la date.
-  const layer = (id: FilterId, layerMatrix: ColorMatrix, filterName: string) => {
-    const preset = presetOf(id);
-    return (
-      <>
-        {kind === 'image' && (
-          <G filter={isIdentity(layerMatrix) ? undefined : `url(#${filterName})`}>
-            <SvgImage href={{ uri }} width={width} height={height} preserveAspectRatio="xMidYMid slice" />
-          </G>
-        )}
-        {preset.stamp && <ShadowedText x={width / 2} y={height * 0.42} size={72} weight="600">{stamp.time}</ShadowedText>}
-        {preset.stamp === 'date' && <ShadowedText x={width / 2} y={height * 0.42 + 36} size={20} weight="400">{stamp.date}</ShadowedText>}
-      </>
-    );
-  };
+  // Une couche visible : la photo filtrée par la carte graphique, et l'heure ou la date du filtre.
+  const layer = (id: FilterId) => (
+    <>
+      <FilteredView steps={stepsOf(id, adjustments)} style={StyleSheet.absoluteFill}>
+        <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+      </FilteredView>
+      {presetOf(id).stamp && (
+        <Svg pointerEvents="none" style={StyleSheet.absoluteFill} width={width} height={height}>
+          <StampMarks kind={presetOf(id).stamp} stamp={stamp} width={width} height={height} />
+        </Svg>
+      )}
+    </>
+  );
 
-  const revealWidth = reveal.interpolate({ inputRange: [0, 1], outputRange: [0, width] });
-  const revealX = swipeDirection === 1 ? reveal.interpolate({ inputRange: [0, 1], outputRange: [width, 0] }) : 0;
+  // La couche voisine arrive par un bord : le cadre glisse, l'image dedans reste immobile. Tout est
+  // animé par le moteur natif, sans repasser par React à chaque image.
+  const side = swipeDirection === 1 ? 1 : -1;
+  const frameX = reveal.interpolate({ inputRange: [0, 1], outputRange: [side * width, 0] });
+  const contentX = reveal.interpolate({ inputRange: [0, 1], outputRange: [-side * width, 0] });
 
   return (
     <>
       <View style={[styles.canvas, { width, height, left: (screen.width - width) / 2, top: (screen.height - height) / 2 }]}>
-        {size && kind === 'video' && <EditorVideo uri={uri} steps={steps} />}
+        {/* Le fichier final, caché sous l'aperçu ; il ne se redessine que si la légende change. */}
         {size && (
-          <Svg ref={canvas} width={width} height={height}>
-            <Defs>
-              <Filter id="current" x="0" y="0" width="100%" height="100%">
-                <FeColorMatrix type="matrix" values={[...matrix]} />
-              </Filter>
-              {neighborMatrix && (
-                <Filter id="neighbor" x="0" y="0" width="100%" height="100%">
-                  <FeColorMatrix type="matrix" values={[...neighborMatrix]} />
+          <Svg ref={canvas} pointerEvents="none" style={StyleSheet.absoluteFill} width={width} height={height}>
+            {exportMatrix && (
+              <Defs>
+                <Filter id="export" x="0" y="0" width="100%" height="100%">
+                  <FeColorMatrix type="matrix" values={[...exportMatrix]} />
                 </Filter>
-              )}
-              <ClipPath id="reveal">
-                <AnimatedRect x={revealX} y={0} width={revealWidth} height={height} />
-              </ClipPath>
-            </Defs>
-            {layer(filter, matrix, 'current')}
-            {neighbor && neighborMatrix && <G clipPath="url(#reveal)">{layer(neighbor, neighborMatrix, 'neighbor')}</G>}
-            {lines.length > 0 && (
-              <G y={bandTop}>
-                <Rect width={width} height={bandHeight} fill={colors.overlay} />
-                {lines.map((line, index) => (
-                  <SvgText
-                    key={index}
-                    x={width / 2}
-                    y={CAPTION_PADDING + CAPTION_LINE_HEIGHT * index + CAPTION_FONT}
-                    fontSize={CAPTION_FONT}
-                    fill={colors.background}
-                    textAnchor="middle"
-                  >
-                    {line}
-                  </SvgText>
-                ))}
+              </Defs>
+            )}
+            {kind === 'image' && (
+              <G filter={exportMatrix ? 'url(#export)' : undefined}>
+                <SvgImage href={{ uri }} width={width} height={height} preserveAspectRatio="xMidYMid slice" />
               </G>
             )}
+            <StampMarks kind={presetOf(filter).stamp} stamp={stamp} width={width} height={height} />
+            <CaptionMarks lines={lines} top={bandTop} width={width} bandHeight={bandHeight} />
           </Svg>
         )}
+
+        {size && kind === 'image' && layer(filter)}
+        {size && kind === 'video' && (
+          <>
+            <FilteredView steps={steps} style={StyleSheet.absoluteFill}>
+              <EditorVideo uri={uri} />
+            </FilteredView>
+            {presetOf(filter).stamp && (
+              <Svg pointerEvents="none" style={StyleSheet.absoluteFill} width={width} height={height}>
+                <StampMarks kind={presetOf(filter).stamp} stamp={stamp} width={width} height={height} />
+              </Svg>
+            )}
+          </>
+        )}
+        {size && neighbor && (
+          <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.clip, { transform: [{ translateX: frameX }] }]}>
+            <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ translateX: contentX }] }]}>{layer(neighbor)}</Animated.View>
+          </Animated.View>
+        )}
+        {lines.length > 0 && (
+          <Svg pointerEvents="none" style={StyleSheet.absoluteFill} width={width} height={height}>
+            <CaptionMarks lines={lines} top={bandTop} width={width} bandHeight={bandHeight} />
+          </Svg>
+        )}
+
         <View
           collapsable={false}
           style={StyleSheet.absoluteFill}
@@ -383,6 +429,9 @@ export function MediaEditor({ uri, kind, takenAt, onToolChange, ref }: Props) {
 const useStyles = createMediaStyles((colors) => ({
   canvas: {
     position: 'absolute',
+  },
+  clip: {
+    overflow: 'hidden',
   },
   tools: {
     position: 'absolute',
