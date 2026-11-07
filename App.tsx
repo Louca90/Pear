@@ -373,6 +373,7 @@ function App() {
           onBack={() => setRoute({ name: 'profile' })}
           onDiagnostic={() => setRoute({ name: 'diagnostic' })}
           onBlocked={() => setRoute({ name: 'blocked' })}
+          onReplayOnboarding={() => setOnboarding({ mode: 'full', step: 0 })}
         />
       );
     }

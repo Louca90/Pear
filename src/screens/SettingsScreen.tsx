@@ -16,10 +16,10 @@ const THEMES: { value: ThemePreference; label: string }[] = [
   { value: 'dark', label: t('profil.themeSombre') },
 ];
 
-type Props = { onBack: () => void; onDiagnostic: () => void; onBlocked: () => void };
+type Props = { onBack: () => void; onDiagnostic: () => void; onBlocked: () => void; onReplayOnboarding: () => void };
 
 // Les réglages de l'app, ouverts depuis le bouton en haut à droite du Profil.
-export function SettingsScreen({ onBack, onDiagnostic, onBlocked }: Props) {
+export function SettingsScreen({ onBack, onDiagnostic, onBlocked, onReplayOnboarding }: Props) {
   const colors = useColors();
   const styles = useStyles();
   const theme = useThemePreference();
@@ -96,6 +96,12 @@ export function SettingsScreen({ onBack, onDiagnostic, onBlocked }: Props) {
             <Pressable onPress={() => previewUpdateScreen(true)} style={({ pressed }) => [styles.setting, pressed && styles.pressed]}>
               <Download size={20} color={colors.text} strokeWidth={1.75} />
               <Text style={styles.settingLabel}>{t('profil.apercuMaj')}</Text>
+            </Pressable>
+          )}
+          {__DEV__ && (
+            <Pressable onPress={onReplayOnboarding} style={({ pressed }) => [styles.setting, pressed && styles.pressed]}>
+              <RefreshCw size={20} color={colors.text} strokeWidth={1.75} />
+              <Text style={styles.settingLabel}>{t('reglages.revoirPriseEnMain')}</Text>
             </Pressable>
           )}
         </View>

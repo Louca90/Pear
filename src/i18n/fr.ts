@@ -317,6 +317,7 @@ export const fr = {
     bloques: 'Contacts bloqués',
     aucunBloque: 'Personne n\'est bloqué.',
     debloquer: 'Débloquer',
+    revoirPriseEnMain: 'Revoir la prise en main (debug)',
   },
   priseEnMain: {
     bienvenue: 'Bienvenue dans Pear',
