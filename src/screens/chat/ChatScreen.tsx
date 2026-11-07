@@ -8,10 +8,11 @@ import * as Haptics from 'expo-haptics';
 import * as Sharing from 'expo-sharing';
 import { Copy, Download, Forward, MessageCircle, Pencil, Pin, PinOff, Reply, Trash2 } from 'lucide-react-native';
 
-import { getContactProfile, getContactRows, getConversationSettings, getMessages, getPeerState, getPinnedMessages, isBlocked, Message } from '../../chat/database';
+import { getContactProfile, getContactRows, getConversationSettings, getMessagePosition, getMessages, getPeerState, getPinnedMessages, isBlocked, Message } from '../../chat/database';
 import { exportCopy, formatSize, MAX_FILE_BYTES, saveToGallery, videoThumbnail } from '../../chat/files';
 import { GroupPosition, groupPosition } from '../../chat/grouping';
 import { chat, PickedFile } from '../../chat/manager';
+import { MESSAGE_PAGE_SIZE } from '../../config';
 import { showDialog } from '../../components/dialog';
 import { ContactPickerSheet } from '../../components/ContactPickerSheet';
 import { MediaPicker } from '../../components/MediaPicker';
@@ -20,6 +21,7 @@ import { bubblePalette, createStyles, radius, spacing, useColors } from '../../t
 
 import { AttachMenu } from './components/AttachMenu';
 import { ChatHeader } from './components/ChatHeader';
+import { useChatScrollbar } from './components/ChatScrollbar';
 import { Composer } from './components/Composer';
 import { ComposerFade } from './components/ComposerFade';
 import { MediaViewer, Viewing } from './components/MediaViewer';
@@ -85,16 +87,30 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
         : null;
 
   // Relu seulement quand le moteur signale un changement, pas à chaque rafraîchissement de l'écran.
-  const messages = useMemo(() => getMessages(contactKey), [contactKey, version]);
+  // Pagination : 40 messages à l'ouverture, 40 de plus à chaque approche du haut.
+  const [limit, setLimit] = useState(MESSAGE_PAGE_SIZE);
+  const messages = useMemo(() => getMessages(contactKey, limit), [contactKey, version, limit]);
+  const loadOlder = () => {
+    if (messages.length >= limit) setLimit((value) => value + MESSAGE_PAGE_SIZE);
+  };
+  // Un message à rejoindre qui n'était pas encore chargé : on charge jusqu'à lui, puis on y va.
+  const [pendingJump, setPendingJump] = useState<string | null>(null);
   const pinnedMessages = useMemo(() => getPinnedMessages(contactKey), [contactKey, version]);
   const contactPhoto = useMemo(() => getContactProfile(contactKey).photo_uri, [contactKey, version]);
   // À l'ouverture, les messages déjà là ne font pas d'entrée ; seuls les suivants apparaissent en douceur.
   const openedWith = useRef<string | null>(null);
+  // Les plus anciens chargés en remontant non plus : seuls les messages plus récents que le dernier
+  // déjà affiché (envoyés ou reçus maintenant) font leur entrée.
+  const newestShown = useRef(0);
   if (openedWith.current !== contactKey) {
     openedWith.current = contactKey;
     markMessagesShown(messages.map(({ id }) => id));
+  } else {
+    markMessagesShown(messages.filter(({ created_at }) => created_at <= newestShown.current).map(({ id }) => id));
   }
+  newestShown.current = Math.max(newestShown.current, messages[0]?.created_at ?? 0);
   const scroll = useChatScroll(list, messages, preview);
+  const scrollbarControl = useChatScrollbar(list, messages);
   const settings = getConversationSettings(contactKey);
   const palettes: Palettes = {
     mine: bubblePalette(settings.my_bubble ?? colors.bubbleMine),
@@ -164,7 +180,13 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
   const jumpTo = (id: string) => {
     const index = messages.findIndex((message) => message.id === id);
     if (index < 0) {
-      showDialog(t('chat.tropAncien'), t('chat.tropAncienAide'));
+      const position = getMessagePosition(contactKey, id);
+      if (position < 0) {
+        showDialog(t('chat.tropAncien'), t('chat.tropAncienAide'));
+        return;
+      }
+      setLimit(position + MESSAGE_PAGE_SIZE);
+      setPendingJump(id);
       return;
     }
     list.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true });
@@ -172,6 +194,12 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
   };
 
   // Déjà liké : le double appui ne retire pas le like (on le retire depuis le menu des réactions).
+  useEffect(() => {
+    if (!pendingJump || !messages.some(({ id }) => id === pendingJump)) return;
+    setPendingJump(null);
+    requestAnimationFrame(() => jumpTo(pendingJump));
+  }, [pendingJump, messages]);
+
   // Double appui : met le cœur, ou l'enlève s'il y est déjà.
   const likeMessage = (message: Message) => chat.react(contactKey, message.id, LIKE);
 
@@ -355,8 +383,20 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
               contentContainerStyle={styles.list}
               keyboardShouldPersistTaps="handled"
               {...scroll.listProps}
+              onScroll={(event) => {
+                scroll.listProps.onScroll(event);
+                scrollbarControl.onScroll(event);
+              }}
+              onEndReached={loadOlder}
+              onEndReachedThreshold={0.6}
+              showsVerticalScrollIndicator={false}
+              // Seules les bulles proches de l'écran sont dessinées.
+              initialNumToRender={15}
+              maxToRenderPerBatch={10}
+              windowSize={11}
             />
           )}
+          {messages.length > 0 && scrollbarControl.scrollbar}
           <NewMessagesButton count={scroll.newCount} onPress={scroll.scrollToBottom} />
           {toast && <Toast text={toast.text} token={toast.token} />}
           {showingReactions && (

@@ -597,8 +597,20 @@ export function getContactToken(contact: string): string | null {
   return db().getFirstSync<{ token: string }>('SELECT token FROM contact_tokens WHERE contact = ?', contact)?.token ?? null;
 }
 
-export function getMessages(contact: string): Message[] {
-  return db().getAllSync<Message>("SELECT * FROM messages WHERE contact = ? AND kind != 'avatar' ORDER BY created_at DESC LIMIT 200", contact).map(withoutFileKey);
+// Les `limit` messages les plus récents (pagination : la conversation en demande plus en remontant).
+export function getMessages(contact: string, limit = 200): Message[] {
+  return db()
+    .getAllSync<Message>("SELECT * FROM messages WHERE contact = ? AND kind != 'avatar' ORDER BY created_at DESC LIMIT ?", contact, limit)
+    .map(withoutFileKey);
+}
+
+// Combien de messages sont plus récents que celui-ci (sa place depuis le bas), -1 s'il n'existe pas.
+export function getMessagePosition(contact: string, id: string): number {
+  const message = db().getFirstSync<{ created_at: number }>('SELECT created_at FROM messages WHERE id = ? AND contact = ?', id, contact);
+  if (!message) return -1;
+  return (
+    db().getFirstSync<{ count: number }>("SELECT COUNT(*) AS count FROM messages WHERE contact = ? AND kind != 'avatar' AND created_at > ?", contact, message.created_at)?.count ?? 0
+  );
 }
 
 export function getUndelivered(contact: string): Message[] {

@@ -39,6 +39,8 @@ export const UPDATE_CHECK_TIMEOUT_MS = 10 * SECOND;
 
 // Battement de coeur : sans signe de l'autre téléphone pendant PEER_TIMEOUT_MS, la connexion est morte.
 export const HEARTBEAT_MS = 4 * SECOND;
+// Conversation : messages lus par pages (à l'ouverture, puis à chaque approche du haut).
+export const MESSAGE_PAGE_SIZE = 40;
 export const PEER_TIMEOUT_MS = 12 * SECOND;
 // Laisse à une négociation le temps d'aboutir avant d'en relancer une, même sur un réseau lent.
 export const RETRY_MS = 20 * SECOND;
