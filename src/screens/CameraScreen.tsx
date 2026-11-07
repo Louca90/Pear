@@ -46,7 +46,7 @@ const REVIEW_CONTROLS_MS = 180;
 // filter : le filtre choisi avant la prise, repris par l'éditeur (il ne touche pas encore au fichier).
 // Une fois la caméra autorisée, inutile d'attendre la relecture de la permission (asynchrone) pour
 // monter l'aperçu à la prochaine ouverture.
-let cameraKnownGranted = false;
+const cameraKnown = { granted: false };
 const PREVIEW_FADE_MS = 200;
 
 type Capture = { uri: string; kind: 'image' | 'video'; takenAt: number; filter: FilterId };
@@ -164,8 +164,10 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
   const { top: topInset } = useInsets();
   const [cameraPermission, requestCamera] = useCameraPermissions();
   const [microphonePermission, requestMicrophone] = useMicrophonePermissions();
-  if (cameraPermission) cameraKnownGranted = cameraPermission.granted;
-  const cameraAllowed = cameraPermission?.granted ?? cameraKnownGranted;
+  const cameraAllowed = cameraPermission?.granted ?? cameraKnown.granted;
+  useEffect(() => {
+    if (cameraPermission) cameraKnown.granted = cameraPermission.granted;
+  }, [cameraPermission]);
   // L'aperçu apparaît en fondu à la première image, sur l'interface déjà affichée.
   const previewOpacity = useRef(new Animated.Value(0)).current;
   useEffect(() => {
