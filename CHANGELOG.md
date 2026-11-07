@@ -1,5 +1,39 @@
 # Journal des versions
 
+## 1.4.0 (versionCode 6)
+
+### Résumé
+
+- Nouvelle prise en main : quelques écrans pour régler les autorisations, ton profil et ton thème.
+- Un seul scan suffit pour ajouter quelqu'un : il reçoit une demande et l'accepte depuis la cloche.
+- Ton profil a son onglet dans la barre du bas, les réglages sont derrière l'engrenage.
+- Photos et vidéos arrivent même quand vous n'êtes pas connectés en même temps.
+- Retour en arrière plus doux, en fondu.
+
+### Détails
+
+#### Nouveautés
+
+- Prise en main : bienvenue, autorisations (notifications, caméra, batterie, installation), profil et thème ; faite une fois par tout le monde, nom et photo préremplis.
+- Pairing à sens unique : demande chiffrée envoyée après un scan, contact « en attente » jusqu'à l'acceptation, scans croisés acceptés tout seuls.
+- Cloche et page Demandes (accepter, refuser, bloquer) ; contacts bloqués dans les Paramètres.
+- Onglet Profil avec ta photo ; page Paramètres (apparence, notifications, diagnostic, bloqués, mises à jour).
+- QR code et lien avec ton pseudo ; « Montrer mon code » s'ouvre par-dessus sans perdre le contact scanné.
+- Relais chiffré des photos, vidéos et fichiers (25 Mo au plus) quand la connexion directe est impossible.
+- Retour en arrière en fondu, fluide aussi au bouton maintenu.
+
+#### Corrections
+
+- Plus de notification de réception pour la photo de profil ou le fond d'écran.
+- Plus de rebond dans la barre du bas ; plus de voile blanc pendant le retour en thème sombre.
+- Bandeau sur l'accueil si une autorisation a été retirée.
+
+#### Technique
+
+- Demandes de pairing scellées (libsodium) dans la boîte du destinataire, push sur son topic.
+- Relais par la Realtime Database : réservation /api/relay, morceaux chiffrés de 512 Ko, budget mensuel, nettoyage quotidien.
+- Fonctions natives de batterie (module maison), permission REQUEST_IGNORE_BATTERY_OPTIMIZATIONS.
+
 ## 1.3.0 (versionCode 5)
 
 ### Résumé
