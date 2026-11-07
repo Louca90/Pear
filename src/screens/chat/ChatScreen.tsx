@@ -1,4 +1,4 @@
-import { ComponentRef, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { ComponentRef, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Animated, FlatList, Image, Keyboard, KeyboardAvoidingView, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { BlurTargetView } from 'expo-blur';
 import * as Clipboard from 'expo-clipboard';
@@ -65,7 +65,7 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
   const [pulsing, setPulsing] = useState<{ id: string; token: number } | null>(null);
   const keyboardOpen = useKeyboardOpen();
   const { top: topInset } = useInsets();
-  useSyncExternalStore(chat.subscribe, chat.getVersion);
+  const version = useSyncExternalStore(chat.subscribe, chat.getVersion);
   // Pas de saisie si l'on ne peut pas écrire : demande pas encore acceptée, contact qui nous a supprimé
   // ou bloqué, ou contact que l'on a bloqué.
   const blockedByMe = isBlocked(contactKey);
@@ -78,7 +78,8 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
         ? { title: t('statut.bloqueTitre', { nom: name }), text: t('statut.bloqueTexte') }
         : null;
 
-  const messages = getMessages(contactKey);
+  // Relu seulement quand le moteur signale un changement, pas à chaque rafraîchissement de l'écran.
+  const messages = useMemo(() => getMessages(contactKey), [contactKey, version]);
   const scroll = useChatScroll(list, messages, preview);
   const settings = getConversationSettings(contactKey);
   const palettes: Palettes = {

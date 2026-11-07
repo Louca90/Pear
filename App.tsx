@@ -62,12 +62,12 @@ type Route =
 // Animations fixes, sans suivre le doigt. Chaque écran a deux valeurs : enter (0 → 1 à son arrivée)
 // et g (0 → 1 quand il part). La page qui part garde la sienne jusqu'à disparaître : rien n'est remis
 // en place au changement d'écran, donc pas d'image de l'ancien écran.
-const ENTER_MS = 260;
-const EXIT_MS = 220;
+const ENTER_MS = 180;
+const EXIT_MS = 160;
 // Démarre vite et se pose doucement, sans dépasser : jamais de rebond.
 const NAV_EASING = Easing.bezier(0.2, 0.8, 0.2, 1);
 // La page arrive de la droite et repart vers la droite ; l'écran d'en dessous se décale un peu.
-const PAGE_SHIFT = 48;
+const PAGE_SHIFT = 36;
 const UNDER_SHIFT = 24;
 // Glissement entre onglets : la page et l'onglet voisin suivent le doigt ; au-delà du seuil (ou d'un
 // geste rapide), le voisin finit de prendre la place.
