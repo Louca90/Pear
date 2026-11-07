@@ -1,4 +1,5 @@
 import { RefObject, useRef, useState } from 'react';
+import { dateLocale } from '../../../i18n';
 import { Animated, Easing, FlatList, NativeScrollEvent, NativeSyntheticEvent, PanResponder, Text, View } from 'react-native';
 
 import { Message } from '../../../chat/database';
@@ -12,7 +13,7 @@ const HIDE_AFTER_MS = 1500;
 const FADE_MS = 200;
 
 function dateLabel(at: number) {
-  return new Date(at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+  return new Date(at).toLocaleDateString(dateLocale(), { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
 // Barre de défilement de la conversation : fine, visible seulement pendant le défilement, puis elle

@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { AppState, Linking, Pressable, ScrollView, Text, View } from 'react-native';
-import { Ban, Bell, ChevronRight, Download, HardDrive, RefreshCw, ShieldCheck, Stethoscope } from 'lucide-react-native';
+import { Ban, Bell, ChevronRight, Download, HardDrive, Languages, RefreshCw, ShieldCheck, Stethoscope } from 'lucide-react-native';
 
 import { appVersionCode, appVersionName } from '../../modules/pear-native';
 
 import { SegmentedControl } from '../components/SegmentedControl';
 import { Header, Screen } from '../components/ui';
-import { t } from '../i18n';
+import { currentLanguage, languageChoice, LANGUAGES, t } from '../i18n';
+import { LanguageSheet } from '../components/LanguageSheet';
 import { createStyles, radius, setThemePreference, spacing, ThemePreference, useColors, useThemePreference } from '../theme';
 import { checkForUpdate, getInstallPermission, previewUpdateScreen, requestInstallPermission, useUpdateState } from '../update/updates';
 
@@ -25,6 +26,7 @@ export function SettingsScreen({ onBack, onDiagnostic, onBlocked, onStorage, onR
   const theme = useThemePreference();
   const update = useUpdateState();
   const [canInstall, setCanInstall] = useState(getInstallPermission);
+  const [languageOpen, setLanguageOpen] = useState(false);
 
   // L'autorisation se donne dans les réglages d'Android : on la relit au retour dans l'app.
   useEffect(() => {
@@ -51,6 +53,14 @@ export function SettingsScreen({ onBack, onDiagnostic, onBlocked, onStorage, onR
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.label}>{t('profil.apparence')}</Text>
         <SegmentedControl options={THEMES} value={theme} onChange={setThemePreference} />
+        <Pressable onPress={() => setLanguageOpen(true)} style={({ pressed }) => [styles.setting, styles.languageRow, pressed && styles.pressed]}>
+          <Languages size={20} color={colors.text} strokeWidth={1.75} />
+          <View style={styles.settingText}>
+            <Text style={styles.settingLabel}>{t('langue.titre')}</Text>
+            <Text style={styles.settingDetail}>{languageChoice() === 'auto' ? t('langue.auto') : LANGUAGES.find(({ code }) => code === currentLanguage())?.name}</Text>
+          </View>
+          <ChevronRight size={20} color={colors.textMuted} strokeWidth={1.75} />
+        </Pressable>
 
         <Text style={[styles.label, styles.section]}>{t('reglages.notifications')}</Text>
         <View style={styles.rows}>
@@ -111,11 +121,15 @@ export function SettingsScreen({ onBack, onDiagnostic, onBlocked, onStorage, onR
           )}
         </View>
       </ScrollView>
+      {languageOpen && <LanguageSheet onClose={() => setLanguageOpen(false)} />}
     </Screen>
   );
 }
 
 const useStyles = createStyles((colors) => ({
+  languageRow: {
+    marginTop: spacing.md,
+  },
   content: {
     padding: spacing.lg,
     paddingTop: spacing.sm,

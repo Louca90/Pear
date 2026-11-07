@@ -24,6 +24,7 @@ declare class PearNativeModule extends NativeModule<{ onBack: (event: BackEvent)
   sha256File(fileUri: string): Promise<string>;
   resizeImage(inputUri: string, outputUri: string, maxSize: number, quality: number): Promise<string>;
   installApk(fileUri: string): void;
+  reloadApp(): Promise<void>;
 }
 
 const PearNative = requireNativeModule<PearNativeModule>('PearNative');
@@ -132,4 +133,9 @@ export function getInsets() {
 
 export function navigationBarHeight() {
   return insets.bottom;
+}
+
+// Recharge l'interface de Pear (après un changement de langue).
+export function reloadApp() {
+  return PearNative.reloadApp();
 }

@@ -467,4 +467,9 @@ export const fr = {
     envoyerMaintenant: 'Envoyer maintenant',
     annuler: 'Annuler l’envoi',
   },
+  langue: {
+    titre: 'Langue',
+    auto: 'Langue du téléphone',
+    redemarrer: 'Fermez et rouvrez Pear pour changer de langue.',
+  },
 };

@@ -1,4 +1,4 @@
-import { t } from '../i18n';
+import { dateLocale, t } from '../i18n';
 import { ComponentRef, Ref, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Dimensions, Image, PanResponder, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { File, Paths } from 'expo-file-system';
@@ -52,7 +52,7 @@ function formatStamp(timestamp: number) {
   const date = new Date(timestamp);
   return {
     time: `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`,
-    date: date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+    date: date.toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
   };
 }
 

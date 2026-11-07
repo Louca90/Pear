@@ -4,7 +4,7 @@ import { Animated, Easing, Modal, Pressable, Text, View } from 'react-native';
 import { Message } from '../../../chat/database';
 import { chat } from '../../../chat/manager';
 import { Avatar, useNavigationBarHeight } from '../../../components/ui';
-import { t } from '../../../i18n';
+import { dateLocale, t } from '../../../i18n';
 import { createStyles, radius, spacing } from '../../../theme';
 import { formatTime } from '../format';
 
@@ -16,7 +16,7 @@ function when(at: number | null | undefined) {
   if (!at) return '';
   const date = new Date(at);
   const today = new Date().toDateString() === date.toDateString();
-  return today ? formatTime(at) : `${date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} · ${formatTime(at)}`;
+  return today ? formatTime(at) : `${date.toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short' })} · ${formatTime(at)}`;
 }
 
 // Qui a réagi, avec quoi et quand. Toucher sa propre réaction la retire.

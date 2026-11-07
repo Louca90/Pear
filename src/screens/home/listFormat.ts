@@ -1,4 +1,4 @@
-import { t } from '../../i18n';
+import { dateLocale, t } from '../../i18n';
 
 // Règles de la liste des conversations (lot 8.1 et 8.8), sans dépendance à l'écran : testées avec Jest.
 
@@ -32,7 +32,7 @@ export function relativeTime(at: number, now: number): string {
   if (elapsed < HOUR) return t('liste.ilYaMin', { n: Math.floor(elapsed / MINUTE) });
   if (elapsed < DAY) return t('liste.ilYaH', { n: Math.floor(elapsed / HOUR) });
   if (elapsed < 7 * DAY) return t('liste.ilYaJ', { n: Math.floor(elapsed / DAY) });
-  return new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', timeZone: 'Europe/Paris' }).format(at);
+  return new Intl.DateTimeFormat(dateLocale(), { day: 'numeric', month: 'short', timeZone: 'Europe/Paris' }).format(at);
 }
 
 // Recherche insensible à la casse et aux accents : « elodie » trouve « Élodie ».

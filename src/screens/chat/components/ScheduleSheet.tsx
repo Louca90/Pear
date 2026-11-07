@@ -3,7 +3,7 @@ import { Animated, Easing, Modal, Pressable, ScrollView, Text, View } from 'reac
 import { Clock, Minus, Plus } from 'lucide-react-native';
 
 import { useNavigationBarHeight } from '../../../components/ui';
-import { t } from '../../../i18n';
+import { dateLocale, t } from '../../../i18n';
 import { createStyles, radius, spacing, useColors } from '../../../theme';
 import { parisNow } from '../../../time';
 import { formatTime } from '../format';
@@ -27,7 +27,7 @@ function dayLabel(offset: number) {
   if (offset === 1) return t('programme.demain');
   const date = new Date(parisNow());
   date.setDate(date.getDate() + offset);
-  return date.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' });
+  return date.toLocaleDateString(dateLocale(), { weekday: 'short', day: 'numeric' });
 }
 
 export function scheduleLabel(time: number) {
@@ -40,7 +40,7 @@ export function scheduleLabel(time: number) {
       ? t('programme.aujourdhui')
       : date.toDateString() === tomorrow.toDateString()
         ? t('programme.demain')
-        : date.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+        : date.toLocaleDateString(dateLocale(), { weekday: 'short', day: 'numeric', month: 'short' });
   return `${day} · ${formatTime(time)}`;
 }
 

@@ -7,7 +7,7 @@ import { getContactProfile, getStreakState } from '../chat/database';
 import { StreakFlame } from './StreakFlame';
 import { SearchField } from './SearchField';
 import { Avatar, useNavigationBarHeight } from './ui';
-import { t } from '../i18n';
+import { dateLocale, t } from '../i18n';
 import { Contact } from '../storage';
 import { createStyles, radius, spacing, useColors } from '../theme';
 
@@ -105,11 +105,11 @@ export function ContactPickerSheet({ title, contacts, onSend, onClose }: Props) 
     }),
   ).current;
 
-  const search = query.trim().toLocaleLowerCase('fr');
+  const search = query.trim().toLocaleLowerCase(dateLocale());
   const shown = contacts
     .filter((contact) => !contact.pending)
-    .filter((contact) => !search || contact.name.toLocaleLowerCase('fr').includes(search))
-    .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+    .filter((contact) => !search || contact.name.toLocaleLowerCase(dateLocale()).includes(search))
+    .sort((a, b) => a.name.localeCompare(b.name, dateLocale()));
 
   const toggle = (key: string) => setSelected((current) => (current.includes(key) ? current.filter((item) => item !== key) : [...current, key]));
 

@@ -136,6 +136,15 @@ class PearNativeModule : Module() {
     // Le geste est allé au bout : le retour repasse par le chemin normal, jusqu'au BackHandler de l'app.
     AsyncFunction("completeBack") { completeBack() }.runOnQueue(Queues.MAIN)
 
+    // Recharge l'interface (changement de langue) : le code JS repart de zéro, l'app reste ouverte.
+    AsyncFunction("reloadApp") {
+      val app = appContext.currentActivity?.application as? com.facebook.react.ReactApplication
+        ?: throw IllegalStateException("Application introuvable.")
+      val host = app.reactHost ?: throw IllegalStateException("Hôte React introuvable.")
+      host.reload("langue")
+      Unit
+    }.runOnQueue(Queues.MAIN)
+
     OnDestroy {
       backCallback.remove()
       unwatchInsets()
