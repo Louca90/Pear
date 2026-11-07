@@ -27,3 +27,22 @@ export function systemAction(message: Message) {
   if (message.mine === 1) return t('chat.enregistreMien', { objet: noun });
   return t('chat.enregistreSien', { possessif: owner === 'yours' ? t('chat.votre') : t('chat.sa'), objet: noun });
 }
+
+// Liens d'un message : http(s)://… ou www.…, sans la ponctuation finale (« voir https://x.fr. »).
+const LINK = /\b(?:https?:\/\/|www\.)[^\s<]*[^\s<.,;:!?)\]'"»]/gi;
+
+export type TextPart = { text: string; url?: string };
+
+export function splitLinks(text: string): TextPart[] {
+  const parts: TextPart[] = [];
+  let last = 0;
+  for (const match of text.matchAll(LINK)) {
+    const start = match.index ?? 0;
+    if (start > last) parts.push({ text: text.slice(last, start) });
+    const link = match[0];
+    parts.push({ text: link, url: /^https?:\/\//i.test(link) ? link : `https://${link}` });
+    last = start + link.length;
+  }
+  if (last < text.length) parts.push({ text: text.slice(last) });
+  return parts;
+}

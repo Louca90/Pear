@@ -2,7 +2,7 @@ import { describe, expect, it } from '@jest/globals';
 
 import type { Message } from '../../chat/database';
 
-import { formatClock, formatTime, isBareMedia, systemAction } from './format';
+import { formatClock, formatTime, isBareMedia, splitLinks, systemAction } from './format';
 
 function message(fields: Partial<Message>): Message {
   return {
@@ -69,5 +69,20 @@ describe('systemAction', () => {
     expect(systemAction(message({ kind: 'system', mine: 1, text: 'saved:video' }))).toBe('enregistré une vidéo sur votre téléphone');
     expect(systemAction(message({ kind: 'system', text: 'saved:image:yours' }))).toBe('enregistré votre photo sur son téléphone');
     expect(systemAction(message({ kind: 'system', text: 'saved:image:theirs' }))).toBe('enregistré sa photo sur son téléphone');
+  });
+});
+
+describe('splitLinks', () => {
+  it('repère les liens sans la ponctuation finale', () => {
+    expect(splitLinks('voir https://pear.fr/a?b=1. merci')).toEqual([
+      { text: 'voir ' },
+      { text: 'https://pear.fr/a?b=1', url: 'https://pear.fr/a?b=1' },
+      { text: '. merci' },
+    ]);
+  });
+
+  it('ajoute https:// aux liens www et laisse le texte simple intact', () => {
+    expect(splitLinks('www.exemple.com')).toEqual([{ text: 'www.exemple.com', url: 'https://www.exemple.com' }]);
+    expect(splitLinks('rien à voir')).toEqual([{ text: 'rien à voir' }]);
   });
 });
