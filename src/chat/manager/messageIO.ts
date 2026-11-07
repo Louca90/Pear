@@ -107,7 +107,7 @@ function receiveText(core: ChatCore, contact: string, data: Payload) {
   acknowledge(core, contact, { id: data.id });
   flush(core, contact);
   const message = getMessage(data.id, contact);
-  if (isNew && !foreground && message) notifyMessage(core, contact, message);
+  if (isNew && !foreground && message) notifyMessage(core, contact);
   core.notify();
 }
 

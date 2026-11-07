@@ -241,6 +241,9 @@ export const fr = {
   },
   notifications: {
     canal: 'Messages',
+    repondre: 'Répondre',
+    marquerLu: 'Marquer comme lu',
+    reception: 'Réception d\'un fichier de {nom}',
   },
   taille: {
     ko: '{n} Ko',

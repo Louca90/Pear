@@ -3,7 +3,7 @@ import { randombytes_buf, to_base64 } from 'react-native-libsodium';
 
 import { Identity } from '../../crypto/pairing';
 import { PeerStatus, RouteType } from '../../network/peer';
-import { Contact } from '../../storage';
+import { Contact, loadContacts, loadOrCreateIdentity } from '../../storage';
 import { addMessage, deleteMessage, editMessage, getMessage, markConversationRead, setConversationSetting, setReaction } from '../database';
 import { clearMessageNotification } from '../notifications';
 
@@ -18,7 +18,8 @@ import { acceptFile, closeIncomingFiles, dropIncomingFile, refuseFile, sendFile 
 import { AFTER_SEND_MS, PickedFile, WAKE_CHECK_MS } from './types';
 import { contactForTag, receivePush } from './incoming';
 import { reconcile } from './strategy';
-import { settlePushAcks, wakeIfNeeded } from './wake';
+import { deliverNow, settlePushAcks, wakeIfNeeded } from './wake';
+import { notifyMessage } from './notify';
 
 export { MAX_PROFILE_NAME_LENGTH, MAX_TEXT_LENGTH } from './types';
 export type { PickedFile } from './types';
@@ -72,6 +73,31 @@ class ChatManager extends ChatCore {
   // Le contact visé par un réveil, ou null pour un réveil d'une ancienne version (tous les contacts).
   contactForWake(data: { [key: string]: unknown } | undefined) {
     return data?.type === 'wake' ? contactForTag(this, data.payload) : null;
+  }
+
+  // Depuis une notification, l'app peut être fermée : on charge alors identité et contacts.
+  private async ensurePrepared() {
+    if (this.identity) return;
+    const [identity, contacts] = await Promise.all([loadOrCreateIdentity(), loadContacts()]);
+    this.prepare(identity, contacts);
+  }
+
+  // Répondre depuis la notification : la conversation est lue, la réponse part (en direct ou par push)
+  // et la notification affiche la réponse.
+  async replyFromNotification(contact: string, text: string) {
+    await this.ensurePrepared();
+    this.send(contact, text);
+    markConversationRead(contact);
+    notifyMessage(this, contact);
+    await deliverNow(this, contact);
+  }
+
+  async markReadFromNotification(contact: string) {
+    await this.ensurePrepared();
+    markConversationRead(contact);
+    clearMessageNotification(contact);
+    flush(this, contact);
+    this.notify();
   }
 
   stopAll() {

@@ -17,6 +17,7 @@ import {
 import { CHUNK_BYTES, deleteStoredFile, isValidFileId, MAX_FILE_BYTES, storedFile, storedSize, storeOutgoingFile } from '../files';
 
 import { decideOffer } from '../limits';
+import { clearFileProgress, showFileProgress } from '../notifications';
 
 import { ChatCore } from './core';
 import { notifyMessage } from './notify';
@@ -72,6 +73,7 @@ export function dropIncomingFile(core: ChatCore, contact: string, id: string) {
   if (incoming?.contact !== contact) return;
   core.incomingFiles.delete(id);
   core.progress.delete(id);
+  clearFileProgress(id);
   core.writeQueue = core.writeQueue.then(() => incoming.handle.close()).catch((e) => log.warn('écriture du fichier', e));
 }
 
@@ -81,6 +83,11 @@ export function setProgress(core: ChatCore, id: string, value: number) {
   if (Date.now() - core.lastProgressNotify > PROGRESS_NOTIFY_MS) {
     core.lastProgressNotify = Date.now();
     core.notify();
+    // App en arrière-plan : un fichier reçu montre sa progression dans une notification.
+    const incoming = core.incomingFiles.get(id);
+    if (incoming && AppState.currentState !== 'active') {
+      showFileProgress(id, core.names.get(incoming.contact) ?? 'Pear', value).catch((e) => log.warn('notification', e));
+    }
   }
 }
 
@@ -176,7 +183,7 @@ export function receiveFileOffer(core: ChatCore, contact: string, data: Payload)
     });
     if (decision === 'ask') {
       const message = getMessage(data.id, contact);
-      if (message && AppState.currentState !== 'active') notifyMessage(core, contact, message);
+      if (message && AppState.currentState !== 'active') notifyMessage(core, contact);
       core.notify();
       return;
     }
@@ -286,6 +293,7 @@ function finishFile(core: ChatCore, contact: string, id: string, incoming: Incom
   incoming.handle.close();
   core.incomingFiles.delete(id);
   core.progress.delete(id);
+  clearFileProgress(id);
   const foreground = AppState.currentState === 'active';
   finishIncomingFile(id, contact, foreground && core.isReading(contact) ? 'read-pending' : 'delivered');
   core.links.get(contact)?.peer.send({ type: 'file-done', id });
@@ -297,7 +305,7 @@ function finishFile(core: ChatCore, contact: string, id: string, incoming: Incom
     setContactProfileField(contact, 'photo_uri', message.file_uri);
     deleteOldAvatars(contact, 0, id);
   }
-  if (!foreground && message && message.kind !== 'avatar') notifyMessage(core, contact, message);
+  if (!foreground && message && message.kind !== 'avatar') notifyMessage(core, contact);
   core.notify();
 }
 

@@ -36,6 +36,14 @@ async function resolveToken(core: ChatCore, contact: string) {
   return fresh;
 }
 
+// Envoie tout de suite ce qui attend, et attend la fin (réponse depuis une notification, app fermée :
+// Android peut arrêter l'app juste après).
+export async function deliverNow(core: ChatCore, contact: string) {
+  if (core.links.get(contact)?.status === 'connected') return;
+  const token = await resolveToken(core, contact);
+  if (token) await pushPending(core, contact, token);
+}
+
 async function pushPending(core: ChatCore, contact: string, token: string) {
   const keys = pushKeysFor(core, contact);
   let needsWake = false;

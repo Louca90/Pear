@@ -246,6 +246,23 @@ export function replaceContactRows(contacts: ContactRow[]) {
   });
 }
 
+// Ce que montre la notification d'une conversation : à partir du plus ancien message reçu non lu,
+// les messages des deux côtés (nos réponses depuis la notification y apparaissent), au plus 8.
+export function getNotificationMessages(contact: string): Message[] {
+  const firstUnread = db().getFirstSync<{ at: number | null }>(
+    "SELECT MIN(created_at) AS at FROM messages WHERE contact = ? AND mine = 0 AND status = 'delivered' AND kind NOT IN ('system', 'avatar')",
+    contact,
+  )?.at;
+  if (firstUnread == null) return [];
+  return db()
+    .getAllSync<Message>(
+      "SELECT * FROM messages WHERE contact = ? AND created_at >= ? AND kind NOT IN ('system', 'avatar') ORDER BY created_at DESC LIMIT 8",
+      contact,
+      firstUnread,
+    )
+    .reverse();
+}
+
 export function getPinnedContacts(): Set<string> {
   return new Set(db().getAllSync<{ public_key: string }>('SELECT public_key FROM contacts WHERE pinned = 1').map((row) => row.public_key));
 }

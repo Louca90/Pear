@@ -3,11 +3,11 @@ import { Animated, AppState, Easing, BackHandler, Dimensions, StyleSheet, View }
 import { NavigationBar } from 'expo-navigation-bar';
 import { StatusBar } from 'expo-status-bar';
 import * as Linking from 'expo-linking';
-import notifee, { EventType } from '@notifee/react-native';
-import { getMessaging, onMessage } from '@react-native-firebase/messaging';
+import notifee from '@notifee/react-native';
 
 import { addBackListener, backHookAvailable, completeBack, setBackMode } from './modules/pear-native';
 import { cleanupCache } from './src/chat/cleanup';
+import { handleNotificationEvent } from './src/chat/notificationActions';
 import { refreshRemoteConfig } from './src/remoteConfig';
 import { deleteMessages, getContactProfile, openDatabase } from './src/chat/database';
 import { clearNotificationTarget, setNotificationTarget, useNotificationTarget } from './src/chat/notificationTarget';
@@ -124,15 +124,9 @@ function App() {
     // Appuyer sur une notification ouvre directement la conversation : app fermée (notification
     // initiale), au premier plan (ici) ou en arrière-plan (index.ts). L'ouverture se fait plus bas.
     notifee.getInitialNotification().then((initial) => setNotificationTarget(initial?.notification.data?.contact));
-    const stopEvents = notifee.onForegroundEvent(({ type, detail }) => {
-      if (type === EventType.PRESS) setNotificationTarget(detail.notification?.data?.contact);
-    });
-    // Un push reçu app ouverte : on tente simplement de se reconnecter tout de suite.
-    const stopPush = onMessage(getMessaging(), async () => chat.retryAll());
-    return () => {
-      stopEvents();
-      stopPush();
-    };
+    const stopEvents = notifee.onForegroundEvent(handleNotificationEvent);
+    // Les pushs reçus app ouverte sont traités par le moteur des conversations (connections.ts).
+    return stopEvents;
   }, []);
 
   // On attend l'identité et les contacts. Un contact supprimé depuis ramène simplement à l'accueil.
