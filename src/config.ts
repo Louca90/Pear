@@ -99,7 +99,7 @@ export const MAX_STORED_SKIPPED = 200;
 // --- Médias ---
 
 // Débit des vidéos filmées et de l'incrustation du texte : une vidéo retouchée ne regonfle pas.
-export const VIDEO_BITRATE = 4_000_000;
+export const VIDEO_BITRATE = 2_500_000;
 export const PROFILE_PHOTO_QUALITY = 0.7;
 
 // --- Notifications ---

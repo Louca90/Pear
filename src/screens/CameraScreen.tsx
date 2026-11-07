@@ -1,10 +1,13 @@
 import { ComponentRef, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, FlatList, Linking, Modal, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import { CameraType, CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
+import { File, Paths } from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
 import { NavigationBar } from 'expo-navigation-bar';
 import { StatusBar } from 'expo-status-bar';
 import { Camera, Check, Download, Lock, Send, Settings, Square, SwitchCamera, X, Zap, ZapOff } from 'lucide-react-native';
+
+import { resizeImage } from '../../modules/pear-native';
 
 import { getContactProfile } from '../chat/database';
 import { saveToGallery } from '../chat/files';
@@ -26,6 +29,10 @@ const LOCK_DISTANCE = 112;
 const LOCK_REACH = 28;
 const SHUTTER_SIZE = 84;
 const PHOTO_QUALITY = 0.9;
+const PHOTO_MAX_SIZE = 2048;
+const PHOTO_JPEG_QUALITY = 82;
+const PHOTO_MAX_SIZE = 2048;
+const PHOTO_JPEG_QUALITY = 82;
 const SHEET_OPEN_MS = 260;
 const SHEET_CLOSE_MS = 200;
 const DOUBLE_TAP_MS = 300;
@@ -270,7 +277,14 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
     vibrate();
     try {
       const photo = await camera.current?.takePictureAsync({ quality: PHOTO_QUALITY });
-      if (photo?.uri) setCapture({ uri: photo.uri, kind: 'image', takenAt: Date.now() });
+      if (!photo?.uri) return;
+      // Réduite à 2048 px : Pear n'est pas une app photo, une image légère part plus vite (et passe le relais).
+      const small = new File(Paths.cache, ).uri;
+      const uri = await resizeImage(photo.uri, small, PHOTO_MAX_SIZE, PHOTO_JPEG_QUALITY).catch((e) => {
+        log.warn('réduction de la photo', e);
+        return photo.uri;
+      });
+      setCapture({ uri, kind: 'image', takenAt: Date.now() });
     } catch (e) {
       showDialog(t('camera.photoNonPrise'), String(e));
     }
@@ -392,7 +406,7 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
           style={StyleSheet.absoluteFill}
           facing={facing}
           mode="video"
-          videoQuality="1080p"
+          videoQuality="720p"
           videoBitrate={VIDEO_BITRATE}
           flash={flashOn ? 'on' : 'off'}
           enableTorch={flashOn && filming}
