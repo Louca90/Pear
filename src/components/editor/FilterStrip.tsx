@@ -1,5 +1,6 @@
 import { ComponentRef, useEffect, useRef } from 'react';
-import { Animated, Easing, NativeScrollEvent, NativeSyntheticEvent, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Animated, Easing, NativeScrollEvent, NativeSyntheticEvent, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 
 import { t } from '../../i18n';
@@ -8,32 +9,54 @@ import { createMediaStyles, radius, spacing } from '../../theme';
 import { lockTabSwipe } from '../tabSwipeLock';
 import { FilteredView } from './FilteredView';
 import { FILTERS, FilterId, NO_ADJUSTMENTS, presetOf, stepsOf } from './filters';
+import type { StampKind } from './stamps';
 
-// Dans l'appareil photo, seulement les filtres de couleur : l'heure et la date se posent après la prise.
-export const CAMERA_FILTERS = FILTERS.filter((preset) => !preset.stamp);
+// Tous les filtres, dans l'ordre de l'éditeur : Original, les marques, puis les couleurs.
+export const CAMERA_FILTERS = FILTERS;
 
-const ITEM_WIDTH = 64;
-const SWATCH_SIZE = 46;
+const ITEM_WIDTH = 66;
+const SWATCH_SIZE = 52;
 const EASING = Easing.bezier(0.2, 0.8, 0.2, 1);
 const HIDE_MS = 180;
 
-// Quatre aplats qui montrent ce que fait le filtre (le noir et blanc les grise, le sépia les brunit…).
-const SAMPLE = ['#E5483B', '#F4B400', '#2E9E5B', '#2D6CDF'];
+// Un petit paysage en aplats (ciel, soleil, nuage, collines) : assez de couleurs différentes, et du
+// blanc, pour que chaque filtre se voie (le noir et blanc grise, le chaud dore le ciel, le fané le voile…).
+function Scene({ size }: { size: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 52 52">
+      <Rect width={52} height={52} fill="#7FBDF0" />
+      <Circle cx={36} cy={16} r={7} fill="#FFC93C" />
+      <Circle cx={14} cy={18} r={4.5} fill="#FFFFFF" />
+      <Circle cx={19} cy={16} r={5.5} fill="#FFFFFF" />
+      <Circle cx={24} cy={19} r={4} fill="#FFFFFF" />
+      <Path d="M0 36 Q14 24 30 33 T52 30 V52 H0 Z" fill="#7CC36A" />
+      <Path d="M0 44 Q20 34 52 42 V52 H0 Z" fill="#2E8B4A" />
+      <Rect x={33} y={36} width={8} height={7} fill="#E5483B" />
+    </Svg>
+  );
+}
+
+// Les marques : un aperçu du texte lui-même, clair sur fond sombre (orange pour la pellicule).
+function StampSample({ kind, size }: { kind: StampKind; size: number }) {
+  const styles = useStyles();
+  if (kind === 'time') return <Text style={[styles.stampText, styles.stampTime, { fontSize: size * 0.3 }]}>12:30</Text>;
+  if (kind === 'date') return <Text style={[styles.stampText, styles.stampDate, { fontSize: size * 0.26 }]}>{`7
+nov.`}</Text>;
+  return <Text style={[styles.stampText, styles.stampFilm, { fontSize: size * 0.24 }]}>'26</Text>;
+}
 
 export function FilterSwatch({ id, size }: { id: FilterId; size: number }) {
   const styles = useStyles();
+  const preset = presetOf(id);
   return (
-    <View style={[styles.swatch, { width: size, height: size, borderRadius: size / 2 }]}>
-      <FilteredView steps={stepsOf(id, NO_ADJUSTMENTS)} style={StyleSheet.absoluteFill}>
-        <View style={styles.sampleRow}>
-          <View style={[styles.sample, { backgroundColor: SAMPLE[0] }]} />
-          <View style={[styles.sample, { backgroundColor: SAMPLE[1] }]} />
-        </View>
-        <View style={styles.sampleRow}>
-          <View style={[styles.sample, { backgroundColor: SAMPLE[2] }]} />
-          <View style={[styles.sample, { backgroundColor: SAMPLE[3] }]} />
-        </View>
-      </FilteredView>
+    <View style={[styles.swatch, { width: size, height: size, borderRadius: size / 2 }, preset.stamp && styles.swatchStamp]}>
+      {preset.stamp ? (
+        <StampSample kind={preset.stamp} size={size} />
+      ) : (
+        <FilteredView steps={stepsOf(id, NO_ADJUSTMENTS)} style={StyleSheet.absoluteFill}>
+          <Scene size={size} />
+        </FilteredView>
+      )}
     </View>
   );
 }
@@ -128,15 +151,32 @@ const useStyles = createMediaStyles((colors) => ({
   },
   swatch: {
     overflow: 'hidden',
-    borderWidth: 2,
+    borderWidth: 2.5,
     borderColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.35)',
   },
-  sampleRow: {
-    flex: 1,
-    flexDirection: 'row',
+  swatchStamp: {
+    backgroundColor: '#1C1C1E',
   },
-  sample: {
-    flex: 1,
+  stampText: {
+    color: colors.background,
+    textAlign: 'center',
+    includeFontPadding: false,
+  },
+  stampTime: {
+    fontFamily: 'sans-serif-thin',
+    letterSpacing: -0.5,
+  },
+  stampDate: {
+    fontFamily: 'serif',
+    lineHeight: 15,
+  },
+  stampFilm: {
+    fontFamily: 'monospace',
+    fontWeight: '700',
+    color: '#FF8A1F',
   },
   name: {
     position: 'absolute',

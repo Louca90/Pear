@@ -1,4 +1,4 @@
-import { dateLocale, t } from '../i18n';
+import { t } from '../i18n';
 import { ComponentRef, Ref, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Animated, Dimensions, Easing, Image, PanResponder, StyleSheet, Text, TextInput, View } from 'react-native';
 import { File, Paths } from 'expo-file-system';
@@ -16,6 +16,7 @@ import { AdjustPanel } from './editor/AdjustPanel';
 import { ColorMatrix, isIdentity, toMedia3 } from './editor/colorMatrix';
 import { FilteredView } from './editor/FilteredView';
 import { Adjustments, FilterId, matrixOf, neighborOf, NO_ADJUSTMENTS, presetOf, stepsOf } from './editor/filters';
+import { formatStamp, StampMarks } from './editor/stamps';
 
 const CAPTION_FONT = 20;
 const CAPTION_LINE_HEIGHT = 28;
@@ -23,7 +24,6 @@ const CAPTION_PADDING = 10;
 const CAPTION_MAX_LENGTH = 160;
 // Une lettre fait en moyenne un peu plus de la moitié de la taille de la police.
 const CAPTION_LETTER_WIDTH = CAPTION_FONT * 0.54;
-const STAMP_SHADOW_OPACITY = 0.45;
 const TAP_DISTANCE = 10;
 // Un glissé horizontal devient un changement de filtre au-delà de cette distance.
 const SWIPE_START = 12;
@@ -50,38 +50,6 @@ function wrapCaption(text: string, maxLetters: number) {
     else lines.push(word);
   }
   return lines;
-}
-
-function formatStamp(timestamp: number) {
-  const date = new Date(timestamp);
-  return {
-    time: `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`,
-    date: date.toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
-  };
-}
-
-function ShadowedText({ x, y, size, weight, children }: { x: number; y: number; size: number; weight: '400' | '600'; children: string }) {
-  const colors = useMediaColors();
-  const shared = { fontSize: size, fontWeight: weight, textAnchor: 'middle' as const };
-  return (
-    <>
-      <SvgText {...shared} x={x + 1} y={y + 2} fill={colors.text} opacity={STAMP_SHADOW_OPACITY}>{children}</SvgText>
-      <SvgText {...shared} x={x} y={y} fill={colors.background}>{children}</SvgText>
-    </>
-  );
-}
-
-type Stamp = ReturnType<typeof formatStamp>;
-
-// L'heure (et la date) des filtres Heure et Date, dessinées pareil à l'écran et dans le fichier.
-function StampMarks({ kind, stamp, width, height }: { kind: 'time' | 'date' | undefined; stamp: Stamp; width: number; height: number }) {
-  if (!kind) return null;
-  return (
-    <>
-      <ShadowedText x={width / 2} y={height * 0.42} size={72} weight="600">{stamp.time}</ShadowedText>
-      {kind === 'date' && <ShadowedText x={width / 2} y={height * 0.42 + 36} size={20} weight="400">{stamp.date}</ShadowedText>}
-    </>
-  );
 }
 
 function CaptionMarks({ lines, top, width, bandHeight }: { lines: string[]; top: number; width: number; bandHeight: number }) {

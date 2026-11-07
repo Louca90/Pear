@@ -1,5 +1,5 @@
 import { ComponentRef, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, Linking, Modal, PanResponder, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, Easing, Linking, useWindowDimensions, Modal, PanResponder, StyleSheet, Text, View } from 'react-native';
 import { CameraType, CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import { File, Paths } from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
@@ -17,13 +17,16 @@ import { ContactPickerSheet } from '../components/ContactPickerSheet';
 import { MediaEditor, MediaEditorHandle } from '../components/MediaEditor';
 import { FilteredView } from '../components/editor/FilteredView';
 import { FilterStrip, FilterSwatch } from '../components/editor/FilterStrip';
-import { FilterId, NO_ADJUSTMENTS, stepsOf } from '../components/editor/filters';
+import { FilterId, NO_ADJUSTMENTS, presetOf, stepsOf } from '../components/editor/filters';
+import { formatStamp, StampMarks } from '../components/editor/stamps';
+import Svg from 'react-native-svg';
 import { Button, IconButton, useInsets, useNavigationBarHeight } from '../components/ui';
 import { Contact } from '../storage';
 import { createMediaStyles, radius, spacing, useMediaColors } from '../theme';
 import { log } from '../log';
 import { VIDEO_BITRATE } from '../config';
 import { t } from '../i18n';
+import { logCameraStep } from './cameraTiming';
 
 // En dessous de ce temps, c'est une photo. Au-delà, le maintien filme.
 const HOLD_MS = 250;
@@ -40,6 +43,11 @@ const FLIP_TAP_DISTANCE = 10;
 const REVIEW_CONTROLS_MS = 180;
 
 // filter : le filtre choisi avant la prise, repris par l'éditeur (il ne touche pas encore au fichier).
+// Une fois la caméra autorisée, inutile d'attendre la relecture de la permission (asynchrone) pour
+// monter l'aperçu à la prochaine ouverture.
+let cameraKnownGranted = false;
+const PREVIEW_FADE_MS = 200;
+
 type Capture = { uri: string; kind: 'image' | 'video'; takenAt: number; filter: FilterId };
 
 function vibrate() {
@@ -154,6 +162,20 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
   const { top: topInset } = useInsets();
   const [cameraPermission, requestCamera] = useCameraPermissions();
   const [microphonePermission, requestMicrophone] = useMicrophonePermissions();
+  if (cameraPermission) cameraKnownGranted = cameraPermission.granted;
+  const cameraAllowed = cameraPermission?.granted ?? cameraKnownGranted;
+  // L'aperçu apparaît en fondu à la première image, sur l'interface déjà affichée.
+  const previewOpacity = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    logCameraStep('écran monté');
+  }, []);
+  useEffect(() => {
+    if (cameraPermission) logCameraStep('permission lue');
+  }, [cameraPermission?.granted]);
+  const onCameraReady = () => {
+    logCameraStep('première image');
+    Animated.timing(previewOpacity, { toValue: 1, duration: PREVIEW_FADE_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+  };
   const [facing, setFacing] = useState<CameraType>('back');
   const [flashOn, setFlashOn] = useState(false);
   const [filming, setFilming] = useState(false);
@@ -165,6 +187,16 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
   const [liveFilter, setLiveFilter] = useState<FilterId>('none');
   const liveFilterRef = useRef(liveFilter);
   liveFilterRef.current = liveFilter;
+  // Heure, Date, Pellicule : la marque se voit sur l'aperçu, mise à jour à chaque minute.
+  const liveStamp = presetOf(liveFilter).stamp;
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!liveStamp) return;
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 15_000);
+    return () => clearInterval(timer);
+  }, [liveStamp]);
+  const window = useWindowDimensions();
   const camera = useRef<ComponentRef<typeof CameraView>>(null);
   const barSpace = useBottomBarSpace();
 
@@ -380,9 +412,11 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
       <StatusBar style="light" />
       {/* Sur l'image de la caméra, la barre d'Android passe en clair pour rester visible. */}
       <NavigationBar style="light" />
-      {cameraPermission?.granted && (
+      {cameraAllowed && (
+        <Animated.View style={[StyleSheet.absoluteFill, { opacity: previewOpacity }]}>
         <FilteredView steps={stepsOf(liveFilter, NO_ADJUSTMENTS)} style={StyleSheet.absoluteFill}>
         <CameraView
+          onCameraReady={onCameraReady}
           ref={camera}
           style={StyleSheet.absoluteFill}
           facing={facing}
@@ -394,8 +428,15 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
           mute={!microphonePermission?.granted}
         />
         </FilteredView>
+        </Animated.View>
       )}
 
+      {liveStamp && (
+        <Svg pointerEvents="none" style={StyleSheet.absoluteFill} width={window.width} height={window.height}>
+          {/* Au-dessus du déclencheur et de la barre du bas, qui cachent le bas de l'écran. */}
+          <StampMarks kind={liveStamp} stamp={formatStamp(now)} width={window.width} height={window.height - barSpace - SHUTTER_SIZE} />
+        </Svg>
+      )}
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.flipFade, { opacity: flipFade }]} />
       <View collapsable={false} style={StyleSheet.absoluteFill} accessibilityLabel={t('camera.changerAide')} {...surface.panHandlers} />
 

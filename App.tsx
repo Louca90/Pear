@@ -42,6 +42,7 @@ import { UpdateScreen } from './src/update/UpdateScreen';
 import { log } from './src/log';
 import { interceptBack } from './src/navigation/backInterceptors';
 import { isTabSwipeLocked } from './src/components/tabSwipeLock';
+import { markCameraRequested } from './src/screens/cameraTiming';
 import { t } from './src/i18n';
 
 type Route =
@@ -562,6 +563,29 @@ function App() {
     );
   };
 
+  // L'appareil photo reste monté et allumé un moment après qu'on l'a quitté (caché sous la page) : y
+  // revenir est alors instantané. Au-delà, il est démonté et la caméra s'éteint.
+  const [cameraWarm, setCameraWarm] = useState(false);
+  const lastRouteName = useRef(route.name);
+  const cameraMarked = useRef(false);
+  if (route.name !== 'camera') cameraMarked.current = false;
+  else if (!cameraMarked.current) {
+    cameraMarked.current = true;
+    if (!cameraWarm) markCameraRequested();
+  }
+  useEffect(() => {
+    const left = lastRouteName.current === 'camera' && route.name !== 'camera';
+    lastRouteName.current = route.name;
+    if (route.name === 'camera') {
+      setCameraWarm(false);
+      return;
+    }
+    if (!left) return;
+    setCameraWarm(true);
+    const timer = setTimeout(() => setCameraWarm(false), CAMERA_WARM_MS);
+    return () => clearTimeout(timer);
+  }, [route.name]);
+
   // Les écrans montés : la page, son parent (et au-dessus les ancêtres déjà montés), chacun gardé par
   // sa clé pour ne jamais être remonté. Sous un onglet, rien : les onglets glissent entre eux.
   const layers: Route[] = [route];
@@ -593,6 +617,7 @@ function App() {
     return element;
   };
   const top = motionFor(currentKey);
+  const warmCamera = cameraWarm && !!identity && route.name !== 'camera' && !layers.some((layer) => layer.name === 'camera');
 
   if (onboarding && identity && !blocked) {
     return (
@@ -632,8 +657,18 @@ function App() {
       <NavigationBar style={barStyle} />
       {/* Retour en arrière, en fondu : la page se réduit, s'écarte du côté du geste et s'efface ; le parent,
           déjà monté dessous, se rapproche. À l'arrivée d'un écran, il entre en fondu sur l'ancien. */}
-      {layers.map((layer, index) => {
+      {/* L'appareil photo gardé au chaud passe en premier, caché, avec la même clé que l'onglet : en y
+          revenant, React garde l'écran et sa caméra déjà prête. */}
+      {[...(warmCamera ? [CAMERA_ROUTE] : []), ...layers].map((layer, position) => {
         const key = routeKey(layer);
+        if (warmCamera && position === 0) {
+          return (
+            <Animated.View key={key} pointerEvents="none" style={[StyleSheet.absoluteFill, styles.hidden]}>
+              {renderPage(layer, false)}
+            </Animated.View>
+          );
+        }
+        const index = position - (warmCamera ? 1 : 0);
         const isTop = index === layers.length - 1;
         if (!isTop) {
           const isParent = index === layers.length - 2;
@@ -708,6 +743,8 @@ function App() {
 }
 
 const THEME_FADE_MS = 320;
+const CAMERA_WARM_MS = 15_000;
+const CAMERA_ROUTE = { name: 'camera' } as Route;
 
 // Voile de la couleur de l'ancien thème, qui s'efface pendant que le nouveau apparaît dessous.
 function useThemeFade(colors: Palette) {

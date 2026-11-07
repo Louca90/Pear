@@ -1,6 +1,7 @@
 import type { ViewStyle } from 'react-native';
 
 import type { TextKey } from '../../i18n';
+import type { StampKind } from './stamps';
 import { brightness, chain, ColorMatrix, contrast, fade, FADE_GRAY, FADE_OPACITY, mix, saturation, SEPIA, temperature } from './colorMatrix';
 
 // Un filtre est une suite d'étapes. Les mêmes étapes donnent la matrice du fichier final (photo : SVG,
@@ -14,13 +15,17 @@ export type Step =
   | { op: 'warmth'; value: number } // -1 (froid) à 1 (chaud)
   | { op: 'fade'; value: number }; // 0 à 1
 
-export type FilterId = 'none' | 'bw' | 'sepia' | 'warm' | 'cool' | 'vivid' | 'faded' | 'vintage' | 'punch' | 'dark' | 'time' | 'date';
+export type FilterId = 'none' | 'time' | 'date' | 'film' | 'bw' | 'sepia' | 'warm' | 'cool' | 'vivid' | 'faded' | 'vintage' | 'punch' | 'dark';
 
-export type FilterPreset = { id: FilterId; label: TextKey; steps: Step[]; stamp?: 'time' | 'date' };
+export type FilterPreset = { id: FilterId; label: TextKey; steps: Step[]; stamp?: StampKind };
 
-// Le voile et la température en dernier : sur une vidéo, ils se posent par-dessus les autres étapes.
+// Original, puis les marques (heure, date, pellicule), puis les couleurs. Dans chaque filtre, le voile
+// et la température en dernier : sur une vidéo, ils se posent par-dessus les autres étapes.
 export const FILTERS: FilterPreset[] = [
   { id: 'none', label: 'editeur.filtreOriginal', steps: [] },
+  { id: 'time', label: 'editeur.filtreHeure', steps: [], stamp: 'time' },
+  { id: 'date', label: 'editeur.filtreDate', steps: [], stamp: 'date' },
+  { id: 'film', label: 'editeur.filtrePellicule', steps: [{ op: 'warmth', value: 0.35 }], stamp: 'film' },
   { id: 'bw', label: 'editeur.filtreNoirBlanc', steps: [{ op: 'saturate', value: 0 }, { op: 'contrast', value: 1.12 }] },
   { id: 'sepia', label: 'editeur.filtreSepia', steps: [{ op: 'sepia', value: 0.85 }, { op: 'contrast', value: 1.05 }] },
   { id: 'warm', label: 'editeur.filtreChaud', steps: [{ op: 'saturate', value: 1.1 }, { op: 'warmth', value: 0.8 }] },
@@ -30,8 +35,6 @@ export const FILTERS: FilterPreset[] = [
   { id: 'vintage', label: 'editeur.filtreVintage', steps: [{ op: 'sepia', value: 0.4 }, { op: 'saturate', value: 0.85 }, { op: 'warmth', value: 0.4 }, { op: 'fade', value: 0.8 }] },
   { id: 'punch', label: 'editeur.filtreContraste', steps: [{ op: 'contrast', value: 1.35 }, { op: 'saturate', value: 1.15 }] },
   { id: 'dark', label: 'editeur.filtreSombre', steps: [{ op: 'brightness', value: 0.58 }] },
-  { id: 'time', label: 'editeur.filtreHeure', steps: [], stamp: 'time' },
-  { id: 'date', label: 'editeur.filtreDate', steps: [], stamp: 'date' },
 ];
 
 export function presetOf(id: FilterId) {

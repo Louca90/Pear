@@ -235,6 +235,7 @@ export const it: Dictionary = {
     filtreSombre: 'Scuro',
     filtreHeure: 'Ora',
     filtreDate: 'Data',
+    filtrePellicule: 'Pellicola',
     filtreNoirBlanc: 'Bianco e nero',
     filtreSepia: 'Seppia',
     filtreChaud: 'Caldo',

@@ -234,6 +234,7 @@ export const fr = {
     filtreSombre: 'Sombre',
     filtreHeure: 'Heure',
     filtreDate: 'Date',
+    filtrePellicule: 'Pellicule',
     filtreNoirBlanc: 'Noir et blanc',
     filtreSepia: 'Sépia',
     filtreChaud: 'Chaud',
