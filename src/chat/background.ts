@@ -3,6 +3,7 @@ import { AppState } from 'react-native';
 import { loadContacts, loadOrCreateIdentity } from '../storage';
 import { chat } from './manager';
 import { BACKGROUND_MAX_AWAKE_MS, BACKGROUND_QUIET_MS } from '../config';
+import { recordPush } from '../diagnostics';
 import { log } from '../log';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -14,6 +15,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 //   contact concerné (à tous pour un réveil d'une ancienne version), puis on se rendort.
 export async function handleWake(message: { data?: { [key: string]: unknown } }) {
   log.info('push reçu', message.data?.type ?? 'wake');
+  recordPush(String(message.data?.type ?? 'wake'));
   if (AppState.currentState === 'active') return;
 
   const [identity, contacts] = await Promise.all([loadOrCreateIdentity(), loadContacts()]);

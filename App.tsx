@@ -22,6 +22,7 @@ import { ChatScreen } from './src/screens/chat/ChatScreen';
 import { ContactScreen } from './src/screens/ContactScreen';
 import { CustomizeScreen } from './src/screens/CustomizeScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
+import { DiagnosticScreen } from './src/screens/DiagnosticScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { ScannerScreen } from './src/screens/ScannerScreen';
 import { Contact, hasIdentity, loadContacts, loadOrCreateIdentity, saveContacts } from './src/storage';
@@ -39,6 +40,7 @@ type Route =
   | { name: 'camera' }
   | { name: 'scan' }
   | { name: 'profile' }
+  | { name: 'diagnostic' }
   | { name: 'customize'; publicKey: string }
   | { name: 'contact'; publicKey: string }
   | { name: 'chat'; publicKey: string };
@@ -169,6 +171,7 @@ function App() {
   const parentOf = (current: Route): Route | null => {
     if (current.name === 'home') return null;
     if (current.name === 'scan') return { name: 'add' };
+    if (current.name === 'diagnostic') return { name: 'profile' };
     if (current.name === 'customize') return { name: 'chat', publicKey: current.publicKey };
     if (current.name === 'contact' && isSaved(current.publicKey)) return { name: 'chat', publicKey: current.publicKey };
     return { name: 'home' };
@@ -287,7 +290,10 @@ function App() {
       );
     }
     if (current.name === 'profile') {
-      return <ProfileScreen onBack={() => setRoute({ name: 'home' })} />;
+      return <ProfileScreen onBack={() => setRoute({ name: 'home' })} onDiagnostic={() => setRoute({ name: 'diagnostic' })} />;
+    }
+    if (current.name === 'diagnostic') {
+      return <DiagnosticScreen onBack={() => setRoute({ name: 'profile' })} />;
     }
     if (current.name === 'customize') {
       const publicKey = current.publicKey;

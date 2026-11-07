@@ -110,6 +110,15 @@ class ChatManager extends ChatCore {
   }
 
   // Entre 0 et 1 pendant un transfert, undefined sinon.
+  // Pour l'écran Diagnostic.
+  getMyToken() {
+    return this.myToken;
+  }
+
+  countConnected() {
+    return [...this.links.values()].filter((link) => link.status === 'connected').length;
+  }
+
   getProgress(id: string) {
     return this.progress.get(id);
   }

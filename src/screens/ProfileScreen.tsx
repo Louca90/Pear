@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AppState, KeyboardAvoidingView, Linking, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { Bell, Camera, Check, ChevronRight, Download, ImageMinus, RefreshCw, ShieldCheck } from 'lucide-react-native';
+import { Bell, Camera, Check, ChevronRight, Download, ImageMinus, RefreshCw, ShieldCheck, Stethoscope } from 'lucide-react-native';
 
 import { appVersionCode, appVersionName } from '../../modules/pear-native';
 
@@ -20,7 +20,7 @@ const THEMES: { value: ThemePreference; label: string }[] = [
   { value: 'dark', label: t('profil.themeSombre') },
 ];
 
-export function ProfileScreen({ onBack }: { onBack: () => void }) {
+export function ProfileScreen({ onBack, onDiagnostic }: { onBack: () => void; onDiagnostic: () => void }) {
   const colors = useColors();
   const styles = useStyles();
   const theme = useThemePreference();
@@ -102,6 +102,11 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
           <Pressable onPress={() => Linking.openSettings()} style={({ pressed }) => [styles.setting, pressed && styles.pressed]}>
             <Bell size={20} color={colors.text} strokeWidth={1.75} />
             <Text style={styles.settingLabel}>{t('commun.notifications')}</Text>
+            <ChevronRight size={20} color={colors.textMuted} strokeWidth={1.75} />
+          </Pressable>
+          <Pressable onPress={onDiagnostic} style={({ pressed }) => [styles.setting, styles.settingGap, pressed && styles.pressed]}>
+            <Stethoscope size={20} color={colors.text} strokeWidth={1.75} />
+            <Text style={styles.settingLabel}>{t('diag.ouvrir')}</Text>
             <ChevronRight size={20} color={colors.textMuted} strokeWidth={1.75} />
           </Pressable>
 
@@ -222,6 +227,9 @@ const useStyles = createStyles((colors) => ({
   },
   rows: {
     gap: spacing.sm,
+  },
+  settingGap: {
+    marginTop: spacing.sm,
   },
   pressed: {
     opacity: 0.6,

@@ -4,6 +4,7 @@ import { addNetworkStateListener, getNetworkStateAsync, NetworkState } from 'exp
 import { deriveSharedSecret, Identity } from '../../crypto/pairing';
 import { PeerLink } from '../../network/peer';
 import { publishTokens } from '../../network/tokens';
+import { recordPush } from '../../diagnostics';
 
 import { ChatCore } from './core';
 import { receivePush } from './incoming';
@@ -73,6 +74,7 @@ export function watch(core: ChatCore) {
     .catch((e) => log.warn('token FCM', e));
   // App ouverte : les pushs arrivent ici. Un message qui n'a pas pu passer en direct s'affiche quand même.
   onMessage(messaging, (message) => {
+    recordPush(String(message.data?.type ?? 'wake'));
     if (message.data?.type === 'msg') receivePush(core, message.data);
     else retryAll(core);
   });
