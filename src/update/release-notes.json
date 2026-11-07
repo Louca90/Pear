@@ -1,5 +1,5 @@
 {
-  "version": "1.3.0",
-  "versionCode": 5,
-  "summary": "- Les messages arrivent même quand Pear est fermé : ils voyagent chiffrés dans la notification.\n- Tu peux répondre ou marquer comme lu directement depuis la notification.\n- Nouveau thème sombre (ou automatique) dans ton profil.\n- Un écran « Diagnostic des notifications » aide à comprendre quand un message tarde.\n- Chiffrement renforcé : tes conversations passent sur des clés neuves, sans rien perdre."
+  "version": "1.4.0",
+  "versionCode": 6,
+  "summary": "- Nouvelle prise en main : quelques écrans pour régler les autorisations, ton profil et ton thème.\n- Un seul scan suffit pour ajouter quelqu'un : il reçoit une demande et l'accepte depuis la cloche.\n- Ton profil a son onglet dans la barre du bas, les réglages sont derrière l'engrenage.\n- Photos et vidéos arrivent même quand vous n'êtes pas connectés en même temps.\n- Retour en arrière plus doux, en fondu."
 }
