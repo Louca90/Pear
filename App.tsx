@@ -65,7 +65,9 @@ const BACK_CANCEL_MS = 220;
 // Démarre vite et se pose doucement, sans dépasser : jamais de rebond.
 const BACK_EASING = Easing.bezier(0.2, 0.8, 0.2, 1);
 // Si le retour a seulement fermé quelque chose dans la page, celle-ci revient à sa place après ce délai.
-const BACK_SETTLE_MS = 250;
+// Filet de sécurité seulement : normalement la page est remise en place au changement d'écran (sinon
+// l'ancien écran réapparaît une image si le retour natif tarde).
+const BACK_SETTLE_MS = 1500;
 const BACK_PAGE_SHIFT = 16;
 // Glissement entre onglets : la page et l'onglet voisin suivent le doigt ; au-delà du seuil (ou d'un
 // geste rapide), le voisin finit de prendre la place.
