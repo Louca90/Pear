@@ -1,10 +1,10 @@
 import { Text, View } from 'react-native';
-import { Flame } from 'lucide-react-native';
+import { EllipsisVertical, Flame } from 'lucide-react-native';
 
 import { getContactProfile, getStreak } from '../../../chat/database';
 import { chat } from '../../../chat/manager';
 import { Avatar, Header, IconButton } from '../../../components/ui';
-import { createStyles, radius, spacing, useColors } from '../../../theme';
+import { createStyles, spacing, useColors } from '../../../theme';
 
 import { ROUTE } from '../constants';
 import { t } from '../../../i18n';
@@ -45,9 +45,8 @@ export function ChatHeader({ contactKey, name, onBack, onInfo, onCustomize }: Pr
                 <Text style={styles.streakCount}>{streak}</Text>
               </View>
             )}
-            <IconButton onPress={onCustomize} label={t('chat.personnaliser')} style={styles.moreButton}>
-              <View style={styles.moreDot} />
-              <View style={styles.moreDot} />
+            <IconButton onPress={onCustomize} label={t('chat.personnaliser')}>
+              <EllipsisVertical size={24} color={colors.text} strokeWidth={1.75} />
             </IconButton>
           </View>
         }
@@ -75,17 +74,5 @@ const useStyles = createStyles((colors) => ({
     fontWeight: '600',
     color: colors.text,
   },
-  moreButton: {
-    height: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 4,
-  },
-  moreDot: {
-    width: 4,
-    height: 4,
-    borderRadius: radius.full,
-    backgroundColor: colors.text,
-  },
+
 }));
