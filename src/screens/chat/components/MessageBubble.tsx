@@ -226,7 +226,7 @@ export function Bubble({ message, name, palettes, hidden, mediaHidden, pulse, on
         </Pressable>
         {badge.shown && (
           <Animated.View style={badge.style}>
-            <Pressable onPress={() => onShowReactions?.(message)} disabled={!onShowReactions} hitSlop={6} style={styles.reactions} accessibilityLabel={t('reactions.titre')}>
+            <Pressable onPress={() => onShowReactions?.(message)} disabled={!onShowReactions} hitSlop={6} style={[styles.reactions, bare && styles.reactionsBare]} accessibilityLabel={t('reactions.titre')}>
               {lastReactions.current.map((emoji, index) => (
                 <Text key={index} style={styles.reactionEmoji}>{emoji}</Text>
               ))}
@@ -306,6 +306,10 @@ const useLocalStyles = createStyles((colors) => ({
     backgroundColor: colors.background,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  // Photo ou vidéo sans bulle : l'heure est juste dessous, le badge passe en dessous au lieu de la recouvrir.
+  reactionsBare: {
+    marginTop: 4,
   },
   reactionEmoji: {
     fontSize: 14,

@@ -67,7 +67,7 @@ export function LanguageSheet({ onClose }: { onClose: () => void }) {
             key={option.code}
             onPress={() => choose(option.code)}
             accessibilityState={{ selected: option.code === current }}
-            style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+            style={({ pressed }) => [styles.row, option.code === current && styles.rowSelected, pressed && styles.pressed]}
           >
             <Text style={styles.name}>{option.name}</Text>
             {option.code === current && <Check size={20} color={colors.text} strokeWidth={2} />}
@@ -97,7 +97,7 @@ const useStyles = createStyles((colors) => ({
     bottom: 0,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    backgroundColor: colors.background,
+    backgroundColor: colors.elevated,
   },
   header: {
     paddingTop: spacing.sm,
@@ -108,7 +108,8 @@ const useStyles = createStyles((colors) => ({
     width: 36,
     height: 4,
     borderRadius: radius.full,
-    backgroundColor: colors.border,
+    backgroundColor: colors.textMuted,
+    opacity: 0.5,
     marginBottom: spacing.md,
   },
   title: {
@@ -122,6 +123,9 @@ const useStyles = createStyles((colors) => ({
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
     height: 52,
+  },
+  rowSelected: {
+    backgroundColor: colors.elevatedActive,
   },
   pressed: {
     opacity: 0.6,

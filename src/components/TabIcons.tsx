@@ -6,7 +6,7 @@ import { useColors } from '../theme';
 // Icônes pleines de la barre du bas, dessinées à la main pour que leurs éléments bougent à l'intérieur
 // (pas un simple agrandissement de l'icône). `kick` va de 0 à 1 à chaque sélection, sans rebond.
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
-const AnimatedG = Animated.createAnimatedComponent(G);
+const AnimatedPath = Animated.createAnimatedComponent(Path);
 
 type IconProps = { size: number; kick: Animated.Value };
 
@@ -60,20 +60,26 @@ export function CameraFilled({ size, kick }: IconProps) {
   );
 }
 
-// Deux personnes : celle de derrière sort de derrière la première, qui hoche la tête.
-// Le contour de la personne de devant, couleur du rond, la détache de celle de derrière.
+// Le tracé exact de l'icône au repos (Users de Lucide) : la personne de devant se remplit et hoche
+// la tête, celle de derrière garde ses deux traits, qui se redessinent l'un après l'autre.
+const BEHIND_HEAD = 'M16 3.13a4 4 0 0 1 0 7.75';
+const BEHIND_BODY = 'M22 21v-2a4 4 0 0 0-3-3.87';
+const BEHIND_HEAD_LENGTH = 12.5;
+const BEHIND_BODY_LENGTH = 7;
+
 export function ContactsFilled({ size, kick }: IconProps) {
   const colors = useColors();
-  const behind = kick.interpolate({ inputRange: [0, 0.15, 0.6, 1], outputRange: [0, -3.5, 0, 0], extrapolate: 'clamp' });
+  // Effacé dès le départ, puis redessiné : la tête de 0,05 à 0,5, le corps de 0,3 à 0,75.
+  const drawn = (length: number, start: number, end: number) =>
+    kick.interpolate({ inputRange: [0, 0.01, start, end, 1], outputRange: [0, length, length, 0, 0], extrapolate: 'clamp' });
+  const behind = { fill: 'none', stroke: colors.text, strokeWidth: 1.75, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
-      <AnimatedG x={behind}>
-        <Circle cx={16.5} cy={7.5} r={3.2} fill={colors.text} />
-        <Path d="M13 21v-2.2a4 4 0 0 1 4-4h1a4 4 0 0 1 4 4V21Z" fill={colors.text} />
-      </AnimatedG>
-      <G stroke={colors.elevatedActive} strokeWidth={1.75} fill={colors.text}>
+      <AnimatedPath d={BEHIND_HEAD} {...behind} strokeDasharray={`${BEHIND_HEAD_LENGTH} ${BEHIND_HEAD_LENGTH}`} strokeDashoffset={drawn(BEHIND_HEAD_LENGTH, 0.05, 0.5)} />
+      <AnimatedPath d={BEHIND_BODY} {...behind} strokeDasharray={`${BEHIND_BODY_LENGTH} ${BEHIND_BODY_LENGTH}`} strokeDashoffset={drawn(BEHIND_BODY_LENGTH, 0.3, 0.75)} />
+      <G fill={colors.text} stroke={colors.text} strokeWidth={1.75} strokeLinejoin="round">
         <AnimatedCircle cx={9} cy={bump(kick, 0.35, 0.85, 7, 5.8)} r={4} />
-        <Path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2Z" strokeLinejoin="round" />
+        <Path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2Z" />
       </G>
     </Svg>
   );
