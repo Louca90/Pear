@@ -294,8 +294,12 @@ const useStyles = createMediaStyles((colors) => ({
     gap: spacing.md,
     alignItems: 'center',
   },
+  // Passe à la ligne plutôt que de déborder (langues aux mots longs, petits écrans).
   aspects: {
+    alignSelf: 'stretch',
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
     gap: spacing.sm,
   },
   chip: {
