@@ -162,10 +162,8 @@ export const fr = {
     supprimerAide: 'Vos messages avec lui seront effacés de ce téléphone, et il faudra refaire le pairing.',
     nouveau: 'Nouveau contact',
     codeVerification: 'Code de vérification',
-    codeVerificationAide: 'Ce code doit être identique sur les deux téléphones. S\'il est différent, ne continuez pas.',
     nom: 'Nom',
     nomContact: 'Nom du contact',
-    montrerCode: 'Montrer mon code',
     supprimer: 'Supprimer ce contact',
   },
   ajout: {

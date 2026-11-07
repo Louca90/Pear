@@ -476,6 +476,7 @@ function App() {
         />
       );
     }
+    // code : la clé scannée est valide (sinon un message et retour à l'accueil, plus haut).
     if (current.name === 'contact' && code?.length) {
       const publicKey = current.publicKey;
       const saved = contacts.find((contact) => contact.publicKey === publicKey);
@@ -485,7 +486,6 @@ function App() {
           key={publicKey}
           initialName={saved?.name ?? current.suggestedName ?? ''}
           profile={getContactProfile(publicKey)}
-          code={code}
           isNew={!saved}
           onBack={() => backFromContact(publicKey)}
           onSave={(name) => {
@@ -495,7 +495,6 @@ function App() {
             if (!saved) chat.requestPairing(publicKey);
             setRoute({ name: 'chat', publicKey });
           }}
-          myPublicKey={identity.publicKey}
           blocked={isBlocked(publicKey)}
           onToggleBlock={() => (isBlocked(publicKey) ? chat.unblockContact(publicKey) : chat.blockContact(publicKey))}
           onRemove={() => {
