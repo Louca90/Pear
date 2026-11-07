@@ -21,6 +21,7 @@ const PEAR = require('../../assets/android-icon-foreground.png');
 const MOVE_MS = 560;
 const FADE_MS = 260;
 const CHECK_MS = 320;
+const INTRO_MS = 700;
 // Démarre vite et se pose doucement, sans dépasser : jamais de rebond.
 const EASING = Easing.bezier(0.2, 0.8, 0.2, 1);
 
@@ -89,6 +90,11 @@ export function OnboardingScreen({ mode, initialStep, onDone }: Props) {
   const position = useRef(new Animated.Value(initialStep)).current;
   const content = useRef(new Animated.Value(0)).current;
   const finishing = useRef(new Animated.Value(0)).current;
+  // Entrée de la poire au premier affichage : elle arrive de la gauche en tournant légèrement.
+  const intro = useRef(new Animated.Value(initialStep === 0 ? 0 : 1)).current;
+  useEffect(() => {
+    Animated.timing(intro, { toValue: 1, duration: INTRO_MS, easing: EASING, useNativeDriver: true }).start();
+  }, [intro]);
   const [states, setStates] = useState<Record<PermissionId, PermissionState> | null>(null);
   const [manufacturerAdvice, setManufacturerAdvice] = useState<{ brand: string; settings: boolean } | null>(null);
   const saved = chat.getMyProfile();
@@ -173,12 +179,17 @@ export function OnboardingScreen({ mode, initialStep, onDone }: Props) {
   const afterPermissions = () => (mode === 'full' ? goTo(2) : finish());
 
   // La poire : une image de `width` de côté, dont le dessin occupe à peu près le centre.
+  // Bienvenue : énorme, sur la gauche, elle déborde de l'écran par le haut et le côté, un peu tournée.
+  // Ensuite : petite en haut au centre, puis au centre de l'écran pour ouvrir l'app.
+  const pearTranslateX = position.interpolate({ inputRange: [0, 1, 2, 3], outputRange: [-width * 0.42, 0, 0, 0] });
   const pearTranslateY = position.interpolate({
     inputRange: [0, 1, 2, 3],
-    outputRange: [-width * 0.42, top - width * 0.33, top - width * 0.33, height / 2 - width / 2 - top],
+    outputRange: [height * 0.26 - width / 2, top - width * 0.33, top - width * 0.33, height / 2 - width / 2 - top],
   });
-  const pearScale = position.interpolate({ inputRange: [0, 1, 2, 3], outputRange: [2.1, 0.36, 0.36, 0.7] });
-  const pearRotate = position.interpolate({ inputRange: [0, 1, 2, 3], outputRange: ['0deg', '0deg', '-10deg', '0deg'] });
+  const pearScale = position.interpolate({ inputRange: [0, 1, 2, 3], outputRange: [3, 0.36, 0.36, 0.7] });
+  const pearRotate = position.interpolate({ inputRange: [0, 1, 2, 3], outputRange: ['-16deg', '0deg', '-10deg', '0deg'] });
+  const introX = intro.interpolate({ inputRange: [0, 1], outputRange: [-width * 0.35, 0] });
+  const introRotate = intro.interpolate({ inputRange: [0, 1], outputRange: ['-12deg', '0deg'] });
   const finishScale = finishing.interpolate({ inputRange: [0, 1], outputRange: [1, 1.5] });
   const contentStyle = {
     opacity: content,
@@ -190,15 +201,28 @@ export function OnboardingScreen({ mode, initialStep, onDone }: Props) {
       <Animated.Image
         source={PEAR}
         resizeMode="contain"
+        // Android fait apparaître chaque image en fondu (300 ms) : la poire doit être là tout de suite.
+        fadeDuration={0}
         style={[
           styles.pear,
           { width, height: width, tintColor: colors.text },
-          { transform: [{ translateY: pearTranslateY }, { scale: pearScale }, { scale: finishScale }, { rotate: pearRotate }] },
+          {
+            opacity: intro,
+            transform: [
+              { translateX: pearTranslateX },
+              { translateX: introX },
+              { translateY: pearTranslateY },
+              { scale: pearScale },
+              { scale: finishScale },
+              { rotate: pearRotate },
+              { rotate: introRotate },
+            ],
+          },
         ]}
       />
       <KeyboardAvoidingView behavior="padding" style={styles.flex}>
         <ScrollView
-          contentContainerStyle={[styles.content, { paddingTop: step === 0 ? height * 0.42 : top + width * 0.36, paddingBottom: bottom + spacing.lg }]}
+          contentContainerStyle={[styles.content, { paddingTop: step === 0 ? height * 0.6 : top + width * 0.36, paddingBottom: bottom + spacing.lg }]}
           keyboardShouldPersistTaps="handled"
         >
           <Animated.View style={[styles.flex, contentStyle]}>
