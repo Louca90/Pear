@@ -1,5 +1,5 @@
 {
-  "version": "1.5.0",
-  "versionCode": 7,
-  "summary": "- Nouvel appareil photo : il s'ouvre plus vite, filtres en direct à faire défiler autour du déclencheur, zoom ×0,5 / ×1 / ×2, et on peut changer de caméra sans arrêter la vidéo.\n- Éditeur façon Snap : filtres, textes, stickers, dessin, recadrage, et pour les vidéos découpe, son et vitesse.\n- Sauvegarde chiffrée par mot de passe pour changer de téléphone, ou juste ton profil.\n- Partage tes photos et vidéos vers Pear depuis la galerie.\n- Pear parle maintenant 7 langues, et la liste des conversations est plus claire."
+  "version": "1.5.1",
+  "versionCode": 8,
+  "summary": "- La mise à jour ne s'arrête plus sur « Téléchargement refusé (504) » : elle réessaie toute seule.\n- Caméra plus fiable : elle ne reste plus noire à l'ouverture, la photo est exactement l'image plein écran, et la caméra avant a un flash d'écran.\n- Photo de profil recadrée en carré et tournée avant d'être enregistrée.\n- Galerie de Pear bien plus rapide, et un nouveau menu pour joindre photos et fichiers."
 }

@@ -1,5 +1,40 @@
 # Journal des versions
 
+## 1.5.1 (versionCode 8)
+
+### Résumé
+
+- La mise à jour ne s'arrête plus sur « Téléchargement refusé (504) » : elle réessaie toute seule.
+- Caméra plus fiable : elle ne reste plus noire à l'ouverture, la photo est exactement l'image plein écran, et la caméra avant a un flash d'écran.
+- Photo de profil recadrée en carré et tournée avant d'être enregistrée.
+- Galerie de Pear bien plus rapide, et un nouveau menu pour joindre photos et fichiers.
+
+### Détails
+
+#### Nouveautés
+
+- Flash de la caméra avant : l'écran s'allume en blanc à pleine luminosité pour la photo ; pour la vidéo, un cadre blanc doux éclaire le visage.
+- Photo de profil : recadrage en carré (un cercle montre ce qui restera) et rotation, enregistrée dès « Terminé », dans le Profil comme à la prise en main.
+- Pièces jointes : le rond du trombone s'allonge en pilule sur le champ de texte (Photos, Fichier) et le trombone devient une croix ; un appui ailleurs le referme.
+
+#### Corrections
+
+- Mise à jour : 3 essais en cas d'erreur 502/503/504 ou de coupure, reprise refusée = on repart de zéro, et des messages clairs au lieu du texte technique.
+- Caméra qui restait noire et obligeait à changer d'onglet : l'ancien écran coupait la caméra du nouveau.
+- Photo prise : recadrée comme l'aperçu plein écran, au lieu d'une photo en 3:4.
+- Photo envoyée à plusieurs contacts depuis la caméra : plus de message d'erreur alors qu'elle était partie ; seuls les vrais échecs sont signalés, avec le nom du contact.
+- Galerie : vignettes d'Android à la bonne taille au lieu des photos entières, et plus de photos en double en faisant défiler.
+- Conversation : barre de défilement d'Android à la place de la barre maison.
+- Demandes d'ajout : le code de vérification n'est plus affiché.
+- Ombre des pastilles de filtre plus coupée, ligne soulevée pour épingler une conversation qui ne dépasse plus de l'écran.
+- Photo de profil : plus d'écran noir après l'enregistrement, orientation des photos de la galerie respectée.
+
+#### Technique
+
+- Téléchargement natif en plusieurs essais (reprise par Range, 416 = repartir de zéro).
+- PearCamera : aperçu et photo en 4:3, recadrage aux proportions de l'écran en un seul passage avec la rotation ; flash d'écran de CameraX (FLASH_MODE_SCREEN) ; chaque vue ne détache que ses propres usages, ouverture ratée relancée.
+- Nouvelles fonctions natives : thumbnail (loadThumbnail en cache), cropImage et imageSize (EXIF), setScreenBrightness.
+
 ## 1.5.0 (versionCode 7)
 
 ### Résumé
