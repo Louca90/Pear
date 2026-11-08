@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, Easing, FlatList, Linking, Modal, PixelRatio, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { File } from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library/legacy';
@@ -113,7 +113,15 @@ function AssetGrid({ section, album, selected, onToggle }: { section: Section; a
   const [assets, setAssets] = useState<MediaLibrary.Asset[]>([]);
   const [next, setNext] = useState<string | null>(null);
 
+  // onEndReached se déclenche souvent plusieurs fois avant la fin d'un chargement : une seule page à
+  // la fois, et jamais deux fois la même photo (sinon : deux cases avec la même clé).
+  const generation = useRef(0);
+  const pending = useRef<string | null>(null);
   const load = async (after?: string) => {
+    if (after && pending.current === after) return;
+    // Un nouvel onglet ou album : les pages encore en route pour l'ancien sont ignorées.
+    const run = after ? generation.current : ++generation.current;
+    pending.current = after ?? null;
     const page = await MediaLibrary.getAssetsAsync({
       first: PAGE_SIZE,
       after,
@@ -121,7 +129,12 @@ function AssetGrid({ section, album, selected, onToggle }: { section: Section; a
       mediaType: album ? ['photo', 'video'] : section === 'videos' ? ['video'] : ['photo'],
       sortBy: [['creationTime', false]],
     });
-    setAssets((current) => (after ? [...current, ...page.assets] : page.assets));
+    if (generation.current !== run) return;
+    setAssets((current) => {
+      if (!after) return page.assets;
+      const known = new Set(current.map(({ id }) => id));
+      return [...current, ...page.assets.filter(({ id }) => !known.has(id))];
+    });
     setNext(page.hasNextPage ? page.endCursor : null);
   };
 
