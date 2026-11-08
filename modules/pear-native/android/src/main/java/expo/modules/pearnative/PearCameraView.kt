@@ -81,7 +81,12 @@ class PearCameraView(context: Context, appContext: AppContext) : ExpoView(contex
     implementationMode = PreviewView.ImplementationMode.COMPATIBLE
     scaleType = PreviewView.ScaleType.FILL_CENTER
   }
-  private val preview = Preview.Builder().build().also { it.surfaceProvider = previewView.surfaceProvider }
+  // L'aperçu en 4:3, comme la photo : ils voient la même image, et la photo n'a plus qu'à être
+  // recadrée comme l'écran (FILL_CENTER) pour être exactement ce qu'on a vu.
+  private val preview = Preview.Builder()
+    .setResolutionSelector(ResolutionSelector.Builder().setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY).build())
+    .build()
+    .also { it.surfaceProvider = previewView.surfaceProvider }
   private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
   private var provider: ProcessCameraProvider? = null
@@ -133,7 +138,32 @@ class PearCameraView(context: Context, appContext: AppContext) : ExpoView(contex
 
   fun setFlash(value: Boolean) {
     flash = value
-    imageCapture?.flashMode = if (value) ImageCapture.FLASH_MODE_ON else ImageCapture.FLASH_MODE_OFF
+    imageCapture?.let { photo ->
+      try {
+        applyFlash(photo)
+      } catch (e: Exception) {
+        Log.w(TAG, "flash", e)
+        photo.flashMode = ImageCapture.FLASH_MODE_OFF
+      }
+    }
+  }
+
+  // Caméra avant : pas de vrai flash, c'est l'écran qui s'allume en blanc à pleine luminosité
+  // (le « flash d'écran » de CameraX : PreviewView se couvre de blanc, règle la luminosité, attend
+  // que l'exposition suive, puis prend la photo).
+  private fun applyFlash(photo: ImageCapture) {
+    if (facing == "front") {
+      val window = appContext.currentActivity?.window
+      if (flash && window != null) {
+        previewView.setScreenFlashWindow(window)
+        photo.screenFlash = previewView.screenFlash
+        photo.flashMode = ImageCapture.FLASH_MODE_SCREEN
+        return
+      }
+      photo.flashMode = ImageCapture.FLASH_MODE_OFF
+      return
+    }
+    photo.flashMode = if (flash) ImageCapture.FLASH_MODE_ON else ImageCapture.FLASH_MODE_OFF
   }
 
   fun setActive(value: Boolean) {
@@ -188,7 +218,6 @@ class PearCameraView(context: Context, appContext: AppContext) : ExpoView(contex
           )
           .build()
           .also { imageCapture = it }
-        photo.flashMode = if (flash) ImageCapture.FLASH_MODE_ON else ImageCapture.FLASH_MODE_OFF
         val video = videoCapture ?: VideoCapture.withOutput(
           Recorder.Builder()
             .setQualitySelector(QualitySelector.from(Quality.HD, FallbackStrategy.lowerQualityOrHigherThan(Quality.HD)))
@@ -209,6 +238,12 @@ class PearCameraView(context: Context, appContext: AppContext) : ExpoView(contex
           cameraProvider.bindToLifecycle(owner, selector(), preview, video)
         }
         camera = bound
+        try {
+          applyFlash(photo)
+        } catch (e: Exception) {
+          Log.w(TAG, "flash", e)
+          photo.flashMode = ImageCapture.FLASH_MODE_OFF
+        }
         applyZoom()
         bound.cameraControl.enableTorch(torch)
 
@@ -241,9 +276,11 @@ class PearCameraView(context: Context, appContext: AppContext) : ExpoView(contex
     val photo = imageCapture
     if (photo == null || !photoAvailable || camera == null) {
       val frame = previewView.bitmap ?: return promise.reject("ERR_PEAR_CAMERA", "La caméra n'est pas prête.", null)
-      save(frame, 0, maxSize, quality, promise)
+      save(frame, 0, maxSize, quality, null, promise)
       return
     }
+    // Le cadre de l'écran au moment de la prise : la photo sera recadrée à ses proportions.
+    val aspect = if (width > 0 && height > 0) width.toFloat() / height else null
     photo.takePicture(
       ContextCompat.getMainExecutor(context),
       object : ImageCapture.OnImageCapturedCallback() {
@@ -257,7 +294,7 @@ class PearCameraView(context: Context, appContext: AppContext) : ExpoView(contex
             return
           }
           image.close()
-          save(bitmap, rotation, maxSize, quality, promise)
+          save(bitmap, rotation, maxSize, quality, aspect, promise)
         }
 
         override fun onError(exception: ImageCaptureException) {
@@ -267,16 +304,31 @@ class PearCameraView(context: Context, appContext: AppContext) : ExpoView(contex
     )
   }
 
-  private fun save(source: Bitmap, rotation: Int, maxSize: Int, quality: Int, promise: Promise) {
+  // aspect : largeur / hauteur de l'écran ; la photo (une fois tournée) est recadrée au centre à ces
+  // proportions, comme l'aperçu plein écran. Recadrage, rotation et réduction en un seul passage.
+  private fun save(source: Bitmap, rotation: Int, maxSize: Int, quality: Int, aspect: Float?, promise: Promise) {
     scope.launch {
       try {
         val result = withContext(Dispatchers.Default) {
-          val scale = minOf(1f, maxSize.toFloat() / maxOf(source.width, source.height))
+          val sideways = rotation % 180 != 0
+          val turnedWidth = if (sideways) source.height else source.width
+          val turnedHeight = if (sideways) source.width else source.height
+          var keptWidth = turnedWidth
+          var keptHeight = turnedHeight
+          if (aspect != null && aspect > 0f) {
+            if (turnedWidth.toFloat() / turnedHeight > aspect) keptWidth = (turnedHeight * aspect).toInt() else keptHeight = (turnedWidth / aspect).toInt()
+          }
+          val cropWidth = (if (sideways) keptHeight else keptWidth).coerceIn(1, source.width)
+          val cropHeight = (if (sideways) keptWidth else keptHeight).coerceIn(1, source.height)
+          val left = (source.width - cropWidth) / 2
+          val top = (source.height - cropHeight) / 2
+          val scale = minOf(1f, maxSize.toFloat() / maxOf(cropWidth, cropHeight))
           val matrix = Matrix().apply {
             postRotate(rotation.toFloat())
             postScale(scale, scale)
           }
-          val output = if (rotation == 0 && scale >= 1f) source else Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, true)
+          val cropped = cropWidth != source.width || cropHeight != source.height
+          val output = if (rotation == 0 && scale >= 1f && !cropped) source else Bitmap.createBitmap(source, left, top, cropWidth, cropHeight, matrix, true)
           val file = File(context.cacheDir, "photo-${System.currentTimeMillis()}.jpg")
           FileOutputStream(file).use { output.compress(Bitmap.CompressFormat.JPEG, quality, it) }
           val size = Pair(output.width, output.height)

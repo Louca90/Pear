@@ -33,6 +33,7 @@ declare class PearNativeModule extends NativeModule<{ onBack: (event: BackEvent)
   resizeImage(inputUri: string, outputUri: string, maxSize: number, quality: number): Promise<string>;
   installApk(fileUri: string): void;
   reloadApp(): Promise<void>;
+  setScreenBrightness?(value: number): Promise<void>;
 }
 
 const PearNative = requireNativeModule<PearNativeModule>('PearNative');
@@ -117,6 +118,11 @@ export function takeSharedMedia(): Promise<SharedMedia[]> {
 // Un partage arrivé pendant que Pear est ouvert.
 export function addShareListener(listener: () => void) {
   return PearNative.addListener('onShare', listener);
+}
+
+// Luminosité de l'écran (0 à 1, -1 = celle du téléphone). Sans effet sur un APK plus ancien.
+export function setScreenBrightness(value: number) {
+  return PearNative.setScreenBrightness?.(value) ?? Promise.resolve();
 }
 
 // Une vue dessinée dans une image PNG (calques de l'éditeur). Demande l'APK du lot 10.3.

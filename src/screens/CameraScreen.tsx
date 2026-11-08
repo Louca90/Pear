@@ -6,6 +6,7 @@ import { NavigationBar } from 'expo-navigation-bar';
 import { StatusBar } from 'expo-status-bar';
 import { Camera, Check, Download, Lock, Send, Settings, Square, SwitchCamera, X, Zap, ZapOff } from 'lucide-react-native';
 
+import { setScreenBrightness } from '../../modules/pear-native';
 import { PearCameraHandle, PearCameraView, wideLens } from '../../modules/pear-native/camera';
 
 import { saveToGallery } from '../chat/files';
@@ -255,6 +256,16 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
   const lockHover = useRef(new Animated.Value(1)).current;
   const overLock = useRef(false);
   const flipFade = useRef(new Animated.Value(0)).current;
+
+  // Vidéo avec la caméra avant et le flash : un cadre blanc doux autour de l'image et l'écran à pleine
+  // luminosité éclairent le visage (pour une photo, c'est le flash d'écran de CameraX qui s'en charge).
+  const frontLight = flashOn && filming && facing === 'front';
+  const frontGlow = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(frontGlow, { toValue: frontLight ? 1 : 0, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    setScreenBrightness(frontLight ? 1 : -1).catch((e) => log.warn('luminosité', e));
+  }, [frontLight, frontGlow]);
+  useEffect(() => () => void setScreenBrightness(-1).catch(() => undefined), []);
   const lastTap = useRef(0);
 
   useEffect(() => {
@@ -511,6 +522,7 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
           <StampMarks kind={liveStamp} stamp={formatStamp(now)} width={window.width} height={window.height - barSpace - SHUTTER_SIZE} />
         </Svg>
       )}
+      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.frontGlow, { opacity: frontGlow }]} />
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.flipFade, { opacity: flipFade }]} />
       <View collapsable={false} style={StyleSheet.absoluteFill} accessibilityLabel={t('camera.changerAide')} {...surface.panHandlers} />
 
@@ -689,6 +701,11 @@ const useStyles = createMediaStyles((colors) => ({
   },
   flipFade: {
     backgroundColor: colors.text,
+  },
+  frontGlow: {
+    borderWidth: 44,
+    borderRadius: 32,
+    borderColor: 'rgba(255, 255, 255, 0.94)',
   },
   lock: {
     position: 'absolute',

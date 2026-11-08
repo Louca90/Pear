@@ -281,6 +281,13 @@ class PearNativeModule : Module() {
 
     // Dessine une vue (et tout ce qu'elle contient) dans une image PNG, agrandie de `scale` : les textes
     // et les traits sont redessinés à cette taille, donc nets. Le fond reste transparent.
+    // Luminosité de la fenêtre de Pear (0 à 1), -1 pour revenir au réglage du téléphone : l'écran
+    // éclaire le visage quand on filme avec la caméra avant et le flash.
+    AsyncFunction("setScreenBrightness") { value: Double ->
+      val window = appContext.currentActivity?.window ?: return@AsyncFunction
+      window.attributes = window.attributes.apply { screenBrightness = if (value < 0) -1f else value.toFloat().coerceIn(0f, 1f) }
+    }.runOnQueue(Queues.MAIN)
+
     AsyncFunction("captureView") { tag: Int, outputUri: String, scale: Double ->
       captureView(tag, outputUri, scale)
     }.runOnQueue(Queues.MAIN)
