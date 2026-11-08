@@ -110,7 +110,8 @@ export function FilterStrip({ value, hidden, onChange }: Props) {
         snapToInterval={ITEM_WIDTH}
         decelerationRate="fast"
         contentOffset={{ x: current.current * ITEM_WIDTH, y: 0 }}
-        contentContainerStyle={{ paddingHorizontal: (width - ITEM_WIDTH) / 2 }}
+        // La marge verticale laisse la place à l'ombre des pastilles, que la bande coupait.
+        contentContainerStyle={{ paddingHorizontal: (width - ITEM_WIDTH) / 2, paddingVertical: 14 }}
         onScroll={onScroll}
         scrollEventThrottle={16}
         onTouchStart={() => lockTabSwipe(true)}

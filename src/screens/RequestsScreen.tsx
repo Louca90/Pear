@@ -5,7 +5,7 @@ import { Ban, BellOff, Check, X } from 'lucide-react-native';
 import { getPendingRequests, PairingRequest } from '../chat/database';
 import { chat, MAX_PROFILE_NAME_LENGTH } from '../chat/manager';
 import { Header, Screen } from '../components/ui';
-import { deriveSharedSecret, getVerificationCode, Identity } from '../crypto/pairing';
+import { Identity } from '../crypto/pairing';
 import { t } from '../i18n';
 import { createStyles, radius, spacing, useColors } from '../theme';
 
@@ -36,12 +36,11 @@ function initials(name: string) {
   return [...letters].slice(0, 2).join('').toUpperCase() || '?';
 }
 
-function RequestCard({ request, identity, onAccept }: { request: PairingRequest; identity: Identity; onAccept: Props['onAccept'] }) {
+function RequestCard({ request, onAccept }: { request: PairingRequest; onAccept: Props['onAccept'] }) {
   const colors = useColors();
   const styles = useStyles();
   const [name, setName] = useState(request.name);
   const progress = useRef(new Animated.Value(0)).current;
-  const code = getVerificationCode(deriveSharedSecret(identity, request.from_key));
 
   useEffect(() => {
     Animated.timing(progress, { toValue: 1, duration: ENTER_MS, easing: EASING, useNativeDriver: true }).start();
@@ -69,9 +68,6 @@ function RequestCard({ request, identity, onAccept }: { request: PairingRequest;
           <Text style={styles.muted}>{ago(request.at)}</Text>
         </View>
       </View>
-      <Text style={styles.label}>{t('contact.codeVerification')}</Text>
-      <Text style={styles.code}>{code.join('  ')}</Text>
-      <Text style={styles.hint}>{t('demandes.codeAide')}</Text>
       <Text style={styles.label}>{t('contact.nom')}</Text>
       <TextInput
         style={styles.input}
@@ -103,7 +99,7 @@ function RequestCard({ request, identity, onAccept }: { request: PairingRequest;
 }
 
 // Les demandes d'ajout reçues : rien ne se fait sans un « Accepter ».
-export function RequestsScreen({ identity, onBack, onAccept }: Props) {
+export function RequestsScreen({ onBack, onAccept }: Props) {
   const colors = useColors();
   const styles = useStyles();
   useSyncExternalStore(chat.subscribe, chat.getVersion);
@@ -124,7 +120,7 @@ export function RequestsScreen({ identity, onBack, onAccept }: Props) {
         ) : (
           <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
             {requests.map((request) => (
-              <RequestCard key={request.id} request={request} identity={identity} onAccept={onAccept} />
+              <RequestCard key={request.id} request={request} onAccept={onAccept} />
             ))}
           </ScrollView>
         )}
@@ -180,17 +176,6 @@ const useStyles = createStyles((colors) => ({
     fontWeight: '500',
     color: colors.textMuted,
     marginBottom: 4,
-  },
-  code: {
-    fontSize: 22,
-    fontWeight: '600',
-    letterSpacing: 1,
-    color: colors.text,
-  },
-  hint: {
-    fontSize: 13,
-    color: colors.textMuted,
-    marginBottom: spacing.md,
   },
   input: {
     height: 48,

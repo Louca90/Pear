@@ -53,10 +53,11 @@ export function ConversationActions({ rect, row, actions, onClose }: Props) {
         style={[
           styles.lifted,
           { top: rect.y, left: rect.x, width: rect.width, height: rect.height },
-          { transform: [{ scale: progress.interpolate({ inputRange: [0, 1], outputRange: [1, 1.03] }) }] },
         ]}
       >
         {row}
+        {/* Le liseré reste dans la ligne : elle ne grandit plus, rien ne dépasse de l'écran. */}
+        <Animated.View pointerEvents="none" style={[styles.ring, { opacity: progress }]} />
       </Animated.View>
       <Animated.View
         style={[
@@ -91,6 +92,12 @@ const useStyles = createStyles((colors) => ({
     borderRadius: radius.md,
     backgroundColor: colors.elevated,
     overflow: 'hidden',
+  },
+  ring: {
+    ...StyleSheet.absoluteFill,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: colors.border,
   },
   menu: {
     position: 'absolute',

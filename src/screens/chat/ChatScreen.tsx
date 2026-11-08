@@ -21,7 +21,6 @@ import { bubblePalette, createStyles, radius, spacing, useColors } from '../../t
 
 import { AttachMenu } from './components/AttachMenu';
 import { ChatHeader } from './components/ChatHeader';
-import { useChatScrollbar } from './components/ChatScrollbar';
 import { Composer } from './components/Composer';
 import { ComposerFade } from './components/ComposerFade';
 import { MediaViewer, Viewing } from './components/MediaViewer';
@@ -112,7 +111,6 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
   }
   newestShown.current = Math.max(newestShown.current, messages[0]?.created_at ?? 0);
   const scroll = useChatScroll(list, messages, preview);
-  const scrollbarControl = useChatScrollbar(list, messages);
   const settings = getConversationSettings(contactKey);
   const palettes: Palettes = {
     mine: bubblePalette(settings.my_bubble ?? colors.bubbleMine),
@@ -402,20 +400,15 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
               contentContainerStyle={styles.list}
               keyboardShouldPersistTaps="handled"
               {...scroll.listProps}
-              onScroll={(event) => {
-                scroll.listProps.onScroll(event);
-                scrollbarControl.onScroll(event);
-              }}
               onEndReached={loadOlder}
               onEndReachedThreshold={0.6}
-              showsVerticalScrollIndicator={false}
+              showsVerticalScrollIndicator
               // Seules les bulles proches de l'écran sont dessinées.
               initialNumToRender={15}
               maxToRenderPerBatch={10}
               windowSize={11}
             />
           )}
-          {messages.length > 0 && scrollbarControl.scrollbar}
           <NewMessagesButton count={scroll.newCount} onPress={scroll.scrollToBottom} />
           {toast && <Toast text={toast.text} token={toast.token} />}
           {scheduling && <ScheduleSheet onSchedule={schedule} onClose={() => setScheduling(false)} />}
