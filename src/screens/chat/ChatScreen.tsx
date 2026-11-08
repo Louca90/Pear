@@ -435,16 +435,6 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
               }}
             />
           )}
-          <AttachMenu
-            open={attachOpen}
-            anchor={attachAnchor}
-            onClose={() => setAttachOpen(false)}
-            onPhotos={() => {
-              setAttachOpen(false);
-              setGalleryOpen(true);
-            }}
-            onFile={pickDocument}
-          />
           </View>
           {blockedByMe ? (
             <View style={styles.pendingBar}>
@@ -500,6 +490,17 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
           onClose={closeSelection}
         />
       )}
+      {/* Au-dessus de tout l'écran : un appui ailleurs que sur les deux choix referme le menu. */}
+      <AttachMenu
+        open={attachOpen}
+        anchor={attachAnchor}
+        onClose={() => setAttachOpen(false)}
+        onPhotos={() => {
+          setAttachOpen(false);
+          setGalleryOpen(true);
+        }}
+        onFile={pickDocument}
+      />
       {viewing && <MediaViewer viewing={viewing} onClose={() => setViewing(null)} />}
       {galleryOpen && <MediaPicker onPick={sendFromGallery} onClose={() => setGalleryOpen(false)} />}
     </Screen>
