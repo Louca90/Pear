@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
-import { FlatList, Image, Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { memo, useCallback, useEffect, useState } from 'react';
+import { Animated, Easing, FlatList, Linking, Modal, PixelRatio, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { File } from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library/legacy';
 import { ArrowLeft, ArrowUp, Images, Play, Settings, X } from 'lucide-react-native';
 
+import { thumbnail } from '../../modules/pear-native';
 import { PickedFile } from '../chat/manager';
 import { createStyles, radius, spacing, useColors } from '../theme';
 import { showDialog } from './dialog';
@@ -12,7 +13,7 @@ import { log } from '../log';
 import { t } from '../i18n';
 
 type Section = 'photos' | 'videos' | 'albums';
-type AlbumRow = { album: MediaLibrary.Album; cover: string | null };
+type AlbumRow = { album: MediaLibrary.Album; cover: MediaLibrary.Asset | null };
 
 const SECTIONS: { section: Section; label: string }[] = [
   { section: 'photos', label: t('chat.photos') },
@@ -22,6 +23,52 @@ const SECTIONS: { section: Section; label: string }[] = [
 
 const COLUMNS = 3;
 const PAGE_SIZE = 60;
+
+// Les vignettes déjà connues pendant la session : en revenant sur une case, pas d'attente ni de clignement.
+const thumbnails = new Map<string, string>();
+
+// La vignette d'Android à la taille de la case (en pixels), en cache ; sinon (ancien APK) la photo
+// décodée directement réduite par Fresco (resizeMethod).
+function Thumbnail({ asset, size, style }: { asset: MediaLibrary.Asset; size: number; style: object }) {
+  const video = asset.mediaType === MediaLibrary.MediaType.video;
+  const key = `${asset.id}-${size}`;
+  const [uri, setUri] = useState(() => thumbnails.get(key) ?? (thumbnail ? null : asset.uri));
+  const [shown] = useState(() => new Animated.Value(thumbnails.has(key) ? 1 : 0));
+
+  useEffect(() => {
+    if (uri || !thumbnail) return;
+    let alive = true;
+    thumbnail(asset.id, video, size)
+      .then((found) => {
+        thumbnails.set(key, found);
+        if (alive) setUri(found);
+      })
+      .catch(() => {
+        if (alive) setUri(asset.uri);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [asset, key, size, uri, video]);
+
+  if (!uri) return null;
+  return (
+    <Animated.Image
+      source={{ uri }}
+      style={[style, { opacity: shown }]}
+      resizeMode="cover"
+      resizeMethod="resize"
+      fadeDuration={0}
+      onLoad={() => Animated.timing(shown, { toValue: 1, duration: 120, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start()}
+    />
+  );
+}
+
+function useTileSize(columns: number) {
+  const { width } = useWindowDimensions();
+  // Arrondi par paliers : la même vignette en cache sert à toutes les cases.
+  return Math.min(512, Math.ceil(PixelRatio.getPixelSizeForLayoutSize(width / columns) / 64) * 64);
+}
 
 function formatDuration(seconds: number) {
   const total = Math.round(seconds);
@@ -39,13 +86,13 @@ function toPickedFile(asset: MediaLibrary.Asset): PickedFile {
   };
 }
 
-function AssetTile({ asset, order, onPress }: { asset: MediaLibrary.Asset; order: number; onPress: () => void }) {
+const AssetTile = memo(function AssetTile({ asset, order, size, onToggle }: { asset: MediaLibrary.Asset; order: number; size: number; onToggle: (asset: MediaLibrary.Asset) => void }) {
   const colors = useColors();
   const styles = useStyles();
   const video = asset.mediaType === MediaLibrary.MediaType.video;
   return (
-    <Pressable onPress={onPress} accessibilityLabel={asset.filename} accessibilityState={{ selected: order > 0 }} style={styles.tile}>
-      <Image source={{ uri: asset.uri }} style={styles.tileImage} resizeMode="cover" />
+    <Pressable onPress={() => onToggle(asset)} accessibilityLabel={asset.filename} accessibilityState={{ selected: order > 0 }} style={styles.tile}>
+      <Thumbnail asset={asset} size={size} style={styles.tileImage} />
       {video && (
         <View style={styles.duration}>
           <Play size={10} color={colors.onMedia} fill={colors.onMedia} strokeWidth={1.75} />
@@ -58,10 +105,11 @@ function AssetTile({ asset, order, onPress }: { asset: MediaLibrary.Asset; order
       </View>
     </Pressable>
   );
-}
+});
 
 function AssetGrid({ section, album, selected, onToggle }: { section: Section; album: MediaLibrary.Album | null; selected: MediaLibrary.Asset[]; onToggle: (asset: MediaLibrary.Asset) => void }) {
   const styles = useStyles();
+  const size = useTileSize(COLUMNS);
   const [assets, setAssets] = useState<MediaLibrary.Asset[]>([]);
   const [next, setNext] = useState<string | null>(null);
 
@@ -92,13 +140,12 @@ function AssetGrid({ section, album, selected, onToggle }: { section: Section; a
       onEndReached={() => {
         if (next) load(next).catch((e) => log.warn('galerie', e));
       }}
-      renderItem={({ item }) => (
-        <AssetTile
-          asset={item}
-          order={selected.findIndex((asset) => asset.id === item.id) + 1}
-          onPress={() => onToggle(item)}
-        />
-      )}
+      // Quelques écrans d'avance, pas plus : chaque case demande sa vignette au système.
+      initialNumToRender={COLUMNS * 8}
+      maxToRenderPerBatch={COLUMNS * 6}
+      windowSize={9}
+      removeClippedSubviews
+      renderItem={({ item }) => <AssetTile asset={item} size={size} order={selected.findIndex((asset) => asset.id === item.id) + 1} onToggle={onToggle} />}
       ListEmptyComponent={<Text style={styles.emptyText}>{t('galerie.vide')}</Text>}
     />
   );
@@ -106,6 +153,7 @@ function AssetGrid({ section, album, selected, onToggle }: { section: Section; a
 
 function AlbumList({ onOpen }: { onOpen: (album: MediaLibrary.Album) => void }) {
   const styles = useStyles();
+  const size = useTileSize(2);
   const [rows, setRows] = useState<AlbumRow[]>([]);
 
   useEffect(() => {
@@ -116,7 +164,7 @@ function AlbumList({ onOpen }: { onOpen: (album: MediaLibrary.Album) => void }) 
             .filter((album) => album.assetCount > 0)
             .map(async (album) => {
               const { assets } = await MediaLibrary.getAssetsAsync({ first: 1, album, mediaType: ['photo', 'video'], sortBy: [['creationTime', false]] });
-              return { album, cover: assets[0]?.uri ?? null };
+              return { album, cover: assets[0] ?? null };
             }),
         ),
       )
@@ -133,7 +181,7 @@ function AlbumList({ onOpen }: { onOpen: (album: MediaLibrary.Album) => void }) 
       contentContainerStyle={styles.albums}
       renderItem={({ item: { album, cover } }) => (
         <Pressable onPress={() => onOpen(album)} style={styles.album}>
-          {cover ? <Image source={{ uri: cover }} style={styles.albumCover} resizeMode="cover" /> : <View style={styles.albumCover} />}
+          <View style={styles.albumCover}>{cover && <Thumbnail asset={cover} size={size} style={styles.albumImage} />}</View>
           <Text style={styles.albumTitle} numberOfLines={1}>{album.title}</Text>
           <Text style={styles.albumCount}>{album.assetCount}</Text>
         </Pressable>
@@ -169,13 +217,17 @@ export function MediaPicker({ onPick, onClose, single }: PickerProps) {
       });
   }, []);
 
-  const toggle = (asset: MediaLibrary.Asset) => {
-    if (single) {
-      if (asset.mediaType !== MediaLibrary.MediaType.video) onPick([toPickedFile(asset)]);
-      return;
-    }
-    setSelected((current) => (current.some(({ id }) => id === asset.id) ? current.filter(({ id }) => id !== asset.id) : [...current, asset]));
-  };
+  // Stable d'un rendu à l'autre : seules les cases dont la sélection change sont redessinées.
+  const toggle = useCallback(
+    (asset: MediaLibrary.Asset) => {
+      if (single) {
+        if (asset.mediaType !== MediaLibrary.MediaType.video) onPick([toPickedFile(asset)]);
+        return;
+      }
+      setSelected((current) => (current.some(({ id }) => id === asset.id) ? current.filter(({ id }) => id !== asset.id) : [...current, asset]));
+    },
+    [single, onPick],
+  );
 
   const send = () => {
     try {
@@ -345,11 +397,16 @@ const useStyles = createStyles((colors) => ({
     flex: 1 / 2,
   },
   albumCover: {
+    overflow: 'hidden',
     width: '100%',
     aspectRatio: 1,
     borderRadius: radius.md,
     backgroundColor: colors.surface,
     marginBottom: spacing.sm,
+  },
+  albumImage: {
+    width: '100%',
+    height: '100%',
   },
   albumTitle: {
     fontSize: 15,

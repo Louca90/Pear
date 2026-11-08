@@ -9,6 +9,7 @@ import android.media.ExifInterface
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
+import android.provider.MediaStore
 import android.provider.Settings
 import android.util.Log
 import android.webkit.MimeTypeMap
@@ -267,6 +268,11 @@ class PearNativeModule : Module() {
     AsyncFunction("sha256File") { fileUri: String -> sha256File(fileUri) }
 
     // Réduit une image (photo de profil) : plus grand côté maxSize, recompressée en JPEG.
+    // Vignette d'une photo ou d'une vidéo de la galerie : celle qu'Android garde déjà (loadThumbnail,
+    // la même que la galerie du téléphone), enregistrée une fois dans le cache de Pear. Bien plus
+    // rapide que de décoder la photo entière pour une case de 120 points.
+    AsyncFunction("thumbnail") { id: String, video: Boolean, size: Int -> thumbnail(id, video, size) }
+
     // Taille d'une photo telle qu'on la voit (orientation EXIF appliquée).
     AsyncFunction("imageSize") { uri: String -> imageSize(uri) }
 
@@ -418,6 +424,28 @@ class PearNativeModule : Module() {
     file.parentFile?.mkdirs()
     FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.JPEG, quality, it) }
     return outputUri
+  }
+
+  private fun thumbnail(id: String, video: Boolean, size: Int): String {
+    val context = appContext.reactContext ?: throw IllegalStateException("Contexte indisponible.")
+    val mediaId = id.toLongOrNull() ?: throw IllegalArgumentException("Média inconnu.")
+    val directory = File(context.cacheDir, "vignettes").apply { mkdirs() }
+    val file = File(directory, "${if (video) "v" else "p"}$mediaId-$size.jpg")
+    if (file.exists() && file.length() > 0) return Uri.fromFile(file).toString()
+    val base = if (video) MediaStore.Video.Media.EXTERNAL_CONTENT_URI else MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+    val uri = android.content.ContentUris.withAppendedId(base, mediaId)
+    val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+      context.contentResolver.loadThumbnail(uri, android.util.Size(size, size), null)
+    } else {
+      @Suppress("DEPRECATION")
+      if (video) MediaStore.Video.Thumbnails.getThumbnail(context.contentResolver, mediaId, MediaStore.Video.Thumbnails.MINI_KIND, null)
+      else MediaStore.Images.Thumbnails.getThumbnail(context.contentResolver, mediaId, MediaStore.Images.Thumbnails.MINI_KIND, null)
+    } ?: throw IllegalArgumentException("Vignette indisponible.")
+    val partial = File(directory, file.name + ".part")
+    FileOutputStream(partial).use { bitmap.compress(Bitmap.CompressFormat.JPEG, 80, it) }
+    bitmap.recycle()
+    partial.renameTo(file)
+    return Uri.fromFile(file).toString()
   }
 
   private fun exifDegrees(context: android.content.Context, uri: Uri): Int = try {

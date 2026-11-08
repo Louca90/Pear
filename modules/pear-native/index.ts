@@ -35,6 +35,7 @@ declare class PearNativeModule extends NativeModule<{ onBack: (event: BackEvent)
   reloadApp(): Promise<void>;
   setScreenBrightness?(value: number): Promise<void>;
   imageSize?(uri: string): Promise<{ width: number; height: number }>;
+  thumbnail?(id: string, video: boolean, size: number): Promise<string>;
   cropImage?(inputUri: string, outputUri: string, rect: number[], rotation: number, maxSize: number, quality: number): Promise<string>;
 }
 
@@ -126,6 +127,9 @@ export function addShareListener(listener: () => void) {
 export function setScreenBrightness(value: number) {
   return PearNative.setScreenBrightness?.(value) ?? Promise.resolve();
 }
+
+// Vignette de la galerie (MediaStore), mise en cache : null sur un APK plus ancien.
+export const thumbnail = PearNative.thumbnail ? (id: string, video: boolean, size: number) => PearNative.thumbnail!(id, video, size) : null;
 
 // Photo de profil : la taille vue (EXIF appliqué) et le recadrage natif, hors du fil de l'interface.
 // Absents d'un APK plus ancien : null, l'appelant garde alors la photo entière.
