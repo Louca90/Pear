@@ -38,7 +38,6 @@ export const VIEWER_CLOSE_MS = 240;
 export const VIEWER_CANCEL_MS = 160;
 export const VIEWER_EASING = Easing.bezier(0.2, 0.8, 0.2, 1);
 export const COMPOSER_FADE_HEIGHT = 140;
-export const ATTACH_CLOSE_MS = 140;
 export const TOAST_VISIBLE_MS = 1800;
 // Vocal : lâcher avant ce temps ne l'envoie pas. Glisser à gauche l'annule, vers le haut le verrouille.
 export const VOICE_MIN_MS = 700;

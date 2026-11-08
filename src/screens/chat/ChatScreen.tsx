@@ -1,5 +1,5 @@
 import { ComponentRef, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { Animated, FlatList, Image, Keyboard, KeyboardAvoidingView, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, Image, Keyboard, KeyboardAvoidingView, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { BlurTargetView } from 'expo-blur';
 import * as Clipboard from 'expo-clipboard';
 import * as DocumentPicker from 'expo-document-picker';
@@ -19,7 +19,7 @@ import { MediaPicker } from '../../components/MediaPicker';
 import { Screen, useInsets } from '../../components/ui';
 import { bubblePalette, createStyles, radius, spacing, useColors } from '../../theme';
 
-import { AttachMenu } from './components/AttachMenu';
+import { AttachAnchor, AttachMenu } from './components/AttachMenu';
 import { ChatHeader } from './components/ChatHeader';
 import { Composer } from './components/Composer';
 import { ComposerFade } from './components/ComposerFade';
@@ -56,7 +56,7 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
   const colors = useColors();
   const [draft, setDraft] = useState('');
   const [attachOpen, setAttachOpen] = useState(false);
-  const attachProgress = useRef(new Animated.Value(0)).current;
+  const [attachAnchor, setAttachAnchor] = useState<AttachAnchor | null>(null);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [toast, setToast] = useState<{ text: string; token: number } | null>(null);
   const [forwarding, setForwarding] = useState<Message | null>(null);
@@ -437,7 +437,8 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
           )}
           <AttachMenu
             open={attachOpen}
-            progress={attachProgress}
+            anchor={attachAnchor}
+            onClose={() => setAttachOpen(false)}
             onPhotos={() => {
               setAttachOpen(false);
               setGalleryOpen(true);
@@ -473,9 +474,10 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
               onSchedule={() => draft.trim() && setScheduling(true)}
               input={input}
               keyboardOpen={keyboardOpen}
-              attachOpen={attachOpen}
-              attachProgress={attachProgress}
-              onToggleAttach={() => setAttachOpen(!attachOpen)}
+              onToggleAttach={(anchor) => {
+                setAttachAnchor(anchor);
+                setAttachOpen(true);
+              }}
               onVoiceRecorded={(uri, seconds) => sendPicked({ uri, name: `vocal-${seconds}s.m4a`, size: 0, mime: 'audio/mp4', kind: 'audio' })}
               onVoiceTooShort={() => setToast({ text: t('chat.maintenirMicro'), token: Date.now() })}
             />

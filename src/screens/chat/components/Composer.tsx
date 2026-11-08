@@ -1,4 +1,4 @@
-import { ComponentRef, RefObject, useMemo } from 'react';
+import { ComponentRef, RefObject, useMemo, useRef } from 'react';
 import { Animated, StyleSheet, TextInput, View } from 'react-native';
 import { ArrowUp, Check, ChevronUp, Lock, Mic, Paperclip, Trash2 } from 'lucide-react-native';
 
@@ -12,6 +12,7 @@ import { useVoiceRecorder } from '../hooks/useVoiceRecorder';
 import { useChatStyles } from '../styles';
 import { ComposerModeCard } from './ComposerModeCard';
 import { RecordingRow } from './RecordingRow';
+import { AttachAnchor } from './AttachMenu';
 import { t } from '../../../i18n';
 
 type Props = {
@@ -27,9 +28,8 @@ type Props = {
   onSchedule: () => void;
   input: RefObject<ComponentRef<typeof TextInput> | null>;
   keyboardOpen: boolean;
-  attachOpen: boolean;
-  attachProgress: Animated.Value;
-  onToggleAttach: () => void;
+  // Le bouton trombone, mesuré dans la fenêtre : le menu des pièces jointes naît de lui.
+  onToggleAttach: (anchor: AttachAnchor) => void;
   onVoiceRecorded: (uri: string, seconds: number) => void;
   onVoiceTooShort: () => void;
 };
@@ -47,8 +47,6 @@ export function Composer({
   onSchedule,
   input,
   keyboardOpen,
-  attachOpen,
-  attachProgress,
   onToggleAttach,
   onVoiceRecorded,
   onVoiceTooShort,
@@ -57,6 +55,8 @@ export function Composer({
   const colors = useColors();
   const bottom = useNavigationBarHeight();
   const voice = useVoiceRecorder(onVoiceRecorded, onVoiceTooShort);
+  const attachButton = useRef<ComponentRef<typeof View>>(null);
+  const openAttach = () => attachButton.current?.measureInWindow((x, y, width, height) => onToggleAttach({ x, y, width, height }));
   // Le micro devient progressivement une poubelle, au fil du glissé vers la gauche.
   const trashAmount = voice.dragX.interpolate({ inputRange: [-VOICE_CANCEL_DISTANCE, -VOICE_CANCEL_DISTANCE * 0.2], outputRange: [1, 0], extrapolate: 'clamp' });
 
@@ -75,11 +75,11 @@ export function Composer({
           <RecordingRow seconds={voice.seconds} locked={voice.phase === 'locked'} dragX={voice.dragX} onDiscard={voice.discard} />
         ) : (
           <>
-            <IconButton onPress={onToggleAttach} label={t('chat.joindre')} hitSlop={0} style={styles.attach}>
-              <Animated.View style={{ transform: [{ rotate: attachProgress.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-45deg'] }) }] }}>
+            <View ref={attachButton} collapsable={false}>
+              <IconButton onPress={openAttach} label={t('chat.joindre')} hitSlop={0} style={styles.attach}>
                 <Paperclip size={20} color={colors.text} strokeWidth={1.75} />
-              </Animated.View>
-            </IconButton>
+              </IconButton>
+            </View>
             <TextInput
               ref={input}
               style={styles.input}
