@@ -19,7 +19,6 @@ import { MediaPicker } from '../../components/MediaPicker';
 import { Screen, useInsets } from '../../components/ui';
 import { bubblePalette, createStyles, radius, spacing, useColors } from '../../theme';
 
-import { AttachAnchor, AttachMenu } from './components/AttachMenu';
 import { ChatHeader } from './components/ChatHeader';
 import { Composer } from './components/Composer';
 import { ComposerFade } from './components/ComposerFade';
@@ -56,7 +55,6 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
   const colors = useColors();
   const [draft, setDraft] = useState('');
   const [attachOpen, setAttachOpen] = useState(false);
-  const [attachAnchor, setAttachAnchor] = useState<AttachAnchor | null>(null);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [toast, setToast] = useState<{ text: string; token: number } | null>(null);
   const [forwarding, setForwarding] = useState<Message | null>(null);
@@ -410,6 +408,8 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
             />
           )}
           <NewMessagesButton count={scroll.newCount} onPress={scroll.scrollToBottom} />
+          {/* Menu des pièces jointes ouvert : un appui dans la conversation le referme seulement. */}
+          {attachOpen && <Pressable style={StyleSheet.absoluteFill} onPress={() => setAttachOpen(false)} accessibilityLabel={t('commun.fermer')} />}
           {toast && <Toast text={toast.text} token={toast.token} />}
           {scheduling && <ScheduleSheet onSchedule={schedule} onClose={() => setScheduling(false)} />}
           {showingReactions && (
@@ -464,10 +464,14 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
               onSchedule={() => draft.trim() && setScheduling(true)}
               input={input}
               keyboardOpen={keyboardOpen}
-              onToggleAttach={(anchor) => {
-                setAttachAnchor(anchor);
-                setAttachOpen(true);
+              attachOpen={attachOpen}
+              onToggleAttach={() => setAttachOpen(!attachOpen)}
+              onCloseAttach={() => setAttachOpen(false)}
+              onPhotos={() => {
+                setAttachOpen(false);
+                setGalleryOpen(true);
               }}
+              onFile={pickDocument}
               onVoiceRecorded={(uri, seconds) => sendPicked({ uri, name: `vocal-${seconds}s.m4a`, size: 0, mime: 'audio/mp4', kind: 'audio' })}
               onVoiceTooShort={() => setToast({ text: t('chat.maintenirMicro'), token: Date.now() })}
             />
@@ -490,17 +494,6 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
           onClose={closeSelection}
         />
       )}
-      {/* Au-dessus de tout l'écran : un appui ailleurs que sur les deux choix referme le menu. */}
-      <AttachMenu
-        open={attachOpen}
-        anchor={attachAnchor}
-        onClose={() => setAttachOpen(false)}
-        onPhotos={() => {
-          setAttachOpen(false);
-          setGalleryOpen(true);
-        }}
-        onFile={pickDocument}
-      />
       {viewing && <MediaViewer viewing={viewing} onClose={() => setViewing(null)} />}
       {galleryOpen && <MediaPicker onPick={sendFromGallery} onClose={() => setGalleryOpen(false)} />}
     </Screen>

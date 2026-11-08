@@ -1,6 +1,6 @@
-import { ComponentRef, RefObject, useMemo, useRef } from 'react';
-import { Animated, StyleSheet, TextInput, View } from 'react-native';
-import { ArrowUp, Check, ChevronUp, Lock, Mic, Paperclip, Trash2 } from 'lucide-react-native';
+import { ComponentRef, RefObject, useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { ArrowUp, Check, ChevronUp, Lock, Mic, Trash2 } from 'lucide-react-native';
 
 import { Message } from '../../../chat/database';
 import { MAX_TEXT_LENGTH } from '../../../chat/manager';
@@ -12,7 +12,8 @@ import { useVoiceRecorder } from '../hooks/useVoiceRecorder';
 import { useChatStyles } from '../styles';
 import { ComposerModeCard } from './ComposerModeCard';
 import { RecordingRow } from './RecordingRow';
-import { AttachAnchor } from './AttachMenu';
+import { ATTACH_CLOSE_EASING, ATTACH_CLOSE_MS, ATTACH_EASING, ATTACH_OPEN_MS, AttachPill } from './AttachMenu';
+import { useBackInterceptor } from '../../../navigation/backInterceptors';
 import { t } from '../../../i18n';
 
 type Props = {
@@ -28,8 +29,12 @@ type Props = {
   onSchedule: () => void;
   input: RefObject<ComponentRef<typeof TextInput> | null>;
   keyboardOpen: boolean;
-  // Le bouton trombone, mesuré dans la fenêtre : le menu des pièces jointes naît de lui.
-  onToggleAttach: (anchor: AttachAnchor) => void;
+  // Pièces jointes : le trombone s'allonge en pilule (Photos, Fichier) sur le champ de texte.
+  attachOpen: boolean;
+  onToggleAttach: () => void;
+  onCloseAttach: () => void;
+  onPhotos: () => void;
+  onFile: () => void;
   onVoiceRecorded: (uri: string, seconds: number) => void;
   onVoiceTooShort: () => void;
 };
@@ -47,7 +52,11 @@ export function Composer({
   onSchedule,
   input,
   keyboardOpen,
+  attachOpen,
   onToggleAttach,
+  onCloseAttach,
+  onPhotos,
+  onFile,
   onVoiceRecorded,
   onVoiceTooShort,
 }: Props) {
@@ -55,8 +64,18 @@ export function Composer({
   const colors = useColors();
   const bottom = useNavigationBarHeight();
   const voice = useVoiceRecorder(onVoiceRecorded, onVoiceTooShort);
-  const attachButton = useRef<ComponentRef<typeof View>>(null);
-  const openAttach = () => attachButton.current?.measureInWindow((x, y, width, height) => onToggleAttach({ x, y, width, height }));
+  // La pilule vit dans la barre : elle suit le clavier et la barre sans rien mesurer dans la fenêtre.
+  const attachProgress = useRef(new Animated.Value(0)).current;
+  const [fieldWidth, setFieldWidth] = useState(0);
+  useBackInterceptor(attachOpen, onCloseAttach);
+  useEffect(() => {
+    Animated.timing(attachProgress, {
+      toValue: attachOpen ? 1 : 0,
+      duration: attachOpen ? ATTACH_OPEN_MS : ATTACH_CLOSE_MS,
+      easing: attachOpen ? ATTACH_EASING : ATTACH_CLOSE_EASING,
+      useNativeDriver: false,
+    }).start();
+  }, [attachOpen, attachProgress]);
   // Le micro devient progressivement une poubelle, au fil du glissé vers la gauche.
   const trashAmount = voice.dragX.interpolate({ inputRange: [-VOICE_CANCEL_DISTANCE, -VOICE_CANCEL_DISTANCE * 0.2], outputRange: [1, 0], extrapolate: 'clamp' });
 
@@ -74,12 +93,9 @@ export function Composer({
         {voice.phase !== 'idle' ? (
           <RecordingRow seconds={voice.seconds} locked={voice.phase === 'locked'} dragX={voice.dragX} onDiscard={voice.discard} />
         ) : (
-          <>
-            <View ref={attachButton} collapsable={false}>
-              <IconButton onPress={openAttach} label={t('chat.joindre')} hitSlop={0} style={styles.attach}>
-                <Paperclip size={20} color={colors.text} strokeWidth={1.75} />
-              </IconButton>
-            </View>
+          <View style={styles.field} onLayout={(event) => setFieldWidth(event.nativeEvent.layout.width)}>
+            {/* La place du trombone : c'est la pilule (plus bas) qui le dessine. */}
+            <View style={styles.attachSpace} />
             <TextInput
               ref={input}
               style={styles.input}
@@ -90,7 +106,8 @@ export function Composer({
               maxLength={MAX_TEXT_LENGTH}
               multiline
             />
-          </>
+            <AttachPill progress={attachProgress} width={fieldWidth} open={attachOpen} onToggle={onToggleAttach} onPhotos={onPhotos} onFile={onFile} />
+          </View>
         )}
         {voice.phase === 'holding' && (
           <Animated.View
@@ -133,6 +150,8 @@ export function Composer({
             </Animated.View>
           </Animated.View>
         )}
+        {/* Menu ouvert : un appui sur le bouton d'envoi ou le micro referme seulement le menu. */}
+        {attachOpen && <Pressable onPress={onCloseAttach} accessibilityLabel={t('commun.fermer')} style={styles.sendCover} />}
       </View>
     </View>
   );
@@ -175,13 +194,22 @@ const useLocalStyles = createStyles((colors) => ({
     paddingTop: spacing.sm,
     backgroundColor: colors.background,
   },
-  attach: {
+  field: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: spacing.sm,
+  },
+  attachSpace: {
     width: 44,
     height: 44,
-    borderRadius: radius.full,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
+  },
+  sendCover: {
+    position: 'absolute',
+    right: spacing.md,
+    top: spacing.sm,
+    width: 44,
+    bottom: 0,
   },
   input: {
     flex: 1,
