@@ -46,6 +46,8 @@ export type PickedFile = {
   fromCamera?: boolean;
   // Transféré depuis une autre conversation.
   forwarded?: boolean;
+  // Le même fichier part ensuite à un autre contact : copié, jamais déplacé.
+  keepSource?: boolean;
 };
 
 // Après un envoi ou une réception, la connexion reste ouverte un moment : la réponse arrive souvent vite.

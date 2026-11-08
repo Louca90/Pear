@@ -54,6 +54,8 @@ import java.security.MessageDigest
 
 private const val DOWNLOAD_TIMEOUT_MS = 20_000
 private const val DOWNLOAD_PROGRESS_MS = 250L
+private const val DOWNLOAD_ATTEMPTS = 3
+private const val DOWNLOAD_BACKOFF_MS = 2_000L
 private const val APK_MIME = "application/vnd.android.package-archive"
 
 // Les retouches d'une vidéo, envoyées depuis l'éditeur. Sans valeur : rien ne change.
@@ -313,9 +315,32 @@ class PearNativeModule : Module() {
 
   private fun pathOf(fileUri: String) = Uri.parse(fileUri).path ?: throw IllegalArgumentException("Fichier introuvable.")
 
+  // Plusieurs essais : GitHub répond parfois 502/503/504 ou coupe la connexion. Chaque essai reprend
+  // là où le précédent s'est arrêté ; si la reprise est refusée (416), on repart de zéro.
   private fun downloadFile(url: String, fileUri: String) {
     val file = File(pathOf(fileUri))
     file.parentFile?.mkdirs()
+    var lastError: Exception? = null
+    for (attempt in 0 until DOWNLOAD_ATTEMPTS) {
+      if (attempt > 0) Thread.sleep(DOWNLOAD_BACKOFF_MS * attempt)
+      try {
+        downloadOnce(url, file)
+        return
+      } catch (e: DownloadHttpException) {
+        lastError = e
+        if (!e.retryable) throw e
+      } catch (e: java.io.IOException) {
+        lastError = e
+      }
+    }
+    throw lastError ?: IllegalStateException("Téléchargement impossible.")
+  }
+
+  private class DownloadHttpException(val code: Int) : IllegalStateException("Téléchargement refusé ($code).") {
+    val retryable = code >= 500 || code == 408 || code == 429
+  }
+
+  private fun downloadOnce(url: String, file: File) {
     val already = if (file.exists()) file.length() else 0L
     val connection = URL(url).openConnection() as HttpURLConnection
     try {
@@ -323,7 +348,12 @@ class PearNativeModule : Module() {
       connection.readTimeout = DOWNLOAD_TIMEOUT_MS
       if (already > 0) connection.setRequestProperty("Range", "bytes=$already-")
       val code = connection.responseCode
-      if (code != HttpURLConnection.HTTP_OK && code != HttpURLConnection.HTTP_PARTIAL) throw IllegalStateException("Téléchargement refusé ($code).")
+      if (code == 416 && already > 0) {
+        // Reprise impossible (fichier partiel plus long ou abîmé) : on l'efface, l'essai suivant repart de zéro.
+        file.delete()
+        throw java.io.IOException("Reprise refusée.")
+      }
+      if (code != HttpURLConnection.HTTP_OK && code != HttpURLConnection.HTTP_PARTIAL) throw DownloadHttpException(code)
       // Le serveur a ignoré la reprise : on repart de zéro.
       val resume = code == HttpURLConnection.HTTP_PARTIAL
       val start = if (resume) already else 0L

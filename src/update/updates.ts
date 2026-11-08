@@ -4,6 +4,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 import { addDownloadListener, appVersionCode, canRequestPackageInstalls, downloadFile, installApk, openUnknownAppSourcesSettings, sha256File } from '../../modules/pear-native';
 import { parseRelease, Release } from './release';
 import { log } from '../log';
+import { t } from '../i18n';
 import { LATEST_RELEASE_URL, UPDATE_CHECK_INTERVAL_MS, UPDATE_CHECK_TIMEOUT_MS } from '../config';
 
 export { LATEST_RELEASE_URL };
@@ -102,6 +103,17 @@ export function requestInstallPermission() {
   openUnknownAppSourcesSettings();
 }
 
+// Le rejet d'une fonction native arrive sous la forme « Call to function … Caused by: … » : on montre
+// une phrase compréhensible à la place.
+function readableError(e: unknown) {
+  const message = e instanceof Error ? e.message : String(e);
+  const code = /refusé \((\d{3})\)/.exec(message)?.[1];
+  if (code && Number(code) >= 500) return t('maj.serveurIndisponible');
+  if (code) return `${t('maj.connexionCoupee')} (${code})`;
+  if (/Call to function|IOException|SocketTimeout|UnknownHost|Reprise/.test(message)) return t('maj.connexionCoupee');
+  return message;
+}
+
 // Télécharge (en reprenant un fichier partiel), vérifie l'empreinte publiée, puis ouvre l'installeur.
 export async function startUpdate() {
   const release = state.release;
@@ -127,14 +139,14 @@ export async function startUpdate() {
       if (hash !== release.sha256) {
         // Fichier abîmé ou modifié : on le supprime pour repartir de zéro au prochain essai.
         file.delete();
-        throw new Error('Le fichier téléchargé ne correspond pas à la mise à jour publiée.');
+        throw new Error(t('maj.fichierAbime'));
       }
     }
     set({ phase: 'installing', progress: 1 });
     installApk(file.uri);
   } catch (e) {
     log.warn('mise à jour', e);
-    set({ phase: 'failed', error: e instanceof Error ? e.message : String(e) });
+    set({ phase: 'failed', error: readableError(e) });
   } finally {
     subscription.remove();
   }

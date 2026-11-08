@@ -58,6 +58,7 @@ export const nl: Dictionary = {
     fichierTropLourd: 'Bestand te groot',
     limite: 'De limiet is {taille}.',
     envoiImpossible: 'Verzenden mislukt',
+    envoiEchoueA: 'Het bericht kon niet worden verstuurd naar: {noms}.',
     ouvertureImpossible: 'Openen mislukt',
     vide: 'Je berichten blijven op jullie twee telefoons.',
     maintenirMicro: 'Houd de microfoon ingedrukt om op te nemen',
@@ -121,6 +122,7 @@ export const nl: Dictionary = {
     messageEpingleN: 'Vastgezet bericht {i}/{n}',
   },
   profil: {
+    photoImpossible: 'Foto niet bijgesneden',
     themeAuto: 'Automatisch',
     themeClair: 'Licht',
     themeSombre: 'Donker',
@@ -209,6 +211,9 @@ export const nl: Dictionary = {
     fermerApercu: 'Voorbeeld sluiten (debug)',
     aJour: 'Pear is up-to-date!',
     detailGithub: 'Updatedetails bekijken op GitHub',
+    serveurIndisponible: 'De server van GitHub reageert nu niet. Probeer het over een paar minuten opnieuw.',
+    connexionCoupee: 'De download is onderbroken. Controleer de verbinding en probeer het opnieuw: hij gaat verder waar hij stopte.',
+    fichierAbime: 'Het gedownloade bestand komt niet overeen met de gepubliceerde update. Probeer het opnieuw: het wordt opnieuw gedownload.',
   },
   camera: {
     zoom: 'Zoom ×{valeur}',

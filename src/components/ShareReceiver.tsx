@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AppState } from 'react-native';
-import { File, Paths } from 'expo-file-system';
-import { randombytes_buf, to_base64 } from 'react-native-libsodium';
 
 import { addShareListener, SharedMedia, takeSharedMedia } from '../../modules/pear-native';
 import { chat } from '../chat/manager';
@@ -45,14 +43,15 @@ export function ShareReceiver({ contacts, ready, onSent }: { contacts: Contact[]
       for (const [index, key] of keys.entries()) {
         for (const item of items) {
           // L'envoi déplace le fichier du cache : chaque contact sauf le dernier reçoit une copie.
-          let uri = item.uri;
-          if (index < keys.length - 1) {
-            const copy = new File(Paths.cache, `partage-${to_base64(randombytes_buf(8))}`);
-            await new File(item.uri).copy(copy);
-            uri = copy.uri;
-          }
           const video = item.mime.startsWith('video/');
-          await chat.sendFile(key, { uri, name: video ? 'video.mp4' : 'photo.jpg', size: item.size, mime: item.mime, kind: video ? 'video' : 'image' });
+          await chat.sendFile(key, {
+            uri: item.uri,
+            name: video ? 'video.mp4' : 'photo.jpg',
+            size: item.size,
+            mime: item.mime,
+            kind: video ? 'video' : 'image',
+            keepSource: index < keys.length - 1,
+          });
         }
       }
       if (keys[0]) onSent(keys[0]);

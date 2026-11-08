@@ -64,16 +64,24 @@ function vibrate() {
   Haptics.selectionAsync().catch((e) => log.warn('vibration', e));
 }
 
-type Props = { uri: string; image: { width: number; height: number }; crop: Crop; bottom: number; onDone: (crop: Crop) => void };
+type Props = {
+  uri: string;
+  image: { width: number; height: number };
+  crop: Crop;
+  bottom: number;
+  onDone: (crop: Crop) => void;
+  // Format imposé (photo de profil : 1:1) : pas de choix de format, et un cercle montre ce qui restera.
+  lockedAspect?: Aspect;
+};
 
 // Recadrer et tourner une photo : la photo entière, le cadre gardé en clair, le reste assombri.
-export function CropPanel({ uri, image, crop: initial, bottom, onDone }: Props) {
+export function CropPanel({ uri, image, crop: initial, bottom, onDone, lockedAspect }: Props) {
   const colors = useMediaColors();
   const styles = useStyles();
   const { top } = useInsets();
   const screen = useWindowDimensions();
   const [crop, setCrop] = useState(initial);
-  const [aspect, setAspect] = useState<Aspect>('free');
+  const [aspect, setAspect] = useState<Aspect>(lockedAspect ?? 'free');
   const progress = useRef(new Animated.Value(0)).current;
   const content = useRef(new Animated.Value(1)).current;
   const grid = useRef(new Animated.Value(0)).current;
@@ -207,6 +215,7 @@ export function CropPanel({ uri, image, crop: initial, bottom, onDone }: Props) 
         <View style={[styles.shade, { left: origin.x, top: frame.top, width: box.x, height: frame.height }]} />
         <View style={[styles.shade, { left: frame.left + frame.width, top: frame.top, width: shown.width - box.x - box.width, height: frame.height }]} />
         <View style={[styles.frame, frame]}>
+          {lockedAspect === '1:1' && <View style={styles.circle} />}
           <Animated.View style={[StyleSheet.absoluteFill, { opacity: grid }]}>
             <View style={[styles.gridLine, { left: '33.33%', top: 0, bottom: 0, width: StyleSheet.hairlineWidth }]} />
             <View style={[styles.gridLine, { left: '66.66%', top: 0, bottom: 0, width: StyleSheet.hairlineWidth }]} />
@@ -242,7 +251,7 @@ export function CropPanel({ uri, image, crop: initial, bottom, onDone }: Props) 
 
       <View style={[styles.bottomRow, { bottom: bottom + spacing.lg }]}>
         <View style={styles.aspects}>
-          {ASPECTS.map(({ id, ratio: value }) => (
+          {ASPECTS.filter(({ id }) => !lockedAspect || id === lockedAspect).map(({ id, ratio: value }) => (
             <Pressable
               key={id}
               onPress={() => chooseAspect(id)}
@@ -261,6 +270,10 @@ export function CropPanel({ uri, image, crop: initial, bottom, onDone }: Props) 
         <Pressable
           onPress={() => {
             vibrate();
+            if (lockedAspect) {
+              swap({ rotation: 0, rect: fullRect(image, 0, ratio) });
+              return;
+            }
             setAspect('free');
             swap(NO_CROP);
           }}
@@ -285,6 +298,12 @@ const useStyles = createMediaStyles((colors) => ({
     position: 'absolute',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.9)',
+  },
+  circle: {
+    ...StyleSheet.absoluteFill,
+    borderRadius: 9999,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.7)',
   },
   gridLine: {
     position: 'absolute',

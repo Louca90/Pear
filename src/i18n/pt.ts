@@ -58,6 +58,7 @@ export const pt: Dictionary = {
     fichierTropLourd: 'Arquivo grande demais',
     limite: 'O limite é {taille}.',
     envoiImpossible: 'Não foi possível enviar',
+    envoiEchoueA: 'Não foi possível enviar a mensagem para: {noms}.',
     ouvertureImpossible: 'Não foi possível abrir',
     vide: 'Suas mensagens ficam nos seus dois telefones.',
     maintenirMicro: 'Segure o microfone para gravar',
@@ -121,6 +122,7 @@ export const pt: Dictionary = {
     messageEpingleN: 'Mensagem fixada {i}/{n}',
   },
   profil: {
+    photoImpossible: 'Foto não recortada',
     themeAuto: 'Automático',
     themeClair: 'Claro',
     themeSombre: 'Escuro',
@@ -209,6 +211,9 @@ export const pt: Dictionary = {
     fermerApercu: 'Fechar a prévia (debug)',
     aJour: 'O Pear está atualizado!',
     detailGithub: 'Ver os detalhes da atualização no GitHub',
+    serveurIndisponible: 'O servidor do GitHub não está respondendo no momento. Tente novamente em alguns minutos.',
+    connexionCoupee: 'O download foi interrompido. Verifique a conexão e tente novamente: ele continuará de onde parou.',
+    fichierAbime: 'O arquivo baixado não corresponde à atualização publicada. Tente novamente: ele será baixado de novo.',
   },
   camera: {
     zoom: 'Zoom ×{valeur}',

@@ -5,6 +5,7 @@ import { Camera, Check, FileDown, FileUp, ImageMinus, Settings } from 'lucide-re
 import { chat, MAX_PROFILE_NAME_LENGTH } from '../chat/manager';
 import { BackupSheet } from '../components/BackupSheet';
 import { MediaPicker } from '../components/MediaPicker';
+import { ProfilePhotoCropper } from '../components/ProfilePhotoCropper';
 import { useBottomBarSpace } from '../components/BottomBar';
 import { showDialog } from '../components/dialog';
 import { Avatar, Button, Header, IconButton, Screen } from '../components/ui';
@@ -30,6 +31,8 @@ export function ProfileScreen({ onSettings }: { onSettings: () => void }) {
 
   // La galerie de Pear, une seule photo : elle est réduite à l'enregistrement (saveProfile).
   const [galleryOpen, setGalleryOpen] = useState(false);
+  // La photo choisie passe d'abord par le recadrage en carré, avant d'être gardée.
+  const [cropping, setCropping] = useState<string | null>(null);
   const pickPhoto = () => setGalleryOpen(true);
 
   const save = async () => {
@@ -103,9 +106,19 @@ export function ProfileScreen({ onSettings }: { onSettings: () => void }) {
           single
           onPick={([picked]) => {
             setGalleryOpen(false);
-            if (picked) setPhoto(picked.uri);
+            if (picked) setCropping(picked.uri);
           }}
           onClose={() => setGalleryOpen(false)}
+        />
+      )}
+      {cropping && (
+        <ProfilePhotoCropper
+          uri={cropping}
+          onDone={(uri) => {
+            setCropping(null);
+            setPhoto(uri);
+          }}
+          onCancel={() => setCropping(null)}
         />
       )}
     </Screen>

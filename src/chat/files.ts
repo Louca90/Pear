@@ -29,10 +29,12 @@ export function storedFile(id: string): File {
 // Un fichier de notre cache est déplacé, ce qui évite de copier une grosse vidéo.
 // Tout le reste, comme une photo de la galerie, est copié : l'original ne doit jamais quitter sa place.
 // move et copy sont asynchrones : le fichier n'est à sa place qu'une fois la Promise terminée.
-export async function storeOutgoingFile(sourceUri: string, id: string): Promise<string> {
+// Un fichier du cache est déplacé (pas de copie inutile), sauf keepSource : le même fichier part
+// ensuite à un autre contact.
+export async function storeOutgoingFile(sourceUri: string, id: string, keepSource = false): Promise<string> {
   const source = new File(sourceUri);
   const destination = storedFile(id);
-  if (!sourceUri.startsWith(Paths.cache.uri)) {
+  if (keepSource || !sourceUri.startsWith(Paths.cache.uri)) {
     await source.copy(destination);
     return destination.uri;
   }

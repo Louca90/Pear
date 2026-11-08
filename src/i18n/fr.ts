@@ -57,6 +57,7 @@ export const fr = {
     fichierTropLourd: 'Fichier trop lourd',
     limite: 'La limite est de {taille}.',
     envoiImpossible: 'Envoi impossible',
+    envoiEchoueA: 'Le message n\'a pas pu partir pour : {noms}.',
     ouvertureImpossible: 'Ouverture impossible',
     vide: 'Vos messages restent sur vos deux téléphones.',
     maintenirMicro: 'Maintenez le micro pour enregistrer',
@@ -120,6 +121,7 @@ export const fr = {
     messageEpingleN: 'Message épinglé {i}/{n}',
   },
   profil: {
+    photoImpossible: 'Photo non recadrée',
     themeAuto: 'Automatique',
     themeClair: 'Clair',
     themeSombre: 'Sombre',
@@ -208,6 +210,9 @@ export const fr = {
     fermerApercu: 'Fermer l\'aperçu (debug)',
     aJour: 'Pear est à jour !',
     detailGithub: 'Voir le détail de la mise à jour sur GitHub',
+    serveurIndisponible: 'Le serveur de GitHub ne répond pas pour le moment. Réessayez dans quelques minutes.',
+    connexionCoupee: 'Le téléchargement a été coupé. Vérifiez la connexion, puis réessayez : il reprendra où il s\'est arrêté.',
+    fichierAbime: 'Le fichier téléchargé ne correspond pas à la mise à jour publiée. Réessayez : il sera retéléchargé.',
   },
   camera: {
     zoom: 'Zoom ×{valeur}',

@@ -14,6 +14,7 @@ import { checkAllPermissions, PermissionId, PermissionState, requestPermission }
 import { Pear, PEAR_RATIO } from './Pear';
 import { BackupSheet } from '../components/BackupSheet';
 import { MediaPicker } from '../components/MediaPicker';
+import { ProfilePhotoCropper } from '../components/ProfilePhotoCropper';
 import { saveOnboardingStep } from './progress';
 
 export type OnboardingStep = 0 | 1 | 2 | 3;
@@ -166,6 +167,8 @@ export function OnboardingScreen({ mode, initialStep, onDone }: Props) {
 
   // La galerie de Pear, une seule photo : elle est réduite à l'enregistrement (saveProfile).
   const [galleryOpen, setGalleryOpen] = useState(false);
+  // La photo choisie passe d'abord par le recadrage en carré, avant d'être gardée.
+  const [cropping, setCropping] = useState<string | null>(null);
   const pickPhoto = () => setGalleryOpen(true);
 
   const saveProfile = async () => {
@@ -324,9 +327,19 @@ export function OnboardingScreen({ mode, initialStep, onDone }: Props) {
           single
           onPick={([picked]) => {
             setGalleryOpen(false);
-            if (picked) setPhoto(picked.uri);
+            if (picked) setCropping(picked.uri);
           }}
           onClose={() => setGalleryOpen(false)}
+        />
+      )}
+      {cropping && (
+        <ProfilePhotoCropper
+          uri={cropping}
+          onDone={(uri) => {
+            setCropping(null);
+            setPhoto(uri);
+          }}
+          onCancel={() => setCropping(null)}
         />
       )}
     </Animated.View>

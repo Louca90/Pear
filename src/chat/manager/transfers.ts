@@ -43,7 +43,7 @@ import { log } from '../../log';
 
 export async function sendFile(core: ChatCore, contact: string, file: PickedFile) {
   const id = to_base64(randombytes_buf(FILE_ID_BYTES));
-  const uri = await storeOutgoingFile(file.uri, id);
+  const uri = await storeOutgoingFile(file.uri, id, file.keepSource);
   // Seule la taille du fichier stocké compte : le sélecteur donne parfois celle de l'original avant
   // compression (photo réduite par quality).
   const size = storedSize(uri) || file.size;

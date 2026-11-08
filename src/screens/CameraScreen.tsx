@@ -112,18 +112,42 @@ function CaptureReview({ capture, contacts, onDiscard, onSent }: ReviewProps) {
   };
 
   // Un ou plusieurs contacts : le média préparé une seule fois, puis envoyé à chacun (chiffré à part).
+  // Le fichier est copié pour chaque contact sauf le dernier, qui le reçoit déplacé : avant, le premier
+  // envoi le déplaçait et les suivants échouaient (message d'erreur alors que la photo était partie).
   const send = async (keys: string[]) => {
+    let uri: string;
     try {
-      const uri = await finalUri();
-      const ending = extension(uri);
-      const mime = capture.kind === 'video' ? 'video/mp4' : ending === '.png' ? 'image/png' : 'image/jpeg';
-      for (const key of keys) {
-        await chat.sendFile(key, { uri, name: `${capture.kind === 'video' ? 'video' : 'photo'}${ending}`, size: 0, mime, kind: capture.kind, fromCamera: true });
-      }
-      onSent(keys[0]);
+      uri = await finalUri();
     } catch (e) {
-      showDialog(t('chat.envoiImpossible'), String(e));
+      showDialog(t('chat.envoiImpossible'), e instanceof Error ? e.message : String(e));
+      return;
     }
+    const ending = extension(uri);
+    const mime = capture.kind === 'video' ? 'video/mp4' : ending === '.png' ? 'image/png' : 'image/jpeg';
+    const failed: string[] = [];
+    for (const [index, key] of keys.entries()) {
+      try {
+        await chat.sendFile(key, {
+          uri,
+          name: `${capture.kind === 'video' ? 'video' : 'photo'}${ending}`,
+          size: 0,
+          mime,
+          kind: capture.kind,
+          fromCamera: true,
+          keepSource: index < keys.length - 1,
+        });
+      } catch (e) {
+        log.warn('envoi depuis la caméra', e);
+        failed.push(key);
+      }
+    }
+    // Seuls les vrais échecs sont signalés, avec le nom des contacts concernés.
+    if (failed.length > 0) {
+      const names = failed.map((key) => contacts.find((contact) => contact.publicKey === key)?.name || t('app.contact'));
+      showDialog(t('chat.envoiImpossible'), t('chat.envoiEchoueA', { noms: names.join(', ') }));
+    }
+    const sent = keys.find((key) => !failed.includes(key));
+    if (sent) onSent(sent);
   };
 
   return (
