@@ -35,10 +35,13 @@ export function ProfileScreen({ onSettings }: { onSettings: () => void }) {
   const [cropping, setCropping] = useState<string | null>(null);
   const pickPhoto = () => setGalleryOpen(true);
 
-  const save = async () => {
+  // La photo recadrée est enregistrée tout de suite (« Terminé » suffit) : sinon elle restait en
+  // attente et l'onglet gardait l'ancienne.
+  const save = async (nextPhoto: string | null = photo) => {
     setState('saving');
     try {
-      await chat.saveProfile(name.trim(), photo);
+      await chat.saveProfile(name.trim(), nextPhoto);
+      setPhoto(chat.getMyProfile().photo);
       setState('saved');
       timer.current = setTimeout(() => setState('idle'), SAVED_MS);
     } catch (e) {
@@ -86,7 +89,7 @@ export function ProfileScreen({ onSettings }: { onSettings: () => void }) {
           <Button
             label={state === 'saving' ? t('profil.enregistrement') : state === 'saved' ? t('profil.enregistre') : t('commun.enregistrer')}
             icon={Check}
-            onPress={save}
+            onPress={() => save()}
           />
 
           <Text style={[styles.label, styles.section]}>{t('sauvegarde.titre')}</Text>
@@ -117,6 +120,7 @@ export function ProfileScreen({ onSettings }: { onSettings: () => void }) {
           onDone={(uri) => {
             setCropping(null);
             setPhoto(uri);
+            save(uri);
           }}
           onCancel={() => setCropping(null)}
         />

@@ -47,11 +47,15 @@ export function ProfilePhotoCropper({ uri, onDone, onCancel }: Props) {
       requestAnimationFrame(() => {
         const tag = findNodeHandle(exportRoot.current);
         if (!tag) {
+          log.warn('photo de profil', 'vue de recadrage introuvable, photo gardée entière');
           onDone(uri);
           return;
         }
         const output = new File(Paths.cache, `profil-${Date.now()}.png`).uri;
-        captureView(tag, output, Math.max(1, scale)).then(onDone, (e) => {
+        captureView(tag, output, Math.max(1, scale)).then((result) => {
+          log.info('photo de profil', `recadrée ${Math.round(EXPORT_POINTS * scale)} px`);
+          onDone(result);
+        }, (e) => {
           log.warn('photo de profil', e);
           showDialog(t('profil.photoImpossible'), e instanceof Error ? e.message : String(e));
           onCancel();
