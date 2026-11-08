@@ -53,6 +53,8 @@ import java.io.File
 import java.io.FileOutputStream
 
 private const val TAG = "PearCamera"
+private const val MAX_RETRIES = 3
+private const val RETRY_DELAY_MS = 400L
 
 // CameraX, déjà préparé au lancement de l'app (PearCameraModule) : ici on attend qu'il soit prêt.
 suspend fun cameraProvider(context: Context): ProcessCameraProvider = suspendCancellableCoroutine { continuation ->
@@ -99,6 +101,7 @@ class PearCameraView(context: Context, appContext: AppContext) : ExpoView(contex
   private var recording: Recording? = null
   private var recordingPromise: Promise? = null
   private var bindToken = 0
+  private var retries = 0
 
   private var facing = "back"
   private var cameraId: String? = null
@@ -248,9 +251,25 @@ class PearCameraView(context: Context, appContext: AppContext) : ExpoView(contex
         bound.cameraControl.enableTorch(torch)
 
         var announced = false
+        var opening = false
         val observer = Observer<CameraState> { state ->
-          if (announced || token != bindToken || state.type != CameraState.Type.OPEN) return@Observer
+          if (token != bindToken) return@Observer
+          if (state.type == CameraState.Type.OPENING) opening = true
+          // Ouverture ratée (caméra occupée, fermée par le système) : on rebranche, quelques fois.
+          if (!announced && (state.error != null || (opening && state.type == CameraState.Type.CLOSED)) && retries < MAX_RETRIES && active) {
+            retries++
+            Log.w(TAG, "caméra fermée à l'ouverture (${state.error?.code}), nouvel essai $retries")
+            postDelayed({
+              if (token == bindToken && active) {
+                needsBind = true
+                applyChanges()
+              }
+            }, RETRY_DELAY_MS)
+            return@Observer
+          }
+          if (announced || state.type != CameraState.Type.OPEN) return@Observer
           announced = true
+          retries = 0
           val zoomState = bound.cameraInfo.zoomState.value
           onReady(mapOf("minZoom" to (zoomState?.minZoomRatio ?: 1f).toDouble(), "maxZoom" to (zoomState?.maxZoomRatio ?: 1f).toDouble()))
         }
@@ -268,7 +287,14 @@ class PearCameraView(context: Context, appContext: AppContext) : ExpoView(contex
     stateObserver?.let { observer -> camera?.cameraInfo?.cameraState?.removeObserver(observer) }
     stateObserver = null
     camera = null
-    provider?.unbindAll()
+    // Seulement nos usages : une nouvelle vue de caméra (écran rouvert) a pu déjà se brancher, et
+    // unbindAll la coupait juste après son ouverture (caméra noire jusqu'au changement d'onglet).
+    val mine = listOfNotNull(preview, imageCapture, videoCapture).toTypedArray()
+    try {
+      provider?.unbind(*mine)
+    } catch (e: Exception) {
+      Log.w(TAG, "caméra non détachée", e)
+    }
   }
 
   // La photo, déjà tournée et réduite (le JPEG n'a pas besoin d'orientation EXIF), en un seul passage.

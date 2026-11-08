@@ -4,6 +4,8 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import android.graphics.Matrix
+import android.media.ExifInterface
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
@@ -265,6 +267,16 @@ class PearNativeModule : Module() {
     AsyncFunction("sha256File") { fileUri: String -> sha256File(fileUri) }
 
     // Réduit une image (photo de profil) : plus grand côté maxSize, recompressée en JPEG.
+    // Taille d'une photo telle qu'on la voit (orientation EXIF appliquée).
+    AsyncFunction("imageSize") { uri: String -> imageSize(uri) }
+
+    // Recadre une photo (rect en fractions de la photo vue puis tournée de rotation), la réduit et
+    // l'enregistre en JPEG, hors du fil de l'interface : photo de profil.
+    AsyncFunction("cropImage") { inputUri: String, outputUri: String, rect: List<Double>, rotation: Int, maxSize: Int, quality: Int ->
+      if (rect.size != 4) throw IllegalArgumentException("Cadre invalide.")
+      cropImage(inputUri, outputUri, FloatArray(4) { rect[it].toFloat() }, rotation, maxSize, quality)
+    }
+
     AsyncFunction("resizeImage") { inputUri: String, outputUri: String, maxSize: Int, quality: Int -> resizeImage(inputUri, outputUri, maxSize, quality) }
 
     Function("installApk") { fileUri: String -> installApk(fileUri) }
@@ -405,6 +417,59 @@ class PearNativeModule : Module() {
     val file = File(pathOf(outputUri))
     file.parentFile?.mkdirs()
     FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.JPEG, quality, it) }
+    return outputUri
+  }
+
+  private fun exifDegrees(context: android.content.Context, uri: Uri): Int = try {
+    context.contentResolver.openInputStream(uri)?.use { input ->
+      when (ExifInterface(input).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
+        ExifInterface.ORIENTATION_ROTATE_90, ExifInterface.ORIENTATION_TRANSPOSE -> 90
+        ExifInterface.ORIENTATION_ROTATE_180 -> 180
+        ExifInterface.ORIENTATION_ROTATE_270, ExifInterface.ORIENTATION_TRANSVERSE -> 270
+        else -> 0
+      }
+    } ?: 0
+  } catch (e: Exception) {
+    0
+  }
+
+  private fun imageSize(inputUri: String): Map<String, Int> {
+    val context = appContext.reactContext ?: throw IllegalStateException("Contexte indisponible.")
+    val uri = Uri.parse(inputUri)
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    context.contentResolver.openInputStream(uri).use { BitmapFactory.decodeStream(it, null, bounds) }
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw IllegalArgumentException("Image illisible.")
+    val sideways = exifDegrees(context, uri) % 180 != 0
+    return mapOf("width" to if (sideways) bounds.outHeight else bounds.outWidth, "height" to if (sideways) bounds.outWidth else bounds.outHeight)
+  }
+
+  private fun cropImage(inputUri: String, outputUri: String, rect: FloatArray, rotation: Int, maxSize: Int, quality: Int): String {
+    val context = appContext.reactContext ?: throw IllegalStateException("Contexte indisponible.")
+    val uri = Uri.parse(inputUri)
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    context.contentResolver.openInputStream(uri).use { BitmapFactory.decodeStream(it, null, bounds) }
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw IllegalArgumentException("Image illisible.")
+    // Décodée directement réduite, tant que la partie gardée reste plus grande que maxSize.
+    val kept = maxOf(bounds.outWidth, bounds.outHeight) * maxOf(rect[2], rect[3])
+    var sample = 1
+    while (kept / (sample * 2) >= maxSize) sample *= 2
+    val decoded = context.contentResolver.openInputStream(uri).use {
+      BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample })
+    } ?: throw IllegalArgumentException("Image illisible.")
+    val turn = (exifDegrees(context, uri) + rotation) % 360
+    val turned = if (turn == 0) decoded else Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, Matrix().apply { postRotate(turn.toFloat()) }, true)
+    if (turned !== decoded) decoded.recycle()
+    val left = (rect[0] * turned.width).toInt().coerceIn(0, turned.width - 1)
+    val top = (rect[1] * turned.height).toInt().coerceIn(0, turned.height - 1)
+    val width = (rect[2] * turned.width).toInt().coerceIn(1, turned.width - left)
+    val height = (rect[3] * turned.height).toInt().coerceIn(1, turned.height - top)
+    val scale = minOf(1f, maxSize.toFloat() / maxOf(width, height))
+    val output = Bitmap.createBitmap(turned, left, top, width, height, Matrix().apply { postScale(scale, scale) }, true)
+    val file = File(pathOf(outputUri))
+    file.parentFile?.mkdirs()
+    FileOutputStream(file).use { output.compress(Bitmap.CompressFormat.JPEG, quality, it) }
+    if (output !== turned) output.recycle()
+    turned.recycle()
     return outputUri
   }
 

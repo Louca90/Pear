@@ -118,11 +118,10 @@ export function ProfileScreen({ onSettings }: { onSettings: () => void }) {
         <ProfilePhotoCropper
           uri={cropping}
           onDone={(uri) => {
-            setCropping(null);
             setPhoto(uri);
             save(uri);
           }}
-          onCancel={() => setCropping(null)}
+          onClose={() => setCropping(null)}
         />
       )}
     </Screen>

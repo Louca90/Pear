@@ -34,6 +34,8 @@ declare class PearNativeModule extends NativeModule<{ onBack: (event: BackEvent)
   installApk(fileUri: string): void;
   reloadApp(): Promise<void>;
   setScreenBrightness?(value: number): Promise<void>;
+  imageSize?(uri: string): Promise<{ width: number; height: number }>;
+  cropImage?(inputUri: string, outputUri: string, rect: number[], rotation: number, maxSize: number, quality: number): Promise<string>;
 }
 
 const PearNative = requireNativeModule<PearNativeModule>('PearNative');
@@ -123,6 +125,14 @@ export function addShareListener(listener: () => void) {
 // Luminosité de l'écran (0 à 1, -1 = celle du téléphone). Sans effet sur un APK plus ancien.
 export function setScreenBrightness(value: number) {
   return PearNative.setScreenBrightness?.(value) ?? Promise.resolve();
+}
+
+// Photo de profil : la taille vue (EXIF appliqué) et le recadrage natif, hors du fil de l'interface.
+// Absents d'un APK plus ancien : null, l'appelant garde alors la photo entière.
+export const nativeImageSize = PearNative.imageSize ? (uri: string) => PearNative.imageSize!(uri) : null;
+export function cropImage(inputUri: string, outputUri: string, rect: { x: number; y: number; width: number; height: number }, rotation: number, maxSize: number, quality: number) {
+  if (!PearNative.cropImage) return Promise.resolve(inputUri);
+  return PearNative.cropImage(inputUri, outputUri, [rect.x, rect.y, rect.width, rect.height], rotation, maxSize, quality);
 }
 
 // Une vue dessinée dans une image PNG (calques de l'éditeur). Demande l'APK du lot 10.3.

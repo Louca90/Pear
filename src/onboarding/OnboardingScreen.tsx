@@ -336,10 +336,9 @@ export function OnboardingScreen({ mode, initialStep, onDone }: Props) {
         <ProfilePhotoCropper
           uri={cropping}
           onDone={(uri) => {
-            setCropping(null);
             setPhoto(uri);
           }}
-          onCancel={() => setCropping(null)}
+          onClose={() => setCropping(null)}
         />
       )}
     </Animated.View>
