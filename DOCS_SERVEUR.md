@@ -51,7 +51,7 @@ Elles sont versionnées dans `database.rules.json` : tout est fermé par défaut
 
 - `GET /api/inbox` → `{ v, serverKey }`. `POST /api/inbox` `{ v: 1, publicKey, at, proof }` → `{ v, inboxId }` : enregistre la boîte, ou la reprend après une réinstallation (même clé, nouveau compte anonyme). Réponses : `400` corps ou date invalide, `401`, `403` preuve fausse, `429` (10 par minute et par compte).
 - `POST /api/pair-request` `{ v: 1, inboxId, sealed }` : dépose la demande et envoie un push `{ type: 'pair', v }` au topic du destinataire (gardé 7 jours). Réponses : `204`, `400`, `401`, `413` demande trop grosse, `429` (5 par minute et par expéditeur, 10 par minute et par boîte), `507` boîte pleine (50 demandes en attente).
-- `GET /api/cleanup` : tâche quotidienne à 4 h UTC (`server/vercel.json`, gratuite sur le plan Hobby). Elle supprime les demandes de plus de 7 jours et les compteurs périmés, rien d'autre : l'appeler à la main est sans danger.
+- `GET /api/cleanup` : tâche quotidienne à 4 h UTC (`server/vercel.json`, gratuite sur le plan Hobby). Elle supprime les demandes, les jetons, les compteurs et les fichiers du relais périmés. Elle exige `Authorization: Bearer $CRON_SECRET` (Vercel l'envoie tout seul au cron quand la variable existe) et répond `401` sinon, y compris si `CRON_SECRET` n'est pas configurée. Elle ne lit aucun morceau de fichier : le relais est listé en `shallow=true` (API REST), puis seule la fiche `meta` de chaque fichier est lue.
 - Pas de serveur TURN : les offres gratuites sans carte bancaire n'existent pas ou ne marchent pas. Sans connexion directe, les messages passent chiffrés dans les pushs, et les fichiers par le relais ci-dessous.
 
 ## Relais des fichiers (lot 7)
@@ -77,6 +77,7 @@ Quand le destinataire n'est pas joignable en direct depuis quelques secondes, l'
 ### Variables d'environnement Vercel (noms seulement)
 
 - `FIREBASE_SERVICE_ACCOUNT` : clé JSON du compte de service Firebase (secrète).
+- `CRON_SECRET` : chaîne aléatoire d'au moins 16 caractères, exigée par `/api/cleanup` (secrète). Sans elle, le nettoyage quotidien est refusé.
 - `FIREBASE_DATABASE_URL` (facultative) : adresse de la Realtime Database, par défaut `https://pear-2c275-default-rtdb.europe-west1.firebasedatabase.app`.
 
 **Déployer** : automatique. Le projet Vercel `pear` est relié au dépôt GitHub (dossier racine `server`) : chaque push sur `main` redéploie la fonction en production. Vérifier ensuite : un `POST` sans jeton sur `https://pear-drab.vercel.app/api/wake` répond `401`.

@@ -1,6 +1,7 @@
 const { cert, getApps, initializeApp } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
 const { getDatabase } = require('firebase-admin/database');
+const { timingSafeEqual } = require('node:crypto');
 
 // Partagé par les fonctions de server/api (Vercel ne déploie comme fonctions que les fichiers de api/).
 
@@ -11,12 +12,12 @@ const DEFAULT_DATABASE_URL = 'https://pear-2c275-default-rtdb.europe-west1.fireb
 // illisible, les fonctions répondent 500 avec un message clair au lieu de planter au démarrage.
 let setupError = null;
 let serviceAccount = null;
+let app = null;
+const databaseURL = process.env.FIREBASE_DATABASE_URL || DEFAULT_DATABASE_URL;
 try {
   if (!process.env.FIREBASE_SERVICE_ACCOUNT) throw new Error('FIREBASE_SERVICE_ACCOUNT manquante');
   serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-  if (!getApps().length) {
-    initializeApp({ credential: cert(serviceAccount), databaseURL: process.env.FIREBASE_DATABASE_URL || DEFAULT_DATABASE_URL });
-  }
+  app = getApps()[0] || initializeApp({ credential: cert(serviceAccount), databaseURL });
 } catch (error) {
   setupError = error.message;
   console.error('Configuration du serveur :', setupError);
@@ -30,6 +31,26 @@ async function verifyCaller(req) {
   } catch {
     return null;
   }
+}
+
+// Appel de la tâche planifiée : Vercel envoie `Authorization: Bearer $CRON_SECRET`. Sans secret configuré,
+// personne ne passe (mieux vaut un nettoyage arrêté qu'une porte ouverte).
+function isCron(req) {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return false;
+  const expected = Buffer.from(`Bearer ${secret}`);
+  const given = Buffer.from(req.headers.authorization || '');
+  return given.length === expected.length && timingSafeEqual(given, expected);
+}
+
+// Les clés directes d'un nœud, sans rien télécharger de ce qu'il contient (`shallow=true` de l'API REST, que
+// le SDK admin ne propose pas). Sert à parcourir le relais sans lire les morceaux de fichiers.
+async function shallowKeys(path) {
+  const { access_token: token } = await app.options.credential.getAccessToken();
+  const response = await fetch(`${databaseURL}/${path}.json?shallow=true`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!response.ok) throw new Error(`Lecture de ${path} : ${response.status}`);
+  const data = await response.json();
+  return data && typeof data === 'object' ? Object.keys(data) : [];
 }
 
 // Compte un appel dans rateLimits/{kind}/{id} : { minute, count }. Un seul nœud par appelant ou
@@ -54,6 +75,8 @@ module.exports = {
   getSetupError: () => setupError,
   getServiceAccount: () => serviceAccount,
   verifyCaller,
+  isCron,
+  shallowKeys,
   overLimit,
   readBody,
 };

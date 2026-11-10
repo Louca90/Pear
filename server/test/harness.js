@@ -7,6 +7,8 @@ const state = {
   pushes: [],
   pushError: null,
   nextId: 0,
+  reads: [],
+  fetches: [],
 };
 
 function get(path) {
@@ -30,7 +32,7 @@ function ref(path = '') {
       set(path, next);
       return { snapshot: { val: () => next } };
     },
-    once: async () => ({ val: () => (get(path) === undefined ? null : JSON.parse(JSON.stringify(get(path)))) }),
+    once: async () => (state.reads.push(path), { val: () => (get(path) === undefined ? null : JSON.parse(JSON.stringify(get(path)))) }),
     set: async (value) => set(path, resolveTimestamps(value)),
     update: async (values) => Object.entries(values).forEach(([key, value]) => set(`${path}/${key}`, value === null ? null : resolveTimestamps(value))),
     push: async (value) => set(`${path}/id${state.nextId++}`, resolveTimestamps(value)),
@@ -38,7 +40,11 @@ function ref(path = '') {
 }
 
 const fakes = {
-  'firebase-admin/app': { cert: (x) => x, getApps: () => [], initializeApp: () => undefined },
+  'firebase-admin/app': {
+    cert: (x) => x,
+    getApps: () => [],
+    initializeApp: () => ({ options: { credential: { getAccessToken: async () => ({ access_token: 'jeton-test' }) } } }),
+  },
   'firebase-admin/auth': {
     getAuth: () => ({
       verifyIdToken: async (token) => {
@@ -58,6 +64,15 @@ const fakes = {
   },
 };
 
+// REST `?shallow=true` : les clés directes d'un nœud, sans son contenu.
+global.fetch = async (url, { headers } = {}) => {
+  const { pathname, searchParams } = new URL(url);
+  state.fetches.push(pathname);
+  if (headers.Authorization !== 'Bearer jeton-test' || searchParams.get('shallow') !== 'true') return { ok: false, status: 401 };
+  const node = get(pathname.replace(/.json$/, ''));
+  return { ok: true, json: async () => (node && typeof node === 'object' ? Object.fromEntries(Object.keys(node).map((k) => [k, true])) : null) };
+};
+
 const load = Module._load;
 Module._load = function (request, ...rest) {
   return fakes[request] ?? load.call(this, request, ...rest);
@@ -69,7 +84,7 @@ function loadHandler(name) {
   return require(`../api/${name}.js`);
 }
 
-function call(handler, { method = 'POST', auth = 'Bearer ok', body } = {}) {
+function call(handler, { method = 'POST', auth = 'Bearer ok', body, headers } = {}) {
   return new Promise((resolve) => {
     const res = {
       code: 200,
@@ -86,7 +101,7 @@ function call(handler, { method = 'POST', auth = 'Bearer ok', body } = {}) {
         resolve(this);
       },
     };
-    handler({ method, headers: { authorization: auth }, body }, res);
+    handler({ method, headers: { authorization: auth, ...headers }, body }, res);
   });
 }
 
@@ -94,6 +109,8 @@ function reset() {
   state.db = {};
   state.pushes = [];
   state.pushError = null;
+  state.reads = [];
+  state.fetches = [];
 }
 
 module.exports = { state, get, loadHandler, call, reset };

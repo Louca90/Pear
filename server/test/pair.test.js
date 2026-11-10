@@ -21,6 +21,7 @@ function proof(device, serverKey, uid, at) {
 }
 
 (async () => {
+  process.env.CRON_SECRET = 'secret-cron';
   process.env.FIREBASE_SERVICE_ACCOUNT = JSON.stringify({ private_key: 'clé de test' });
   const inbox = loadHandler('inbox');
   const pair = loadHandler('pair-request');
@@ -91,8 +92,8 @@ function proof(device, serverKey, uid, at) {
     rateLimits: { caller: { u1: { minute: 1, count: 3 }, u2: { minute: Math.floor(Date.now() / 60000), count: 1 } } },
     tokens: { [inboxId]: { vieux: { v: 1, data: 'x', at: Date.now() - 61 * 24 * 3600000 }, recent: { v: 1, data: 'y', at: Date.now() } } },
   };
-  assert.equal((await call(cleanup, { method: 'POST' })).code, 405);
-  const cleaned = await call(cleanup, { method: 'GET' });
+  assert.equal((await call(cleanup, { method: 'POST', auth: 'Bearer secret-cron' })).code, 405);
+  const cleaned = await call(cleanup, { method: 'GET', auth: 'Bearer secret-cron' });
   assert.equal(cleaned.payload.removed, 3);
   assert.deepEqual(Object.keys(get('tokens/' + inboxId)), ['recent']);
   assert.deepEqual(Object.keys(get(`requests/${inboxId}`)), ['fresh']);

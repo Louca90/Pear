@@ -3,6 +3,7 @@ const assert = require('assert');
 const { state, get, loadHandler, call, reset } = require('./harness');
 
 (async () => {
+  process.env.CRON_SECRET = 'secret-cron';
   process.env.FIREBASE_SERVICE_ACCOUNT = '{}';
   const relay = loadHandler('relay');
   const cleanup = loadHandler('cleanup');
@@ -39,9 +40,19 @@ const { state, get, loadHandler, call, reset } = require('./harness');
     incomplet: { meta: { owner: 'u', size: 10, chunks: 2, at: now - 25 * 3600000 }, chunks: { 0: 'x' } },
     vieux: { meta: { owner: 'u', size: 10, chunks: 1, at: now - 8 * 24 * 3600000 }, chunks: { 0: 'x' } },
   };
-  const cleaned = await call(cleanup, { method: 'GET' });
+  const cleaned = await call(cleanup, { method: 'GET', auth: 'Bearer secret-cron' });
   assert.equal(cleaned.payload.removed, 2);
   assert.deepEqual(Object.keys(get('relay')), ['recent']);
+  // Aucun morceau lu : seulement les fiches `meta`.
+  assert.ok(state.reads.every((path) => !/chunks/.test(path)));
+
+  // Accès : sans secret, avec un mauvais, ou sans CRON_SECRET configuré, rien n'est supprimé.
+  state.db.relay.vieux = { meta: { owner: 'u', size: 10, chunks: 1, at: now - 8 * 24 * 3600000 }, chunks: { 0: 'x' } };
+  for (const auth of ['', 'Bearer faux', 'Bearer okcron', 'Bearer ok']) assert.equal((await call(cleanup, { method: 'GET', auth })).code, 401);
+  assert.ok(get('relay/vieux'));
+  delete process.env.CRON_SECRET;
+  assert.equal((await call(loadHandler('cleanup'), { method: 'GET', auth: 'Bearer undefined' })).code, 401);
+  assert.ok(get('relay/vieux'));
   console.log('relay.js : tous les cas passent');
 })().catch((e) => {
   console.error(e);
