@@ -45,7 +45,8 @@ const REVIEW_CONTROLS_MS = 180;
 // Glisser le déclencheur vers le haut en filmant zoome : ×2 tous les ZOOM_SLIDE points.
 const ZOOM_SLIDE = 140;
 const ZOOM_SLIDE_MAX = 8;
-// Après ce mouvement, le geste choisit son axe jusqu'au relâchement : vertical = zoom, horizontal = cadenas.
+// Après ce mouvement, le geste choisit son axe (vertical = zoom, horizontal = cadenas) et le garde tant
+// qu'il n'est pas revenu à son point de départ.
 const AXIS_LOCK_DISTANCE = 14;
 // Deux petits appuis d'un second doigt pendant qu'on tient le déclencheur : la caméra se retourne.
 const SECOND_TAP_MS = 250;
@@ -258,6 +259,8 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
   const lockHover = useRef(new Animated.Value(1)).current;
   const overLock = useRef(false);
   const gestureAxis = useRef<'zoom' | 'lock' | null>(null);
+  // Position du doigt (depuis l'appui) où le dernier axe s'est libéré : le suivant se mesure à partir d'elle.
+  const gestureAnchor = useRef({ x: 0, y: 0 });
   const flipFade = useRef(new Animated.Value(0)).current;
 
   // Vidéo avec la caméra avant et le flash : un cadre blanc doux autour de l'image et l'écran à pleine
@@ -364,25 +367,35 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
       animateShutter(0.88);
       zoomStart.current = zoomRef.current;
       gestureAxis.current = null;
+      gestureAnchor.current = { x: 0, y: 0 };
       holdTimer.current = setTimeout(beginHold, HOLD_MS);
     },
     move: (dx: number, dy: number, fingers: number) => {
       // Un second doigt posé déplace le centre du geste : on l'ignore pour le cadenas et le zoom.
       if (!wantsVideo.current || isLocked.current || fingers > 1) return;
-      // Une diagonale ne fait pas les deux : l'axe dominant des premiers points l'emporte jusqu'au relâchement.
+      // Jamais les deux à la fois : l'axe dominant des premiers points prend la main. Revenu au départ
+      // (zoom d'origine, ou déclencheur recentré), le geste se libère et peut repartir dans l'autre axe,
+      // mesuré à partir de là.
+      const anchor = gestureAnchor.current;
+      const x = dx - anchor.x;
+      const y = dy - anchor.y;
       if (!gestureAxis.current) {
-        if (Math.hypot(dx, dy) < AXIS_LOCK_DISTANCE) return;
-        gestureAxis.current = Math.abs(dy) > Math.abs(dx) ? 'zoom' : 'lock';
+        if (Math.hypot(x, y) < AXIS_LOCK_DISTANCE) return;
+        gestureAxis.current = Math.abs(y) > Math.abs(x) ? 'zoom' : 'lock';
       }
+      const release = () => {
+        gestureAxis.current = null;
+        gestureAnchor.current = { x: dx, y: dy };
+      };
       if (gestureAxis.current === 'zoom') {
         // Vers le haut, le zoom monte (×2 tous les ZOOM_SLIDE points) ; en redescendant, il revient.
-        if (dy < 0 || zoomRef.current !== zoomStart.current) {
-          const next = Math.max(zoomRange.min, Math.min(Math.min(zoomRange.max, ZOOM_SLIDE_MAX), zoomStart.current * Math.pow(2, -Math.min(0, dy) / ZOOM_SLIDE)));
-          if (Math.abs(next - zoomRef.current) > 0.01) setZoom(next);
-        }
+        const next = Math.max(zoomRange.min, Math.min(Math.min(zoomRange.max, ZOOM_SLIDE_MAX), zoomStart.current * Math.pow(2, -Math.min(0, y) / ZOOM_SLIDE)));
+        if (Math.abs(next - zoomRef.current) > 0.01) setZoom(next);
+        if (y >= 0) release();
         return;
       }
-      const distance = Math.min(0, Math.max(-LOCK_DISTANCE, dx));
+      const distance = Math.min(0, Math.max(-LOCK_DISTANCE, x));
+      if (x >= 0) release();
       shutterX.setValue(distance);
       const reached = distance <= -(LOCK_DISTANCE - LOCK_REACH);
       if (reached !== overLock.current) {
