@@ -45,6 +45,8 @@ const REVIEW_CONTROLS_MS = 180;
 // Glisser le déclencheur vers le haut en filmant zoome : ×2 tous les ZOOM_SLIDE points.
 const ZOOM_SLIDE = 140;
 const ZOOM_SLIDE_MAX = 8;
+// Après ce mouvement, le geste choisit son axe jusqu'au relâchement : vertical = zoom, horizontal = cadenas.
+const AXIS_LOCK_DISTANCE = 14;
 // Deux petits appuis d'un second doigt pendant qu'on tient le déclencheur : la caméra se retourne.
 const SECOND_TAP_MS = 250;
 // La rangée de zoom, au-dessus du déclencheur et du nom du filtre qui s'affiche un instant.
@@ -255,6 +257,7 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
   const lockProgress = useRef(new Animated.Value(0)).current;
   const lockHover = useRef(new Animated.Value(1)).current;
   const overLock = useRef(false);
+  const gestureAxis = useRef<'zoom' | 'lock' | null>(null);
   const flipFade = useRef(new Animated.Value(0)).current;
 
   // Vidéo avec la caméra avant et le flash : un cadre blanc doux autour de l'image et l'écran à pleine
@@ -360,15 +363,24 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
       }
       animateShutter(0.88);
       zoomStart.current = zoomRef.current;
+      gestureAxis.current = null;
       holdTimer.current = setTimeout(beginHold, HOLD_MS);
     },
     move: (dx: number, dy: number, fingers: number) => {
       // Un second doigt posé déplace le centre du geste : on l'ignore pour le cadenas et le zoom.
       if (!wantsVideo.current || isLocked.current || fingers > 1) return;
-      // Vers le haut, le zoom monte (×2 tous les ZOOM_SLIDE points) ; en redescendant, il revient.
-      if (dy < 0 || zoomRef.current !== zoomStart.current) {
-        const next = Math.max(zoomRange.min, Math.min(Math.min(zoomRange.max, ZOOM_SLIDE_MAX), zoomStart.current * Math.pow(2, -Math.min(0, dy) / ZOOM_SLIDE)));
-        if (Math.abs(next - zoomRef.current) > 0.01) setZoom(next);
+      // Une diagonale ne fait pas les deux : l'axe dominant des premiers points l'emporte jusqu'au relâchement.
+      if (!gestureAxis.current) {
+        if (Math.hypot(dx, dy) < AXIS_LOCK_DISTANCE) return;
+        gestureAxis.current = Math.abs(dy) > Math.abs(dx) ? 'zoom' : 'lock';
+      }
+      if (gestureAxis.current === 'zoom') {
+        // Vers le haut, le zoom monte (×2 tous les ZOOM_SLIDE points) ; en redescendant, il revient.
+        if (dy < 0 || zoomRef.current !== zoomStart.current) {
+          const next = Math.max(zoomRange.min, Math.min(Math.min(zoomRange.max, ZOOM_SLIDE_MAX), zoomStart.current * Math.pow(2, -Math.min(0, dy) / ZOOM_SLIDE)));
+          if (Math.abs(next - zoomRef.current) > 0.01) setZoom(next);
+        }
+        return;
       }
       const distance = Math.min(0, Math.max(-LOCK_DISTANCE, dx));
       shutterX.setValue(distance);
