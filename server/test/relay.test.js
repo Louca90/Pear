@@ -1,8 +1,49 @@
 // Teste server/api/relay.js et le nettoyage du relais sans Firebase : node server/test/relay.test.js
 const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
 const { state, get, loadHandler, call, reset } = require('./harness');
 
+// Évalue le texte réel de database.rules.json sur une base fictive (pas le moteur Firebase, mais les mêmes
+// expressions : `data`, `newData`, `auth`, `$n`, `.child()`, `.parent()`, `.matches()`).
+const rules = JSON.parse(fs.readFileSync(path.join(__dirname, '../../database.rules.json'), 'utf8')).rules;
+Object.defineProperty(String.prototype, 'matches', { value: function (re) { return re.test(String(this)); }, configurable: true });
+function snapshot(tree, keys) {
+  const node = keys.reduce((n, k) => (n == null ? undefined : n[k]), tree);
+  return {
+    val: () => (node === undefined ? null : node),
+    exists: () => node != null,
+    child: (p) => snapshot(tree, [...keys, ...String(p).split('/').filter(Boolean)]),
+    parent: () => snapshot(tree, keys.slice(0, -1)),
+  };
+}
+const allows = (expr, vars) => new Function(...Object.keys(vars), `return (${expr});`)(...Object.values(vars));
+const canWriteChunk = (tree, id, n, uid = 'u1') =>
+  allows(rules.relay.$id.chunks.$n['.write'], { auth: { uid }, data: snapshot(tree, ['relay', id, 'chunks', n]), $n: n });
+const canDelete = (tree, id) =>
+  allows(rules.relay.$id['.write'], { auth: { uid: 'u2' }, data: snapshot(tree, ['relay', id]), newData: snapshot({}, ['x']), $id: id });
+
 (async () => {
+  // Règles : un morceau ne s'écrit que dans une place réservée (meta/slots), par le compte qui a réservé.
+  const ID = 'A'.repeat(22);
+  const reserved = (extra = {}) => ({
+    relay: { [ID]: { meta: { owner: 'u1', size: 3 * 512 * 1024, chunks: 3, slots: { 0: true, 1: true, 2: true }, last: '2', at: 0 }, ...extra } },
+  });
+  assert.equal(canWriteChunk(reserved(), ID, '0'), true);
+  assert.equal(canWriteChunk(reserved(), ID, '2'), true);
+  for (const n of ['3', '99', '01']) assert.equal(canWriteChunk(reserved(), ID, n), false);
+  assert.equal(canWriteChunk(reserved(), ID, '0', 'u2'), false);
+  assert.equal(canWriteChunk(reserved({ chunks: { 0: 'x' } }), ID, '0'), false);
+  assert.equal(canWriteChunk({}, ID, '0'), false);
+  // Réservation d'avant les `slots` : ancienne règle, pour ne pas bloquer un envoi en cours.
+  const legacy = { relay: { [ID]: { meta: { owner: 'u1', size: 10, chunks: 1, at: 0 } } } };
+  assert.equal(canWriteChunk(legacy, ID, '5'), true);
+  // Un téléphone ne supprime qu'un fichier complet (sinon le budget ne pourrait plus être rendu).
+  assert.equal(canDelete(reserved({ chunks: { 0: 'x', 1: 'x' } }), ID), false);
+  assert.equal(canDelete(reserved({ chunks: { 0: 'x', 1: 'x', 2: 'x' } }), ID), true);
+  assert.equal(canDelete(legacy, ID), true);
+  assert.equal(canDelete({}, ID), true);
+
   process.env.CRON_SECRET = 'secret-cron';
   process.env.FIREBASE_SERVICE_ACCOUNT = '{}';
   const relay = loadHandler('relay');
@@ -21,6 +62,11 @@ const { state, get, loadHandler, call, reset } = require('./harness');
   assert.match(ok.payload.id, /^[A-Za-z0-9_-]{22}$/);
   assert.equal(ok.payload.chunks, 3);
   assert.equal(get(`relay/${ok.payload.id}/meta/owner`), 'u1');
+  assert.deepEqual(Object.keys(get(`relay/${ok.payload.id}/meta/slots`)), ['0', '1', '2']);
+  assert.equal(get(`relay/${ok.payload.id}/meta/last`), '2');
+  // La fiche écrite par le serveur passe les règles : morceaux 0 à 2 oui, 3 non.
+  assert.equal(canWriteChunk(state.db, ok.payload.id, '2'), true);
+  assert.equal(canWriteChunk(state.db, ok.payload.id, '3'), false);
 
   // 20 envois par jour et par compte.
   for (let i = 0; i < 19; i++) assert.equal((await reserve(10)).code, 200);
@@ -31,6 +77,28 @@ const { state, get, loadHandler, call, reset } = require('./harness');
   state.db.relayUsage = { [new Date().toISOString().slice(0, 7)]: 6 * 1024 * 1024 * 1024 - 100 };
   assert.equal((await reserve(1000, 'u2')).code, 507);
   assert.equal((await reserve(50, 'u2')).code, 200);
+
+  // Budget rendu : une réservation jamais envoyée (ou à moitié) est remboursée au nettoyage suivant.
+  reset();
+  const MB = 1024 * 1024;
+  const thisMonth = new Date().toISOString().slice(0, 7);
+  state.db.relayUsage = { [thisMonth]: 6 * 1024 * MB - 30 * MB };
+  const big = await reserve(25 * MB, 'u3');
+  assert.equal(big.code, 200);
+  assert.equal((await reserve(10 * MB, 'u4')).code, 507);
+  const half = await reserve(3 * MB, 'u5');
+  assert.equal(half.code, 200);
+  state.db.relay[half.payload.id].chunks = { 0: 'x' };
+  // 25 h plus tard : rien d'envoyé pour le premier, 1 morceau sur 6 pour le second.
+  const realNow = Date.now;
+  Date.now = () => realNow() + 25 * 3600000;
+  try {
+    assert.equal((await call(cleanup, { method: 'GET', auth: 'Bearer secret-cron' })).payload.removed, 2);
+  } finally {
+    Date.now = realNow;
+  }
+  assert.equal(get(`relayUsage/${thisMonth}`), 6 * 1024 * MB - 30 * MB + 512 * 1024);
+  assert.equal((await reserve(10 * MB, 'u4')).code, 200);
 
   // Nettoyage : complet et récent gardé ; incomplet de plus de 24 h et tout fichier de plus de 7 jours supprimés.
   reset();

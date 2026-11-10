@@ -65,13 +65,13 @@
     "relay": {
       "$id": {
         ".read": "auth != null && $id.matches(/^[A-Za-z0-9_-]{22}$/)",
-        ".write": "auth != null && !newData.exists() && $id.matches(/^[A-Za-z0-9_-]{22}$/)",
+        ".write": "auth != null && !newData.exists() && $id.matches(/^[A-Za-z0-9_-]{22}$/) && (!data.child('meta/slots').exists() || data.child('chunks/' + data.child('meta/last').val()).exists())",
         "meta": {
           ".write": false
         },
         "chunks": {
           "$n": {
-            ".write": "auth != null && data.parent().parent().child('meta/owner').val() === auth.uid && !data.exists() && $n.matches(/^[0-9]{1,2}$/)",
+            ".write": "auth != null && data.parent().parent().child('meta/owner').val() === auth.uid && !data.exists() && $n.matches(/^[0-9]{1,2}$/) && (data.parent().parent().child('meta/slots/' + $n).exists() || !data.parent().parent().child('meta/slots').exists())",
             ".validate": "newData.isString() && newData.val().length <= 700000"
           }
         }
