@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { Appearance, ImageStyle, StyleSheet, TextStyle, ViewStyle } from 'react-native';
+import { AccessibilityInfo, Appearance, Easing, ImageStyle, StyleSheet, TextStyle, ViewStyle } from 'react-native';
 
 import { getSetting, setSetting } from './chat/database';
 import { log } from './log';
@@ -26,6 +26,11 @@ export type Palette = {
   // Bouton principal : fond de la couleur du texte, libellé de la couleur du fond.
   accent: string;
   onAccent: string;
+  // Couleur signature : boutons principaux, pastilles, anneaux. Jamais en fond d'écran.
+  signature: string;
+  onSignature: string;
+  // Petits indicateurs (anneau « en ligne », point, coche « vérifié »).
+  signatureStrong: string;
   shadow: string;
   // Icônes et texte posés sur une photo ou une vidéo : toujours blancs.
   onMedia: string;
@@ -51,6 +56,9 @@ const light: Palette = {
   danger: '#C62828',
   accent: '#000000',
   onAccent: '#FFFFFF',
+  signature: '#E6EFCB',
+  onSignature: '#000000',
+  signatureStrong: '#9DB84A',
   shadow: 'rgba(0, 0, 0, 0.14)',
   onMedia: '#FFFFFF',
   bubbleMine: '#000000',
@@ -74,10 +82,36 @@ const dark: Palette = {
   danger: '#EF5350',
   accent: '#F5F5F7',
   onAccent: '#0B0B0C',
+  signature: '#2B3420',
+  onSignature: '#E3EDC8',
+  signatureStrong: '#B4CC68',
   shadow: 'rgba(0, 0, 0, 0.6)',
   onMedia: '#FFFFFF',
   bubbleMine: '#E9E9EB',
   bubbleTheirs: '#26262A',
+};
+
+// Couleurs qui ne changent jamais avec le thème : le contenu des photos et de l'éditeur, les dessins
+// (flamme, cœur, aperçu des filtres), le QR code. Les autres fichiers n'écrivent aucune couleur en dur.
+export const fixed = {
+  white: '#FFFFFF',
+  black: '#000000',
+  // Éditeur : voiles de température posés sur la vidéo, tampons « pellicule ».
+  warmTint: '#FF8A00',
+  coolTint: '#0A6CFF',
+  filmOrange: '#FF8A1F',
+  filmGlow: '#C8320A',
+  // Filtre Batterie : niveau bas.
+  batteryLow: '#FF5A4F',
+  // Couleurs proposées pour le texte et le pinceau de l'éditeur.
+  editorTextColors: ['#FFFFFF', '#000000', '#FF3B30', '#FF9500', '#FFCC00', '#34C759', '#00C7BE', '#007AFF', '#AF52DE', '#FF2D92'],
+  // Cœur du double appui, flamme de la série.
+  heart: '#FF3B5C',
+  flame: '#FF7A1A',
+  flameCore: '#FFC94D',
+  // Petit paysage qui montre l'effet des filtres, et son fond.
+  scene: { sky: '#7FBDF0', sun: '#FFC93C', cloud: '#FFFFFF', hill: '#7CC36A', hillDark: '#2E8B4A', house: '#E5483B' },
+  filterStripBackground: '#1C1C1E',
 };
 
 // --- Choix du thème : suit le système, ou forcé clair / sombre (réglage du profil) ---
@@ -146,15 +180,69 @@ export function useThemePreference(): ThemePreference {
 
 type NamedStyles<T> = { [P in keyof T]: ViewStyle | TextStyle | ImageStyle };
 
-// Des styles qui dépendent de la palette, créés une seule fois par thème.
+// --- Taille du texte : 4 crans (réglage des Paramètres), appliquée aux styles de createStyles ---
+
+export const TEXT_SCALES = [1, 1.12, 1.25, 1.4] as const;
+const TEXT_SCALE_KEY = 'text_scale';
+let scaleIndex: number | null = null;
+const scaleListeners = new Set<() => void>();
+
+export function textScaleIndex(): number {
+  if (scaleIndex !== null) return scaleIndex;
+  try {
+    const saved = Number(getSetting(TEXT_SCALE_KEY));
+    scaleIndex = Number.isInteger(saved) && saved >= 0 && saved < TEXT_SCALES.length ? saved : 0;
+  } catch (e) {
+    log.warn('taille du texte', e);
+    scaleIndex = 0;
+  }
+  return scaleIndex;
+}
+
+export function setTextScaleIndex(next: number) {
+  scaleIndex = next;
+  setSetting(TEXT_SCALE_KEY, next === 0 ? null : String(next));
+  scaleListeners.forEach((listener) => listener());
+}
+
+function subscribeScale(listener: () => void) {
+  scaleListeners.add(listener);
+  return () => {
+    scaleListeners.delete(listener);
+  };
+}
+
+export function useTextScaleIndex(): number {
+  return useSyncExternalStore(subscribeScale, textScaleIndex);
+}
+
+function scaleText<T extends NamedStyles<T>>(styles: T, scale: number): T {
+  if (scale === 1) return styles;
+  const out: Record<string, unknown> = {};
+  for (const [name, style] of Object.entries(styles) as [string, Record<string, unknown>][]) {
+    const next = { ...style };
+    if (typeof next.fontSize === 'number') next.fontSize = Math.round(next.fontSize * scale * 2) / 2;
+    if (typeof next.lineHeight === 'number') next.lineHeight = Math.round(next.lineHeight * scale * 2) / 2;
+    out[name] = next;
+  }
+  return out as T;
+}
+
+// Des styles qui dépendent de la palette, créés une seule fois par thème et par taille de texte.
 export function createStyles<T extends NamedStyles<T>>(factory: (colors: Palette) => T) {
-  const cache = new Map<Palette, T>();
+  const cache = new Map<Palette, Map<number, T>>();
   return function useStyles(): T {
     const colors = useColors();
-    let styles = cache.get(colors);
+    const index = useTextScaleIndex();
+    let bySize = cache.get(colors);
+    if (!bySize) {
+      bySize = new Map();
+      cache.set(colors, bySize);
+    }
+    let styles = bySize.get(index);
     if (!styles) {
-      styles = StyleSheet.create(factory(colors));
-      cache.set(colors, styles);
+      styles = StyleSheet.create(scaleText(factory(colors), TEXT_SCALES[index]));
+      bySize.set(index, styles);
     }
     return styles;
   };
@@ -172,6 +260,50 @@ export function createMediaStyles<T extends NamedStyles<T>>(factory: (colors: Pa
     return styles;
   };
 }
+
+// --- Mouvement ---
+
+// Toutes les durées d'animation, au même endroit. Une seule courbe : démarre vite et se pose
+// doucement, sans jamais dépasser (aucun rebond). Si Android a « Supprimer les animations », les
+// durées valent 0 : lire `motion.press` etc. au moment de lancer l'animation, pas dans une
+// constante de module.
+let reduceMotion = false;
+AccessibilityInfo.isReduceMotionEnabled()
+  .then((value) => {
+    reduceMotion = value;
+  })
+  .catch((e) => log.warn('animations', e));
+AccessibilityInfo.addEventListener('reduceMotionChanged', (value) => {
+  reduceMotion = value;
+});
+
+const duration = (ms: number) => (reduceMotion ? 0 : ms);
+
+export const motion = {
+  // Appui sur un bouton.
+  get press() {
+    return duration(110);
+  },
+  // Apparition, changement d'état.
+  get small() {
+    return duration(180);
+  },
+  // Passage d'un écran à l'autre.
+  get screen() {
+    return duration(180);
+  },
+  // La poire mascotte.
+  get mascot() {
+    return duration(420);
+  },
+  easing: Easing.bezier(0.2, 0.8, 0.2, 1),
+  // Effet d'appui commun à tous les boutons (src/components/ui.tsx).
+  pressScale: 0.97,
+  pressOpacity: 0.85,
+  get reduced() {
+    return reduceMotion;
+  },
+};
 
 // --- Bulles ---
 

@@ -9,10 +9,11 @@ export type Insets = { top: number; bottom: number };
 // Les retouches d'une vidéo (lot 10). matrix : 4 × 4 par colonnes, appliquée à (R, G, B, 1).
 export type VideoEdit = { overlayUri?: string; matrix?: number[]; startMs?: number; endMs?: number; mute?: boolean; speed?: number; bitrate: number };
 
-export type SharedMedia = { uri: string; mime: string; size: number };
+export type SharedMedia = { uri: string; mime: string; size: number; contact?: string };
 
 declare class PearNativeModule extends NativeModule<{ onBack: (event: BackEvent) => void; onDownloadProgress: (event: DownloadProgress) => void; onInsetsChange: (event: Insets) => void; onShare: () => void }> {
   takeSharedMedia?(): Promise<SharedMedia[]>;
+  setShareShortcuts?(contacts: { key: string; name: string }[]): Promise<void>;
   burnOverlay(videoUri: string, overlayUri: string, bitrate: number): Promise<string>;
   editVideo?(videoUri: string, edit: VideoEdit): Promise<string>;
   captureView?(tag: number, outputUri: string, scale: number): Promise<string>;
@@ -25,17 +26,23 @@ declare class PearNativeModule extends NativeModule<{ onBack: (event: BackEvent)
   appVersionCode(): number | null;
   appVersionName(): string | null;
   isIgnoringBatteryOptimizations(): boolean;
+  batteryStatus?(): { level: number; charging: boolean } | null;
+  lastKnownLocation?(): { latitude: number; longitude: number } | null;
   requestIgnoreBatteryOptimizations(): boolean;
   canRequestPackageInstalls(): boolean;
   openUnknownAppSourcesSettings(): boolean;
   downloadFile(url: string, fileUri: string): Promise<void>;
   sha256File(fileUri: string): Promise<string>;
   resizeImage(inputUri: string, outputUri: string, maxSize: number, quality: number): Promise<string>;
+  blurCover?(inputUri: string, outputUri: string, video: boolean): Promise<string>;
   installApk(fileUri: string): void;
   reloadApp(): Promise<void>;
   setScreenBrightness?(value: number): Promise<void>;
   imageSize?(uri: string): Promise<{ width: number; height: number }>;
   thumbnail?(id: string, video: boolean, size: number): Promise<string>;
+  setSecureWindow?(enabled: boolean): Promise<void>;
+  authenticate?(title: string): Promise<'ok' | 'cancelled' | 'unavailable'>;
+  setIncognitoKeyboard?(tag: number): Promise<void>;
   cropImage?(inputUri: string, outputUri: string, rect: number[], rotation: number, maxSize: number, quality: number): Promise<string>;
 }
 
@@ -65,6 +72,16 @@ export function appVersionCode() {
 
 export function appVersionName() {
   return PearNative.appVersionName();
+}
+
+// Niveau de la batterie. null avec un ancien APK.
+export function batteryStatus(): { level: number; charging: boolean } | null {
+  return PearNative.batteryStatus?.() ?? null;
+}
+
+// Dernière position connue, approximative. null sans autorisation ou avec un ancien APK.
+export function lastKnownLocation(): { latitude: number; longitude: number } | null {
+  return PearNative.lastKnownLocation?.() ?? null;
 }
 
 export function isIgnoringBatteryOptimizations(): boolean {
@@ -114,6 +131,11 @@ export function burnOverlay(videoUri: string, overlayUri: string, bitrate: numbe
 }
 
 // Photos et vidéos partagées vers Pear depuis une autre app (lot 12), copiées dans le cache. Vide sinon.
+// Les contacts récents dans le menu Partager d'Android (lot 2.6).
+export function setShareShortcuts(contacts: { key: string; name: string }[]) {
+  return PearNative.setShareShortcuts?.(contacts) ?? Promise.resolve();
+}
+
 export function takeSharedMedia(): Promise<SharedMedia[]> {
   return PearNative.takeSharedMedia ? PearNative.takeSharedMedia() : Promise.resolve([]);
 }
@@ -127,6 +149,9 @@ export function addShareListener(listener: () => void) {
 export function setScreenBrightness(value: number) {
   return PearNative.setScreenBrightness?.(value) ?? Promise.resolve();
 }
+
+// Couverture floue d'une notification (lot 2.7) : null sur un APK plus ancien, la notification reste alors sans image.
+export const blurCover = PearNative.blurCover ? (inputUri: string, outputUri: string, video: boolean) => PearNative.blurCover!(inputUri, outputUri, video) : null;
 
 // Vignette de la galerie (MediaStore), mise en cache : null sur un APK plus ancien.
 export const thumbnail = PearNative.thumbnail ? (id: string, video: boolean, size: number) => PearNative.thumbnail!(id, video, size) : null;
@@ -184,6 +209,21 @@ export function getInsets() {
 
 export function navigationBarHeight() {
   return insets.bottom;
+}
+
+// Bloque les captures d'écran et l'aperçu des apps récentes. Sans effet sur un APK plus ancien.
+export function setSecureWindow(enabled: boolean) {
+  return PearNative.setSecureWindow?.(enabled) ?? Promise.resolve();
+}
+
+// Demande l'empreinte, le visage ou le code du téléphone. "unavailable" : aucun verrou réglé ou APK plus ancien.
+export function authenticate(title: string): Promise<'ok' | 'cancelled' | 'unavailable'> {
+  return PearNative.authenticate?.(title) ?? Promise.resolve('unavailable');
+}
+
+// Le clavier n'apprend pas ce qui s'écrit dans cette saisie (tag React de la vue).
+export function setIncognitoKeyboard(tag: number) {
+  return PearNative.setIncognitoKeyboard?.(tag) ?? Promise.resolve();
 }
 
 // Recharge l'interface de Pear (après un changement de langue).

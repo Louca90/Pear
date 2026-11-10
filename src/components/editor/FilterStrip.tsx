@@ -1,11 +1,10 @@
 import { ComponentRef, useEffect, useRef } from 'react';
 import { Animated, Easing, NativeScrollEvent, NativeSyntheticEvent, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '../../haptics';
 
 import { t } from '../../i18n';
-import { log } from '../../log';
-import { createMediaStyles, radius, spacing } from '../../theme';
+import { createMediaStyles, fixed, radius, spacing } from '../../theme';
 import { lockTabSwipe } from '../tabSwipeLock';
 import { FilteredView } from './FilteredView';
 import { FILTERS, FilterId, NO_ADJUSTMENTS, presetOf, stepsOf } from './filters';
@@ -24,24 +23,63 @@ const HIDE_MS = 180;
 function Scene({ size }: { size: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 52 52">
-      <Rect width={52} height={52} fill="#7FBDF0" />
-      <Circle cx={36} cy={16} r={7} fill="#FFC93C" />
-      <Circle cx={14} cy={18} r={4.5} fill="#FFFFFF" />
-      <Circle cx={19} cy={16} r={5.5} fill="#FFFFFF" />
-      <Circle cx={24} cy={19} r={4} fill="#FFFFFF" />
-      <Path d="M0 36 Q14 24 30 33 T52 30 V52 H0 Z" fill="#7CC36A" />
-      <Path d="M0 44 Q20 34 52 42 V52 H0 Z" fill="#2E8B4A" />
-      <Rect x={33} y={36} width={8} height={7} fill="#E5483B" />
+      <Rect width={52} height={52} fill={fixed.scene.sky} />
+      <Circle cx={36} cy={16} r={7} fill={fixed.scene.sun} />
+      <Circle cx={14} cy={18} r={4.5} fill={fixed.scene.cloud} />
+      <Circle cx={19} cy={16} r={5.5} fill={fixed.scene.cloud} />
+      <Circle cx={24} cy={19} r={4} fill={fixed.scene.cloud} />
+      <Path d="M0 36 Q14 24 30 33 T52 30 V52 H0 Z" fill={fixed.scene.hill} />
+      <Path d="M0 44 Q20 34 52 42 V52 H0 Z" fill={fixed.scene.hillDark} />
+      <Rect x={33} y={36} width={8} height={7} fill={fixed.scene.house} />
     </Svg>
   );
 }
 
-// Les marques : un aperçu du texte lui-même, clair sur fond sombre (orange pour la pellicule).
+// Les marques : une icône pour les filtres d'ambiance, un aperçu du texte pour Heure et Pellicule.
 function StampSample({ kind, size }: { kind: StampKind; size: number }) {
   const styles = useStyles();
+  const icon = size * 0.52;
+  const line = { stroke: fixed.white, strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, fill: 'none' };
   if (kind === 'time') return <Text style={[styles.stampText, styles.stampTime, { fontSize: size * 0.3 }]}>12:30</Text>;
-  if (kind === 'date') return <Text style={[styles.stampText, styles.stampDate, { fontSize: size * 0.26 }]}>{`7
-nov.`}</Text>;
+  if (kind === 'date' || kind === 'weekday') {
+    // Date : un calendrier et sa grille de jours. Jour : le même calendrier, un seul jour en plein.
+    return (
+      <Svg width={icon} height={icon} viewBox="0 0 24 24">
+        <Rect x={3.5} y={5} width={17} height={15.5} rx={3} {...line} />
+        <Path d="M3.5 10h17M8 3v4M16 3v4" {...line} />
+        {kind === 'date' ? (
+          <Path d="M8 14h.01M12 14h.01M16 14h.01M8 17.2h.01M12 17.2h.01M16 17.2h.01" {...line} strokeWidth={2.4} />
+        ) : (
+          <Rect x={10} y={13.2} width={4.4} height={4.4} rx={1.2} fill={fixed.white} />
+        )}
+      </Svg>
+    );
+  }
+  if (kind === 'place') {
+    return (
+      <Svg width={icon} height={icon} viewBox="0 0 24 24">
+        <Path d="M12 21.5s-7-6.2-7-11.5a7 7 0 0 1 14 0c0 5.3-7 11.5-7 11.5z" {...line} />
+        <Circle cx={12} cy={10} r={2.6} {...line} />
+      </Svg>
+    );
+  }
+  if (kind === 'streak') {
+    return (
+      <Svg width={icon} height={icon} viewBox="0 0 24 24">
+        <Path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" fill={fixed.flame} />
+        <Path d="M12 21.2a3.4 3.4 0 0 1-3.4-3.4c0-1.6 1-2.6 1.8-3.6.3 1.1 1 1.8 1.7 1.8.9 0 1.6-1.1 1.4-2.6 1.3 1 2.5 2.5 2.5 4.4a4 4 0 0 1-4 3.4z" fill={fixed.flameCore} />
+      </Svg>
+    );
+  }
+  if (kind === 'battery') {
+    return (
+      <Svg width={icon} height={icon} viewBox="0 0 24 24">
+        <Rect x={2} y={7} width={18} height={10} rx={2.6} {...line} />
+        <Path d="M22.2 10.5v3" {...line} />
+        <Rect x={4.4} y={9.4} width={9} height={5.2} rx={1} fill={fixed.white} />
+      </Svg>
+    );
+  }
   return <Text style={[styles.stampText, styles.stampFilm, { fontSize: size * 0.24 }]}>'26</Text>;
 }
 
@@ -61,12 +99,13 @@ export function FilterSwatch({ id, size }: { id: FilterId; size: number }) {
   );
 }
 
-type Props = { value: FilterId; hidden: boolean; onChange: (id: FilterId) => void };
+// Toucher le filtre déjà posé au milieu passe au style typographique suivant de sa marque.
+type Props = { value: FilterId; hidden: boolean; onChange: (id: FilterId) => void; onRestyle?: (kind: StampKind) => void };
 
 // La bande des filtres, de part et d'autre du déclencheur, comme sur Snap : on la fait défiler, le
 // filtre posé au milieu (sous le déclencheur) s'applique tout de suite à l'aperçu, et son nom
 // apparaît un instant au-dessus.
-export function FilterStrip({ value, hidden, onChange }: Props) {
+export function FilterStrip({ value, hidden, onChange, onRestyle }: Props) {
   const styles = useStyles();
   const { width } = useWindowDimensions();
   const scroll = useRef<ComponentRef<typeof ScrollView>>(null);
@@ -92,7 +131,7 @@ export function FilterStrip({ value, hidden, onChange }: Props) {
     const index = Math.max(0, Math.min(CAMERA_FILTERS.length - 1, Math.round(nativeEvent.contentOffset.x / ITEM_WIDTH)));
     if (index === current.current) return;
     current.current = index;
-    Haptics.selectionAsync().catch((e) => log.warn('vibration', e));
+    haptics.select();
     nameText.current = t(CAMERA_FILTERS[index].label);
     onChange(CAMERA_FILTERS[index].id);
     showName();
@@ -122,7 +161,10 @@ export function FilterStrip({ value, hidden, onChange }: Props) {
         {CAMERA_FILTERS.map((preset, index) => (
           <Pressable
             key={preset.id}
-            onPress={() => scroll.current?.scrollTo({ x: index * ITEM_WIDTH, animated: true })}
+            onPress={() => {
+              if (preset.id === value && preset.stamp) onRestyle?.(preset.stamp);
+              else scroll.current?.scrollTo({ x: index * ITEM_WIDTH, animated: true });
+            }}
             accessibilityRole="button"
             accessibilityLabel={t(preset.label)}
             accessibilityState={{ selected: preset.id === value }}
@@ -159,7 +201,7 @@ const useStyles = createMediaStyles((colors) => ({
     boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.35)',
   },
   swatchStamp: {
-    backgroundColor: '#1C1C1E',
+    backgroundColor: fixed.filterStripBackground,
   },
   stampText: {
     color: colors.background,
@@ -170,14 +212,10 @@ const useStyles = createMediaStyles((colors) => ({
     fontFamily: 'sans-serif-thin',
     letterSpacing: -0.5,
   },
-  stampDate: {
-    fontFamily: 'serif',
-    lineHeight: 15,
-  },
   stampFilm: {
     fontFamily: 'monospace',
     fontWeight: '700',
-    color: '#FF8A1F',
+    color: fixed.filmOrange,
   },
   name: {
     position: 'absolute',

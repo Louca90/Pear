@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, Linking, useWindowDimensions, Modal, PanResponder, StyleSheet, Text, View } from 'react-native';
 import { useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '../haptics';
 import { NavigationBar } from 'expo-navigation-bar';
 import { StatusBar } from 'expo-status-bar';
 import { Camera, Check, Download, Lock, Send, Settings, Square, SwitchCamera, X, Zap, ZapOff } from 'lucide-react-native';
 
 import { setScreenBrightness } from '../../modules/pear-native';
-import { PearCameraHandle, PearCameraView, wideLens } from '../../modules/pear-native/camera';
+import { hasLastCameraFrame, PearCameraHandle, PearCameraView, wideLens } from '../../modules/pear-native/camera';
 
-import { saveToGallery } from '../chat/files';
+import { saveToGallery } from '../chat/media';
 import { chat } from '../chat/manager';
 import { useBottomBarSpace } from '../components/BottomBar';
 import { showDialog } from '../components/dialog';
@@ -18,7 +18,8 @@ import { MediaEditor, MediaEditorHandle } from '../components/MediaEditor';
 import { FilteredView } from '../components/editor/FilteredView';
 import { FilterStrip, FilterSwatch } from '../components/editor/FilterStrip';
 import { FilterId, NO_ADJUSTMENTS, presetOf, stepsOf } from '../components/editor/filters';
-import { formatStamp, StampMarks } from '../components/editor/stamps';
+import { getStampStyle, nextStampStyle, readAmbient } from '../components/editor/ambient';
+import { Ambient, formatStamp, NO_AMBIENT, StampMarks } from '../components/editor/stamps';
 import Svg from 'react-native-svg';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Button, IconButton, useInsets, useNavigationBarHeight } from '../components/ui';
@@ -62,7 +63,7 @@ const PREVIEW_FADE_MS = 200;
 type Capture = { uri: string; kind: 'image' | 'video'; takenAt: number; filter: FilterId };
 
 function vibrate() {
-  Haptics.selectionAsync().catch((e) => log.warn('vibration', e));
+  haptics.select();
 }
 
 function formatElapsed(seconds: number) {
@@ -203,7 +204,8 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
     if (cameraPermission) cameraKnown.granted = cameraPermission.granted;
   }, [cameraPermission]);
   // L'aperçu apparaît en fondu à la première image, sur l'interface déjà affichée.
-  const previewOpacity = useRef(new Animated.Value(0)).current;
+  // Si le natif garde la dernière image, il la montre floue : l'aperçu est visible tout de suite.
+  const previewOpacity = useRef(new Animated.Value(hasLastCameraFrame() ? 1 : 0)).current;
   useEffect(() => {
     logCameraStep('écran monté');
   }, []);
@@ -211,7 +213,7 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
     if (cameraPermission) logCameraStep('permission lue');
   }, [cameraPermission?.granted]);
   const onCameraReady = () => {
-    logCameraStep('première image');
+    logCameraStep('caméra ouverte');
     Animated.timing(previewOpacity, { toValue: 1, duration: PREVIEW_FADE_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
   };
   const [facing, setFacing] = useState<'back' | 'front'>('back');
@@ -236,11 +238,23 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
   // Heure, Date, Pellicule : la marque se voit sur l'aperçu, mise à jour à chaque minute.
   const liveStamp = presetOf(liveFilter).stamp;
   const [now, setNow] = useState(Date.now());
+  // Lieu, Série et Batterie : lus sur le téléphone quand le filtre est choisi ; la batterie est relue à chaque tic.
+  const [ambient, setAmbient] = useState<Ambient>(NO_AMBIENT);
+  const [, setStyleTick] = useState(0);
   useEffect(() => {
     if (!liveStamp) return;
+    let current = true;
+    const read = () => readAmbient(liveStamp).then((found) => current && setAmbient((previous) => ({ ...previous, ...found })));
     setNow(Date.now());
-    const timer = setInterval(() => setNow(Date.now()), 15_000);
-    return () => clearInterval(timer);
+    read();
+    const timer = setInterval(() => {
+      setNow(Date.now());
+      if (liveStamp === 'battery') read();
+    }, 15_000);
+    return () => {
+      current = false;
+      clearInterval(timer);
+    };
   }, [liveStamp]);
   const window = useWindowDimensions();
   const camera = useRef<PearCameraHandle>(null);
@@ -390,7 +404,12 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
       if (gestureAxis.current === 'zoom') {
         // Vers le haut, le zoom monte (×2 tous les ZOOM_SLIDE points) ; en redescendant, il revient.
         const next = Math.max(zoomRange.min, Math.min(Math.min(zoomRange.max, ZOOM_SLIDE_MAX), zoomStart.current * Math.pow(2, -Math.min(0, y) / ZOOM_SLIDE)));
-        if (Math.abs(next - zoomRef.current) > 0.01) setZoom(next);
+        if (Math.abs(next - zoomRef.current) > 0.01) {
+          // Le natif d'abord (fluide), l'état React ensuite, seulement pour la pastille.
+          zoomRef.current = next;
+          camera.current?.setZoom(next).catch(() => {});
+          setZoom(next);
+        }
         if (y >= 0) release();
         return;
       }
@@ -535,6 +554,7 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
             setZoomRange({ min: nativeEvent.minZoom, max: nativeEvent.maxZoom });
             onCameraReady();
           }}
+          onFrame={({ nativeEvent }) => logCameraStep(`première image (natif : ${Math.round(nativeEvent.ms)} ms)`)}
           onCameraError={({ nativeEvent }) => log.warn('caméra', nativeEvent.message)}
         />
         </FilteredView>
@@ -544,7 +564,7 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
       {liveStamp && (
         <Svg pointerEvents="none" style={StyleSheet.absoluteFill} width={window.width} height={window.height}>
           {/* Au-dessus du déclencheur et de la barre du bas, qui cachent le bas de l'écran. */}
-          <StampMarks kind={liveStamp} stamp={formatStamp(now)} width={window.width} height={window.height - barSpace - SHUTTER_SIZE} />
+          <StampMarks kind={liveStamp} stamp={formatStamp(now, ambient)} width={window.width} height={window.height - barSpace - SHUTTER_SIZE} variant={getStampStyle(liveStamp)} />
         </Svg>
       )}
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.frontGlow, { opacity: frontGlow }]} />
@@ -585,7 +605,16 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
 
       {/* La hauteur ne change jamais : le bouton reste sous le doigt quand la barre du bas s'efface. */}
       <View pointerEvents="box-none" style={[styles.shutterRow, { bottom: barSpace }]}>
-        <FilterStrip value={liveFilter} hidden={filming} onChange={setLiveFilter} />
+        <FilterStrip
+          value={liveFilter}
+          hidden={filming}
+          onChange={setLiveFilter}
+          onRestyle={(stamp) => {
+            nextStampStyle(stamp);
+            haptics.select();
+            setStyleTick((tick) => tick + 1);
+          }}
+        />
         <Animated.View
           {...shutter.panHandlers}
           accessibilityRole="button"

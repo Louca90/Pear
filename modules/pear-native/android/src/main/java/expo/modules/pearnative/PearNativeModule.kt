@@ -5,6 +5,12 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Matrix
+import android.hardware.biometrics.BiometricManager
+import android.hardware.biometrics.BiometricPrompt
+import android.os.CancellationSignal
+import android.view.WindowManager
+import android.widget.EditText
+import androidx.annotation.RequiresApi
 import android.media.ExifInterface
 import android.media.MediaMetadataRetriever
 import android.net.Uri
@@ -20,6 +26,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.annotation.OptIn
 import androidx.core.content.FileProvider
+import androidx.core.content.pm.ShortcutInfoCompat
+import androidx.core.content.pm.ShortcutManagerCompat
+import androidx.core.graphics.drawable.IconCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.media3.common.C
 import androidx.media3.common.Effect
@@ -59,6 +68,7 @@ private const val DOWNLOAD_TIMEOUT_MS = 20_000
 private const val DOWNLOAD_PROGRESS_MS = 250L
 private const val DOWNLOAD_ATTEMPTS = 3
 private const val DOWNLOAD_BACKOFF_MS = 2_000L
+private const val IME_FLAG_NO_PERSONALIZED_LEARNING = 0x1000000
 private const val APK_MIME = "application/vnd.android.package-archive"
 
 // Les retouches d'une vidéo, envoyées depuis l'éditeur. Sans valeur : rien ne change.
@@ -170,6 +180,26 @@ class PearNativeModule : Module() {
       sharedMedia(intent)
     }
 
+    // Partage direct (lot 2.6) : les contacts récents deviennent des raccourcis de partage. Chacun porte
+    // la clé publique du contact ; Android la renvoie dans EXTRA_SHORTCUT_ID au partage. L'appel remplace
+    // tous les raccourcis précédents (un contact supprimé disparaît du menu).
+    AsyncFunction("setShareShortcuts") { contacts: List<Map<String, String>> ->
+      val context = appContext.reactContext ?: return@AsyncFunction
+      val launch = Intent(context, Class.forName("com.louca.pear.MainActivity")).setAction(Intent.ACTION_VIEW)
+      val icon = IconCompat.createWithResource(context, context.applicationInfo.icon)
+      val shortcuts = contacts.take(4).mapIndexed { index, contact ->
+        ShortcutInfoCompat.Builder(context, SHORTCUT_PREFIX + contact["key"])
+          .setShortLabel(contact["name"] ?: "")
+          .setLongLived(true)
+          .setRank(index)
+          .setIcon(icon)
+          .setIntent(launch)
+          .setCategories(setOf(SHARE_CATEGORY))
+          .build()
+      }
+      ShortcutManagerCompat.setDynamicShortcuts(context, shortcuts)
+    }
+
     // "system" : Android montre son propre aperçu pour quitter. "app" : l'app anime elle-même le geste.
     // "default" : retour normal, sans aperçu.
     AsyncFunction("setBackMode") { mode: String -> setBackMode(mode) }.runOnQueue(Queues.MAIN)
@@ -192,6 +222,22 @@ class PearNativeModule : Module() {
       Unit
     }.runOnQueue(Queues.MAIN)
 
+    // Captures d'écran et aperçu des apps récentes bloqués (FLAG_SECURE), réappliqué à chaque retour au premier plan.
+    AsyncFunction("setSecureWindow") { enabled: Boolean ->
+      secureWindow = enabled
+      applySecure()
+    }.runOnQueue(Queues.MAIN)
+
+    // Empreinte, visage ou code du téléphone. "ok", "cancelled" ou "unavailable" (aucun verrou réglé, Android < 11).
+    AsyncFunction("authenticate") { title: String, promise: Promise -> authenticate(title, promise) }.runOnQueue(Queues.MAIN)
+
+    // Clavier incognito sur une saisie : le clavier n'apprend pas ce qui s'écrit.
+    AsyncFunction("setIncognitoKeyboard") { tag: Int ->
+      val context = appContext.reactContext as? ReactContext ?: return@AsyncFunction
+      val edit = UIManagerHelper.getUIManagerForReactTag(context, tag)?.resolveView(tag) as? EditText ?: return@AsyncFunction
+      edit.imeOptions = edit.imeOptions or IME_FLAG_NO_PERSONALIZED_LEARNING
+    }.runOnQueue(Queues.MAIN)
+
     OnDestroy {
       backCallback.remove()
       unwatchInsets()
@@ -204,6 +250,7 @@ class PearNativeModule : Module() {
 
     OnActivityEntersForeground {
       appContext.currentActivity?.runOnUiThread {
+        applySecure()
         watchInsets()
         emitInsets()
       }
@@ -240,6 +287,31 @@ class PearNativeModule : Module() {
       val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${activity.packageName}"))
       activity.startActivity(intent)
       true
+    }
+
+    // Niveau de la batterie (0 à 100) et si elle charge, pour le filtre Batterie. Aucune autorisation.
+    Function("batteryStatus") {
+      val context = appContext.reactContext ?: return@Function null
+      val intent = context.registerReceiver(null, android.content.IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: return@Function null
+      val level = intent.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1)
+      val scale = intent.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, 100)
+      if (level < 0 || scale <= 0) return@Function null
+      val status = intent.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1)
+      val charging = status == android.os.BatteryManager.BATTERY_STATUS_CHARGING || status == android.os.BatteryManager.BATTERY_STATUS_FULL
+      mapOf("level" to (level * 100 / scale), "charging" to charging)
+    }
+
+    // Dernière position connue du téléphone (approximative), pour le filtre Lieu. Lue sur l'appareil,
+    // jamais envoyée : la ville se trouve ensuite dans une liste embarquée. null sans autorisation.
+    Function("lastKnownLocation") {
+      val context = appContext.reactContext ?: return@Function null
+      if (context.checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) != android.content.pm.PackageManager.PERMISSION_GRANTED) return@Function null
+      val manager = context.getSystemService(android.content.Context.LOCATION_SERVICE) as android.location.LocationManager
+      val best = manager.getProviders(true)
+        .mapNotNull { provider -> try { manager.getLastKnownLocation(provider) } catch (_: SecurityException) { null } }
+        .maxByOrNull { it.time }
+        ?: return@Function null
+      mapOf("latitude" to best.latitude, "longitude" to best.longitude)
     }
 
     // Batterie « sans restriction » : sinon Android retarde les pushs quand le téléphone dort.
@@ -283,6 +355,8 @@ class PearNativeModule : Module() {
       cropImage(inputUri, outputUri, FloatArray(4) { rect[it].toFloat() }, rotation, maxSize, quality)
     }
 
+    AsyncFunction("blurCover") { inputUri: String, outputUri: String, video: Boolean -> blurCover(inputUri, outputUri, video) }
+
     AsyncFunction("resizeImage") { inputUri: String, outputUri: String, maxSize: Int, quality: Int -> resizeImage(inputUri, outputUri, maxSize, quality) }
 
     Function("installApk") { fileUri: String -> installApk(fileUri) }
@@ -318,6 +392,42 @@ class PearNativeModule : Module() {
         promise.reject("ERR_PEAR_VIDEO", e.message ?: "Retouche impossible", e)
       }
     }.runOnQueue(Queues.MAIN)
+  }
+
+  private var secureWindow = true
+
+  private fun applySecure() {
+    val window = appContext.currentActivity?.window ?: return
+    if (secureWindow) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE) else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+  }
+
+  private fun authenticate(title: String, promise: Promise) {
+    val activity = appContext.currentActivity
+    if (activity == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+      promise.resolve("unavailable")
+      return
+    }
+    authenticateApi30(activity, title, promise)
+  }
+
+  @RequiresApi(Build.VERSION_CODES.R)
+  private fun authenticateApi30(activity: android.app.Activity, title: String, promise: Promise) {
+    val allowed = BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL
+    val manager = activity.getSystemService(BiometricManager::class.java)
+    if (manager == null || manager.canAuthenticate(allowed) != BiometricManager.BIOMETRIC_SUCCESS) {
+      promise.resolve("unavailable")
+      return
+    }
+    var done = false
+    val prompt = BiometricPrompt.Builder(activity).setTitle(title).setAllowedAuthenticators(allowed).build()
+    prompt.authenticate(CancellationSignal(), activity.mainExecutor, object : BiometricPrompt.AuthenticationCallback() {
+      override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+        if (!done) { done = true; promise.resolve("ok") }
+      }
+      override fun onAuthenticationError(errorCode: Int, errString: CharSequence?) {
+        if (!done) { done = true; promise.resolve("cancelled") }
+      }
+    })
   }
 
   private fun setBackMode(mode: String) {
@@ -426,6 +536,41 @@ class PearNativeModule : Module() {
     return outputUri
   }
 
+  // Couverture floue d'une notification : l'image est réduite à 24 points de large puis agrandie, il ne
+  // reste que des taches de couleur. Pour une vidéo, on part de sa première image.
+  private fun blurCover(inputUri: String, outputUri: String, video: Boolean): String {
+    val context = appContext.reactContext ?: throw IllegalStateException("Contexte indisponible.")
+    val uri = Uri.parse(inputUri)
+    val source: Bitmap = if (video) {
+      val retriever = MediaMetadataRetriever()
+      try {
+        retriever.setDataSource(context, uri)
+        retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+      } finally {
+        retriever.release()
+      }
+    } else {
+      val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+      context.contentResolver.openInputStream(uri).use { BitmapFactory.decodeStream(it, null, bounds) }
+      var sample = 1
+      while (bounds.outWidth / (sample * 2) >= 96 && bounds.outHeight / (sample * 2) >= 96) sample *= 2
+      val decoded = context.contentResolver.openInputStream(uri).use {
+        BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample })
+      }
+      val degrees = exifDegrees(context, uri)
+      if (decoded != null && degrees != 0) Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, Matrix().apply { postRotate(degrees.toFloat()) }, true) else decoded
+    } ?: throw IllegalArgumentException("Image illisible.")
+    val ratio = source.height.toFloat() / source.width
+    val small = Bitmap.createScaledBitmap(source, 24, maxOf(1, Math.round(24 * ratio)), true)
+    val blurred = Bitmap.createScaledBitmap(small, 512, maxOf(1, Math.round(512 * ratio)), true)
+    val file = File(pathOf(outputUri))
+    file.parentFile?.mkdirs()
+    val partial = File(file.parentFile, file.name + ".part")
+    FileOutputStream(partial).use { blurred.compress(Bitmap.CompressFormat.JPEG, 80, it) }
+    partial.renameTo(file)
+    return outputUri
+  }
+
   private fun thumbnail(id: String, video: Boolean, size: Int): String {
     val context = appContext.reactContext ?: throw IllegalStateException("Contexte indisponible.")
     val mediaId = id.toLongOrNull() ?: throw IllegalArgumentException("Média inconnu.")
@@ -525,6 +670,9 @@ class PearNativeModule : Module() {
 
   private var pendingShare: Intent? = null
 
+  private val SHORTCUT_PREFIX = "contact-"
+  private val SHARE_CATEGORY = "com.louca.pear.category.SHARE_TARGET"
+
   private fun isShare(intent: Intent?) = intent?.action == Intent.ACTION_SEND || intent?.action == Intent.ACTION_SEND_MULTIPLE
 
   @Suppress("DEPRECATION")
@@ -542,7 +690,10 @@ class PearNativeModule : Module() {
         val extension = MimeTypeMap.getSingleton().getExtensionFromMimeType(mime) ?: if (mime.startsWith("video/")) "mp4" else "jpg"
         val target = File(context.cacheDir, "partage-${System.currentTimeMillis()}-$index.$extension")
         context.contentResolver.openInputStream(uri)?.use { input -> FileOutputStream(target).use { input.copyTo(it) } } ?: return@mapIndexedNotNull null
-        mapOf("uri" to Uri.fromFile(target).toString(), "mime" to mime, "size" to target.length().toDouble())
+        val result = mutableMapOf<String, Any>("uri" to Uri.fromFile(target).toString(), "mime" to mime, "size" to target.length().toDouble())
+        // Partage venu d'un raccourci : la clé publique du contact choisi dans le menu.
+        intent.getStringExtra(Intent.EXTRA_SHORTCUT_ID)?.takeIf { it.startsWith(SHORTCUT_PREFIX) }?.let { result["contact"] = it.removePrefix(SHORTCUT_PREFIX) }
+        result
       } catch (e: Exception) {
         Log.w("PearNative", "média partagé illisible", e)
         null

@@ -1,8 +1,8 @@
 import { t } from '../i18n';
-import { ComponentRef, memo, Ref, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { ComponentRef, memo, Ref, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { Animated, Dimensions, Easing, findNodeHandle, Image, StyleSheet, Text, View } from 'react-native';
 import { File, Paths } from 'expo-file-system';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '../haptics';
 import { useVideoPlayer, VideoPlayer, VideoView } from 'expo-video';
 import { getThumbnailAsync } from 'expo-video-thumbnails';
 import { Crop as CropIcon, Gauge, Pencil, Scissors, SlidersHorizontal, Smile, Trash2, Type, Volume2, VolumeX } from 'lucide-react-native';
@@ -11,7 +11,7 @@ import Svg, { Defs, FeColorMatrix, Filter, G, Image as SvgImage } from 'react-na
 
 import { captureView, editVideo } from '../../modules/pear-native';
 import { VIDEO_BITRATE } from '../config';
-import { createMediaStyles, radius, spacing, useMediaColors } from '../theme';
+import { createMediaStyles, fixed, radius, spacing, useMediaColors } from '../theme';
 import { useInsets, useNavigationBarHeight } from './ui';
 import { log } from '../log';
 import { AdjustPanel } from './editor/AdjustPanel';
@@ -20,7 +20,8 @@ import { EditorToolbar, TOOL_SIZE } from './editor/EditorToolbar';
 import { FilteredView } from './editor/FilteredView';
 import { Adjustments, FilterId, matrixOf, neighborOf, NO_ADJUSTMENTS, presetOf, stepsOf } from './editor/filters';
 import { bringToFront, clamp, Layer, layerAt, newLayerId, SCALE_MAX, SCALE_MIN, Size, TEXT_SIZE_DEFAULT, TextLayer, updateLayer } from './editor/layers';
-import { formatStamp, Stamp, StampMarks } from './editor/stamps';
+import { getStampStyle, readAmbient } from './editor/ambient';
+import { Ambient, formatStamp, NO_AMBIENT, Stamp, StampMarks } from './editor/stamps';
 import { TextEditor } from './editor/TextEditor';
 import { TextLayerView } from './editor/TextLayerView';
 import { StickerLayerView } from './editor/StickerLayerView';
@@ -55,7 +56,7 @@ export type MediaEditorHandle = {
 };
 
 function vibrate() {
-  Haptics.selectionAsync().catch((e) => log.warn('vibration', e));
+  haptics.select();
 }
 
 function EditorVideo({ player }: { player: VideoPlayer }) {
@@ -85,7 +86,7 @@ const PhotoLayer = memo(function PhotoLayer({ uri, id, adjustments, stamp, width
       </FilteredView>
       {kind && (
         <Svg pointerEvents="none" style={StyleSheet.absoluteFill} width={width} height={height}>
-          <StampMarks kind={kind} stamp={stamp} width={width} height={height} />
+          <StampMarks kind={kind} stamp={stamp} width={width} height={height} variant={getStampStyle(kind)} />
         </Svg>
       )}
     </>
@@ -127,7 +128,7 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
   const [cropping, setCropping] = useState(false);
   const [drawing, setDrawing] = useState(false);
   const [strokes, setStrokes] = useState<Stroke[]>([]);
-  const [brush, setBrush] = useState({ color: '#FFFFFF', width: BRUSH_DEFAULT });
+  const [brush, setBrush] = useState({ color: fixed.white, width: BRUSH_DEFAULT });
   const [overTrash, setOverTrash] = useState(false);
   // Pendant un glissé sur une photo : le filtre voisin (1 : suivant, par la droite ; -1 : précédent).
   const [swipeDirection, setSwipeDirection] = useState<0 | 1 | -1>(0);
@@ -233,7 +234,18 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
   const left = (screen.width - width) / 2;
   const top = (screen.height - height) / 2;
   const textMaxWidth = width * TEXT_MAX_WIDTH;
-  const [stamp] = useState(() => formatStamp(takenAt));
+  // Lieu, Série et Batterie se lisent sur le téléphone quand le filtre est choisi (jamais avant).
+  const [ambient, setAmbient] = useState<Ambient>(NO_AMBIENT);
+  const stamp = useMemo(() => formatStamp(takenAt, ambient), [takenAt, ambient]);
+  const stampKind = presetOf(filter).stamp;
+  useEffect(() => {
+    if (!stampKind) return;
+    let current = true;
+    readAmbient(stampKind).then((found) => current && setAmbient((previous) => ({ ...previous, ...found })));
+    return () => {
+      current = false;
+    };
+  }, [stampKind]);
 
   const steps = stepsOf(filter, adjustments);
   const neighbor = swipeDirection !== 0 ? neighborOf(filter, swipeDirection) : null;
@@ -328,7 +340,7 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
 
   const startNewText = () => {
     vibrate();
-    setEditing({ id: newLayerId(), kind: 'text', text: '', font: 'classic', color: '#FFFFFF', background: 'none', size: TEXT_SIZE_DEFAULT, x: width / 2, y: height * 0.45, scale: 1, rotation: 0 });
+    setEditing({ id: newLayerId(), kind: 'text', text: '', font: 'classic', color: fixed.white, background: 'none', size: TEXT_SIZE_DEFAULT, x: width / 2, y: height * 0.45, scale: 1, rotation: 0 });
   };
 
   const latest = {
@@ -401,7 +413,7 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
       const state = touch.current;
       if (state.target && state.overTrash) {
         const id = state.target;
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch((e) => log.warn('vibration', e));
+        haptics.action();
         setLayers((current) => current.filter((layer) => layer.id !== id));
       }
       state.target = null;
@@ -532,7 +544,7 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
                   />
                 </G>
               )}
-              <StampMarks kind={currentStamp} stamp={stamp} width={width} height={height} />
+              <StampMarks kind={currentStamp} stamp={stamp} width={width} height={height} variant={currentStamp ? getStampStyle(currentStamp) : 0} />
             </Svg>
             <StrokesView strokes={strokes} width={width} height={height} />
             {textLayers(false)}

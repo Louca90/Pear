@@ -24,8 +24,11 @@
       "permissions": [
         "android.permission.INTERNET",
         "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.REQUEST_INSTALL_PACKAGES",
-        "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
+        "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_DATA_SYNC"
       ],
       "blockedPermissions": [
         "android.permission.SYSTEM_ALERT_WINDOW"
@@ -54,13 +57,20 @@
           }
         }
       ],
-      "expo-sqlite",
+      [
+        "expo-sqlite",
+        {
+          "useSQLCipher": true
+        }
+      ],
       "expo-sharing",
       "expo-video",
       "./plugins/with-release-signing",
       "./plugins/with-dark-launch",
       "./plugins/with-short-native-build",
       "./plugins/with-share-intent",
+      "./plugins/with-file-service",
+      "./plugins/with-notification-icon",
       [
         "expo-navigation-bar",
         {

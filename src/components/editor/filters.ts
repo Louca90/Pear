@@ -1,6 +1,7 @@
 import type { ViewStyle } from 'react-native';
 
 import type { TextKey } from '../../i18n';
+import { fixed } from '../../theme';
 import type { StampKind } from './stamps';
 import { brightness, chain, ColorMatrix, contrast, fade, FADE_GRAY, FADE_OPACITY, mix, saturation, SEPIA, temperature } from './colorMatrix';
 
@@ -15,16 +16,20 @@ export type Step =
   | { op: 'warmth'; value: number } // -1 (froid) à 1 (chaud)
   | { op: 'fade'; value: number }; // 0 à 1
 
-export type FilterId = 'none' | 'time' | 'date' | 'film' | 'bw' | 'sepia' | 'warm' | 'cool' | 'vivid' | 'faded' | 'vintage' | 'punch' | 'dark';
+export type FilterId = 'none' | 'time' | 'date' | 'weekday' | 'place' | 'streak' | 'battery' | 'film' | 'bw' | 'sepia' | 'warm' | 'cool' | 'vivid' | 'faded' | 'vintage' | 'punch' | 'dark';
 
 export type FilterPreset = { id: FilterId; label: TextKey; steps: Step[]; stamp?: StampKind };
 
-// Original, puis les marques (heure, date, pellicule), puis les couleurs. Dans chaque filtre, le voile
+// Original, puis les marques (heure, date, jour, lieu, série, batterie, pellicule), puis les couleurs. Dans chaque filtre, le voile
 // et la température en dernier : sur une vidéo, ils se posent par-dessus les autres étapes.
 export const FILTERS: FilterPreset[] = [
   { id: 'none', label: 'editeur.filtreOriginal', steps: [] },
   { id: 'time', label: 'editeur.filtreHeure', steps: [], stamp: 'time' },
   { id: 'date', label: 'editeur.filtreDate', steps: [], stamp: 'date' },
+  { id: 'weekday', label: 'editeur.filtreJour', steps: [], stamp: 'weekday' },
+  { id: 'place', label: 'editeur.filtreLieu', steps: [], stamp: 'place' },
+  { id: 'streak', label: 'editeur.filtreSerie', steps: [], stamp: 'streak' },
+  { id: 'battery', label: 'editeur.filtreBatterie', steps: [], stamp: 'battery' },
   { id: 'film', label: 'editeur.filtrePellicule', steps: [{ op: 'warmth', value: 0.35 }], stamp: 'film' },
   { id: 'bw', label: 'editeur.filtreNoirBlanc', steps: [{ op: 'saturate', value: 0 }, { op: 'contrast', value: 1.12 }] },
   { id: 'sepia', label: 'editeur.filtreSepia', steps: [{ op: 'sepia', value: 0.85 }, { op: 'contrast', value: 1.05 }] },
@@ -112,8 +117,8 @@ export function viewFiltersOf(steps: Step[]): ViewFilter[] {
   return filters;
 }
 
-const WARM_TINT = '#FF8A00';
-const COOL_TINT = '#0A6CFF';
+
+
 const WARMTH_TINT_OPACITY = 0.12;
 
 // Les voiles posés par-dessus : exact pour le fané, approché pour la température.
@@ -121,7 +126,7 @@ export function tintsOf(steps: Step[]): { color: string; opacity: number }[] {
   const gray = Math.round(FADE_GRAY * 255);
   return steps.flatMap((step) => {
     if (step.op === 'fade') return [{ color: `rgb(${gray}, ${gray}, ${gray})`, opacity: step.value * FADE_OPACITY }];
-    if (step.op === 'warmth') return [{ color: step.value > 0 ? WARM_TINT : COOL_TINT, opacity: Math.abs(step.value) * WARMTH_TINT_OPACITY }];
+    if (step.op === 'warmth') return [{ color: step.value > 0 ? fixed.warmTint : fixed.coolTint, opacity: Math.abs(step.value) * WARMTH_TINT_OPACITY }];
     return [];
   });
 }
