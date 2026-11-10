@@ -1,4 +1,4 @@
-import { getMessaging, getToken, onMessage, onTokenRefresh } from '@react-native-firebase/messaging';
+import { getMessaging, getToken, onMessage, onTokenRefresh, subscribeToTopic } from '@react-native-firebase/messaging';
 import { addNetworkStateListener, getNetworkStateAsync, NetworkState } from 'expo-network';
 
 import { deriveSharedSecret, Identity } from '../../crypto/pairing';
@@ -15,6 +15,8 @@ import { receiveChunk } from './transfers';
 import { AFTER_ACTIVITY_MS, Link, OFFLINE_DELAY_MS } from './types';
 import { shareToken } from './wake';
 import { log } from '../../log';
+import { UPDATES_TOPIC } from '../../config';
+import { checkForUpdate } from '../../update/updates';
 
 export function connect(core: ChatCore, identity: Identity, contact: string) {
   let secret: Uint8Array;
@@ -81,9 +83,12 @@ export function watch(core: ChatCore) {
   onMessage(messaging, (message) => {
     recordPush(String(message.data?.type ?? 'wake'));
     if (message.data?.type === 'msg' || message.data?.type === 'pair') receivePush(core, message.data);
+    else if (message.data?.type === 'update') checkForUpdate(true);
     else retryAll(core);
   });
   onTokenRefresh(messaging, (token) => setMyToken(core, token));
+  // Annonces de nouvelles versions : un topic commun à tous, qui ne révèle rien sur les conversations.
+  subscribeToTopic(messaging, UPDATES_TOPIC).catch((e) => log.warn('topic updates', e));
 }
 
 // Notre token part en direct aux contacts connectés, et chiffré dans Firebase pour les autres.

@@ -1,12 +1,17 @@
+import { ed25519 } from '@noble/curves/ed25519.js';
+import { hexToBytes } from '@noble/curves/utils.js';
+
 // Lecture d'une release GitHub de Pear. Format attendu (voir RELEASE.md) : un tag vX.Y.Z, un APK
 // pear-X.Y.Z.apk en pièce jointe, et dans la description une section « ## Résumé », puis les lignes
-// « versionCode: N » et « sha256: <empreinte> ».
+// « versionCode: N », « sha256: <empreinte> » et « signature: <hex> » (Ed25519, clé de la configuration
+// distante, sur versionCode et sha256 : sans elle, la release est ignorée).
 
 export type Release = {
   tag: string;
   version: string;
   versionCode: number;
   sha256: string | null;
+  signature: string | null;
   summary: string;
   pageUrl: string;
   apkUrl: string;
@@ -25,6 +30,29 @@ export function parseSha256(body: string): string | null {
   return match ? match[1].toLowerCase() : null;
 }
 
+export function parseSignature(body: string): string | null {
+  const match = body.match(/^\s*signature:\s*([0-9a-f]{128})\s*$/im);
+  return match ? match[1].toLowerCase() : null;
+}
+
+// Le texte signé par scripts/release.mjs : le préfixe empêche de réutiliser une autre signature.
+export const RELEASE_SIGNING_PREFIX = 'pear-release-v1\n';
+
+export function releaseSigningMessage(versionCode: number, sha256: string) {
+  return new TextEncoder().encode(`${RELEASE_SIGNING_PREFIX}${versionCode}\n${sha256}`);
+}
+
+// Une release sans empreinte ou sans signature valide n'est jamais proposée : quelqu'un qui publierait un
+// APK sur le dépôt sans la clé privée ne pourrait pas le faire installer.
+export function isReleaseSigned(release: Release, publicKeyHex: string): boolean {
+  if (!release.sha256 || !release.signature) return false;
+  try {
+    return ed25519.verify(hexToBytes(release.signature), releaseSigningMessage(release.versionCode, release.sha256), hexToBytes(publicKeyHex));
+  } catch {
+    return false;
+  }
+}
+
 // La section « Résumé » jusqu'au titre suivant. Sans elle, les premières lignes de la description.
 export function extractSummary(body: string): string {
   const lines = body.replace(/\r\n/g, '\n').split('\n');
@@ -37,7 +65,7 @@ export function extractSummary(body: string): string {
   }
   return lines
     .map((line) => line.trim())
-    .filter((line) => line && !line.startsWith('#') && !/^(versionCode|sha256):/i.test(line))
+    .filter((line) => line && !line.startsWith('#') && !/^(versionCode|sha256|signature):/i.test(line))
     .slice(0, SUMMARY_FALLBACK_LINES)
     .join('\n');
 }
@@ -68,6 +96,7 @@ export function parseRelease(json: unknown): Release | null {
     version: tag.replace(/^v/i, ''),
     versionCode,
     sha256: parseSha256(body),
+    signature: parseSignature(body),
     summary: extractSummary(body),
     pageUrl,
     apkUrl: apk.browser_download_url,

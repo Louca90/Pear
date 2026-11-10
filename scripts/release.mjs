@@ -2,8 +2,12 @@
 //   node scripts/release.mjs bump 1.2.0   version et versionCode suivant dans app.json
 //   node scripts/release.mjs draft        brouillon de CHANGELOG.md depuis les commits du dernier tag
 //   node scripts/release.mjs build        notes embarquées, APK release signé, empreinte SHA-256
-//   node scripts/release.mjs publish      tag, release GitHub et envoi de l'APK
+//   node scripts/release.mjs publish      tag, release GitHub signée, envoi de l'APK, puis annonce aux téléphones
+//                                         (variable ANNOUNCE_SECRET, la même que sur Vercel ; sans elle, pas d'annonce)
 import { createHash } from 'node:crypto';
+import { homedir } from 'node:os';
+import { ed25519 } from '@noble/curves/ed25519.js';
+import { bytesToHex, hexToBytes } from '@noble/curves/utils.js';
 import { execFileSync, execSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -53,6 +57,29 @@ function summaryOf(version) {
 
 function sha256(path) {
   return createHash('sha256').update(readFileSync(path)).digest('hex');
+}
+
+// Signature Ed25519 de « versionCode + sha256 » avec la clé de la configuration distante (scripts/sign-config.mjs).
+// Le préfixe et le format doivent rester identiques à releaseSigningMessage (src/update/release.ts).
+function signRelease(versionCode, hash) {
+  const keyFile = join(homedir(), '.pear', 'remote-config-key.hex');
+  if (!existsSync(keyFile)) throw new Error(`Clé de signature absente : ${keyFile} (voir sign-config.mjs init).`);
+  const message = new TextEncoder().encode(['pear-release-v1', versionCode, hash].join('\n'));
+  return bytesToHex(ed25519.sign(message, hexToBytes(readFileSync(keyFile, 'utf8').trim())));
+}
+
+const ANNOUNCE_URL = 'https://pear-drab.vercel.app/api/announce';
+
+// Notification « Pear X.Y est disponible » : un échec ne doit pas faire croire que la release a échoué.
+async function announce(version, versionCode) {
+  const secret = process.env.ANNOUNCE_SECRET;
+  if (!secret) return console.log("ANNOUNCE_SECRET absent : pas d'annonce aux téléphones.");
+  const response = await fetch(ANNOUNCE_URL, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ version, versionCode }),
+  });
+  console.log(response.ok ? 'Annonce envoyée.' : `Annonce refusée (${response.status}).`);
 }
 
 function bump(version) {
@@ -145,7 +172,8 @@ async function publish() {
   if (!existsSync(apk)) throw new Error(`APK absent : lance d'abord « build ».`);
   if (output('git status --porcelain --untracked-files=no')) throw new Error('Des changements ne sont pas commités.');
   const hash = sha256(apk);
-  const body = `${releaseBody(version)}\n\nversionCode: ${versionCode}\nsha256: ${hash}\n`;
+  const signature = signRelease(versionCode, hash);
+  const body = `${releaseBody(version)}\n\nversionCode: ${versionCode}\nsha256: ${hash}\nsignature: ${signature}\n`;
 
   run(`git tag -a ${tag} -m "Pear ${version}"`);
   run(`git push origin HEAD ${tag}`);
@@ -162,6 +190,7 @@ async function publish() {
     body: readFileSync(apk),
   });
   console.log(`Publiée : ${release.html_url}`);
+  await announce(version, versionCode).catch((e) => console.log(`Annonce impossible : ${e.message}`));
 }
 
 const [command, argument] = process.argv.slice(2);

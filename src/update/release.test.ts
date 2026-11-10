@@ -1,6 +1,9 @@
 import { describe, expect, it } from '@jest/globals';
 
-import { extractSummary, parseRelease, parseSha256, parseVersionCode } from './release';
+import { ed25519 } from '@noble/curves/ed25519.js';
+import { bytesToHex } from '@noble/curves/utils.js';
+
+import { extractSummary, isReleaseSigned, parseRelease, parseSha256, parseSignature, parseVersionCode, releaseSigningMessage } from './release';
 
 const SHA = 'a'.repeat(64);
 const BODY = `## Résumé
@@ -59,6 +62,7 @@ describe('parseRelease', () => {
       version: '1.1.1',
       versionCode: 3,
       sha256: SHA,
+      signature: null,
       summary: '- Mise à jour automatique\n- Corrections',
       pageUrl: 'https://github.com/Louca90/Pear/releases/tag/v1.1.1',
       apkUrl: 'https://github.com/Louca90/Pear/releases/download/v1.1.1/pear-1.1.1.apk',
@@ -81,5 +85,37 @@ describe('parseRelease', () => {
     expect(parseRelease(null)).toBeNull();
     expect(parseRelease('texte')).toBeNull();
     expect(parseRelease({ message: 'Not Found' })).toBeNull();
+  });
+});
+
+describe('release signée', () => {
+  const secret = ed25519.utils.randomSecretKey();
+  const publicKey = bytesToHex(ed25519.getPublicKey(secret));
+  const sign = (versionCode: number, sha: string) => bytesToHex(ed25519.sign(releaseSigningMessage(versionCode, sha), secret));
+  const signedBody = (signature: string, versionCode = 3) => `${BODY.replace('versionCode: 3', `versionCode: ${versionCode}`)}
+signature: ${signature}`;
+
+  it('accepte une release signée avec la bonne clé', () => {
+    const parsed = parseRelease(release({ body: signedBody(sign(3, SHA)) }));
+    expect(parsed?.signature).toBe(sign(3, SHA));
+    expect(isReleaseSigned(parsed!, publicKey)).toBe(true);
+  });
+
+  it('ignore une release sans signature', () => {
+    const parsed = parseRelease(release());
+    expect(parsed).not.toBeNull();
+    expect(isReleaseSigned(parsed!, publicKey)).toBe(false);
+  });
+
+  it('ignore une signature d’une autre clé, d’un autre versionCode ou d’une autre empreinte', () => {
+    const other = bytesToHex(ed25519.sign(releaseSigningMessage(3, SHA), ed25519.utils.randomSecretKey()));
+    expect(isReleaseSigned(parseRelease(release({ body: signedBody(other) }))!, publicKey)).toBe(false);
+    expect(isReleaseSigned(parseRelease(release({ body: signedBody(sign(3, SHA), 4) }))!, publicKey)).toBe(false);
+    expect(isReleaseSigned(parseRelease(release({ body: signedBody(sign(3, 'b'.repeat(64))) }))!, publicKey)).toBe(false);
+  });
+
+  it('ne plante pas sur une signature mal formée ou une clé invalide', () => {
+    expect(parseSignature('signature: zz')).toBeNull();
+    expect(isReleaseSigned(parseRelease(release({ body: signedBody(sign(3, SHA)) }))!, 'pas-une-clé')).toBe(false);
   });
 });

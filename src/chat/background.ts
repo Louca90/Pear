@@ -2,6 +2,8 @@ import { AppState } from 'react-native';
 
 import { loadContacts, loadOrCreateIdentity } from '../storage';
 import { chat } from './manager';
+import { showUpdateNotification } from './notifications';
+import { appVersionCode } from '../../modules/pear-native';
 import { BACKGROUND_MAX_AWAKE_MS, BACKGROUND_QUIET_MS } from '../config';
 import { recordPush } from '../diagnostics';
 import { log } from '../log';
@@ -17,6 +19,14 @@ export async function handleWake(message: { data?: { [key: string]: unknown } })
   log.info('push reçu', message.data?.type ?? 'wake');
   recordPush(String(message.data?.type ?? 'wake'));
   if (AppState.currentState === 'active') return;
+
+  // Annonce d'une version (topic « updates », envoyée par /api/announce) : aucun contact à réveiller.
+  if (message.data?.type === 'update') {
+    const versionCode = Number(message.data.versionCode);
+    const version = String(message.data.version ?? '');
+    if (/^d+.d+.d+$/.test(version) && versionCode > (appVersionCode() ?? 0)) await showUpdateNotification(version);
+    return;
+  }
 
   const [identity, contacts] = await Promise.all([loadOrCreateIdentity(), loadContacts()]);
   chat.prepare(identity, contacts);

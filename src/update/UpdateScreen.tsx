@@ -1,19 +1,20 @@
 import { useEffect } from 'react';
 import { AppState, BackHandler, Linking, Pressable, ScrollView, Text, View } from 'react-native';
-import { Download, ExternalLink, LogOut, RotateCw, Settings } from 'lucide-react-native';
+import { ArrowRight, Download, ExternalLink, LogOut, RotateCw, Settings } from 'lucide-react-native';
 
 import { formatSize } from '../chat/files';
 import { Button, Screen, useNavigationBarHeight } from '../components/ui';
 import { createStyles, radius, spacing, useColors } from '../theme';
 import { Release } from './release';
-import { getInstallPermission, previewUpdateScreen, requestInstallPermission, startUpdate, useUpdateState } from './updates';
+import { canSkipUpdate, getInstallPermission, previewUpdateScreen, requestInstallPermission, skipUpdateOnce, startUpdate, useUpdateState } from './updates';
 import { t } from '../i18n';
 
 // Plein écran et bloquant : ni le bouton retour ni le geste ne le ferment. On met à jour, ou on quitte.
 export function UpdateScreen({ release }: { release: Release }) {
   const colors = useColors();
   const styles = useStyles();
-  const { phase, progress, error, preview } = useUpdateState();
+  const update = useUpdateState();
+  const { phase, progress, error, preview } = update;
   const bottom = useNavigationBarHeight();
   const busy = phase === 'downloading' || phase === 'verifying';
 
@@ -74,6 +75,9 @@ export function UpdateScreen({ release }: { release: Release }) {
             <Button label={t('maj.reessayer')} icon={RotateCw} onPress={startUpdate} />
           ) : (
             <Button label={busy ? t('maj.enCours') : phase === 'installing' ? t('maj.installer') : t('maj.mettreAJour')} icon={Download} onPress={startUpdate} />
+          )}
+          {phase === 'failed' && canSkipUpdate(update) && (
+            <Button label={t('maj.continuer')} icon={ArrowRight} variant="secondary" onPress={skipUpdateOnce} />
           )}
           <Button label={t('maj.quitter')} icon={LogOut} variant="secondary" onPress={() => BackHandler.exitApp()} />
           {preview && (

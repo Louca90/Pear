@@ -2,12 +2,15 @@ import { useSyncExternalStore } from 'react';
 import { Directory, File, Paths } from 'expo-file-system';
 
 import { addDownloadListener, appVersionCode, canRequestPackageInstalls, downloadFile, installApk, openUnknownAppSourcesSettings, sha256File } from '../../modules/pear-native';
-import { parseRelease, Release } from './release';
+import { isReleaseSigned, parseRelease, Release } from './release';
 import { log } from '../log';
 import { t } from '../i18n';
-import { LATEST_RELEASE_URL, UPDATE_CHECK_INTERVAL_MS, UPDATE_CHECK_TIMEOUT_MS } from '../config';
+import { LATEST_RELEASE_URL, REMOTE_CONFIG_PUBLIC_KEY, UPDATE_CHECK_INTERVAL_MS, UPDATE_CHECK_TIMEOUT_MS } from '../config';
 
 export { LATEST_RELEASE_URL };
+
+// Après ce nombre d'échecs d'installation de suite, l'écran propose « Continuer pour cette fois ».
+export const MAX_INSTALL_FAILURES = 3;
 
 export type CheckStatus = 'idle' | 'checking' | 'upToDate' | 'available' | 'offline';
 export type DownloadPhase = 'idle' | 'permission' | 'downloading' | 'verifying' | 'installing' | 'failed';
@@ -19,11 +22,14 @@ type UpdateState = {
   // Entre 0 et 1 pendant le téléchargement.
   progress: number;
   error: string | null;
+  // Échecs d'installation de suite pour cette version, et « Continuer pour cette fois » (jusqu'au prochain lancement).
+  failures: number;
+  skipped: boolean;
   // En debug, l'écran bloquant ne s'affiche que si on le demande, pour le tester.
   preview: boolean;
 };
 
-let state: UpdateState = { status: 'idle', release: null, phase: 'idle', progress: 0, error: null, preview: false };
+let state: UpdateState = { status: 'idle', release: null, phase: 'idle', progress: 0, error: null, failures: 0, skipped: false, preview: false };
 let lastCheck = 0;
 const listeners = new Set<() => void>();
 
@@ -45,7 +51,15 @@ export function useUpdateState() {
 
 // Bloque l'app tant que la mise à jour n'est pas installée. Jamais en debug, sauf aperçu demandé.
 export function isBlocking(current: UpdateState) {
-  return current.status === 'available' && current.release !== null && (!__DEV__ || current.preview);
+  return current.status === 'available' && current.release !== null && !current.skipped && (!__DEV__ || current.preview);
+}
+
+export function canSkipUpdate(current: UpdateState) {
+  return current.failures >= MAX_INSTALL_FAILURES;
+}
+
+export function skipUpdateOnce() {
+  if (canSkipUpdate(state)) set({ skipped: true });
 }
 
 export function previewUpdateScreen(show: boolean) {
@@ -66,9 +80,13 @@ export async function checkForUpdate(force = false) {
   const timeout = setTimeout(() => controller.abort(), UPDATE_CHECK_TIMEOUT_MS);
   try {
     const response = await fetch(LATEST_RELEASE_URL, { headers: { Accept: 'application/vnd.github+json' }, signal: controller.signal });
-    const release = response.ok ? parseRelease(await response.json()) : null;
+    let release = response.ok ? parseRelease(await response.json()) : null;
+    if (release && !isReleaseSigned(release, REMOTE_CONFIG_PUBLIC_KEY)) {
+      log.warn('mise à jour', 'release ignorée : signature absente ou fausse');
+      release = null;
+    }
     if (release && release.versionCode > installedVersionCode()) {
-      set({ status: 'available', release });
+      set({ status: 'available', release, ...(state.release?.versionCode === release.versionCode ? {} : { failures: 0, skipped: false }) });
     } else {
       set({ status: 'upToDate', release });
       cleanupDownloads();
@@ -133,20 +151,19 @@ export async function startUpdate() {
       set({ phase: 'downloading', progress: file.exists ? file.size / release.apkSize : 0, error: null });
       await downloadFile(release.apkUrl, file.uri);
     }
-    if (release.sha256) {
-      set({ phase: 'verifying' });
-      const hash = await sha256File(file.uri);
-      if (hash !== release.sha256) {
-        // Fichier abîmé ou modifié : on le supprime pour repartir de zéro au prochain essai.
-        file.delete();
-        throw new Error(t('maj.fichierAbime'));
-      }
+    // L'empreinte est signée (isReleaseSigned) : un fichier qui ne la respecte pas n'est jamais installé.
+    set({ phase: 'verifying' });
+    const hash = await sha256File(file.uri);
+    if (hash !== release.sha256) {
+      // Fichier abîmé ou modifié : on le supprime pour repartir de zéro au prochain essai.
+      file.delete();
+      throw new Error(t('maj.fichierAbime'));
     }
     set({ phase: 'installing', progress: 1 });
     installApk(file.uri);
   } catch (e) {
     log.warn('mise à jour', e);
-    set({ phase: 'failed', error: readableError(e) });
+    set({ phase: 'failed', error: readableError(e), failures: state.failures + 1 });
   } finally {
     subscription.remove();
   }

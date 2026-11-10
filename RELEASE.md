@@ -26,7 +26,7 @@ versionCode: 3
 sha256: 9f2c…(64 caractères hexadécimaux)
 ```
 
-L'app affiche la section « Résumé » (jusqu'au titre suivant) et un lien vers la release. Sans cette section, elle affiche les premières lignes de la description. Sans ligne `versionCode`, la release est ignorée. Avec une ligne `sha256`, le fichier téléchargé est vérifié avant l'installation.
+L'app affiche la section « Résumé » (jusqu'au titre suivant) et un lien vers la release. Sans cette section, elle affiche les premières lignes de la description. Sans ligne `versionCode`, la release est ignorée. Sans lignes `sha256` et `signature` valides (Ed25519, clé de la configuration distante, sur `versionCode` + `sha256`), la release est ignorée ; le fichier téléchargé est toujours vérifié contre l'empreinte avant l'installation. `publish` ajoute ces deux lignes tout seul.
 
 `CHANGELOG.md` garde une section par version, la plus récente en haut, avec les mêmes parties en `###` : le script les remonte d'un niveau pour la release.
 
@@ -37,7 +37,7 @@ L'app affiche la section « Résumé » (jusqu'au titre suivant) et un lien vers
 3. Commiter (`app.json`, `CHANGELOG.md`).
 4. `node scripts/release.mjs build` : génère `src/update/release-notes.json` (le Résumé embarqué, lisible hors ligne par le popup « Pear est à jour ! »), vérifie les types et les tests, compile l'APK release signé (arm64, `--all-abis` pour toutes les architectures) dans `dist/` et affiche son empreinte.
 5. Commiter `src/update/release-notes.json` s'il a changé.
-6. `node scripts/release.mjs publish` : crée le tag, pousse, crée la release GitHub avec la description et envoie l'APK. Le token vient du gestionnaire d'identifiants de git ; il n'est jamais écrit ni affiché.
+6. `node scripts/release.mjs publish` : crée le tag, pousse, crée la release GitHub avec la description et envoie l'APK. Le token vient du gestionnaire d'identifiants de git ; il n'est jamais écrit ni affiché. Ensuite il appelle `/api/announce` (secret `ANNOUNCE_SECRET`, à définir sur Vercel et dans l'environnement de Louca) : notification « Pear X.Y est disponible » aux téléphones abonnés au topic FCM `updates`. Sans la variable, la release part quand même, sans annonce.
 
 ## À savoir
 

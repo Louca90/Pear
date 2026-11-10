@@ -51,6 +51,17 @@ export async function showMessageNotification(contact: string, name: string, pho
   });
 }
 
+// « Pear X.Y est disponible » : un appui ouvre l'app, qui vérifie alors la mise à jour (et la signature).
+export async function showUpdateNotification(version: string) {
+  await ensureChannel();
+  await notifee.displayNotification({
+    id: 'update',
+    title: t('maj.notifTitre', { version }),
+    body: t('maj.notifTexte'),
+    android: { channelId: NOTIFICATION_CHANNEL_ID, smallIcon: NOTIFICATION_SMALL_ICON, pressAction: { id: 'default' } },
+  });
+}
+
 // « X veut se pairer avec toi » : un appui ouvre la page Demandes ; on peut aussi répondre directement.
 export async function showPairNotification(contact: string, name: string) {
   await ensureChannel();
