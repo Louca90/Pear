@@ -16,6 +16,7 @@ import { parisNow } from '../../time';
 import { publishMyToken, retryAll, watch } from './connections';
 import { ChatCore } from './core';
 import { addSystemMessage, flush, sendEvent } from './outbox';
+import { isRepairPending, requestRepair } from './sessions';
 import { getMyProfile, saveProfile, shareProfile } from './profile';
 import { acceptFile, closeIncomingFiles, dropIncomingFile, refuseFile, sendFile } from './transfers';
 import { AFTER_SEND_MS, PickedFile, WAKE_CHECK_MS } from './types';
@@ -270,6 +271,18 @@ class ChatManager extends ChatCore {
     this.atBottom = atBottom;
     this.markOpenConversationRead();
     this.notify();
+  }
+
+  // « Réparer la conversation » : nouvelle session avec le contact. Vrai si la demande est partie tout de
+  // suite, faux si elle attend la prochaine connexion.
+  repairConversation(contact: string) {
+    const sent = requestRepair(this, contact);
+    this.notify();
+    return sent;
+  }
+
+  isRepairPending(contact: string) {
+    return isRepairPending(contact);
   }
 
   send(contact: string, text: string, replyTo: string | null = null, forwarded = false) {

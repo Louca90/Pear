@@ -2,7 +2,7 @@ import { describe, expect, it } from '@jest/globals';
 
 import { createIdentity, deriveSharedSecret } from './pairing';
 import { createRatchet, ratchetDecrypt, ratchetEncrypt, RatchetState } from './ratchet';
-import { createEphemeral, createSessionV2, decryptWithSessions, isSessionV2 } from './rekey';
+import { createEphemeral, createSessionV2, decryptWithSessions, isRetiredSessionExpired, isSessionV2, RETIRED_SESSION_MS, retireSession } from './rekey';
 
 type Phone = { current: RatchetState; pending?: RatchetState; previous?: RatchetState };
 
@@ -89,6 +89,47 @@ describe('passage en session v2 (clés éphémères)', () => {
     // Une session v1 refaite avec les seules identités ne lit pas un message v2.
     const intruder = createRatchet(bob, alice.publicKey, deriveSharedSecret(bob, alice.publicKey));
     expect(() => ratchetDecrypt(intruder, send(a, 'secret'))).toThrow();
+  });
+
+  it('répare une conversation cassée par la restauration d’une sauvegarde', () => {
+    const phones = setup();
+    const { alice, bob, secret, a, b } = phones;
+    expect(receive(b, send(a, 'un'))).toBe('un');
+    expect(receive(a, send(b, 'deux'))).toBe('deux');
+    // Sauvegarde de « b », puis la conversation continue.
+    const backup = JSON.parse(JSON.stringify(b.current)) as RatchetState;
+    expect(receive(b, send(a, 'trois'))).toBe('trois');
+    expect(receive(a, send(b, 'quatre'))).toBe('quatre');
+    // « b » restaure sa sauvegarde : les messages de « a » ne se lisent plus, ni ceux de « b ».
+    b.current = backup;
+    expect(() => receive(b, send(a, 'perdu'))).toThrow();
+    expect(() => receive(a, send(b, 'perdu aussi'))).toThrow();
+
+    // Réparation : les clés éphémères passent par la connexion directe, hors de la session cassée.
+    const ephA = createEphemeral();
+    const ephB = createEphemeral();
+    b.previous = retireSession(b.current);
+    b.current = createSessionV2(bob, alice.publicKey, secret, ephB, ephA.publicKey);
+    a.previous = retireSession(a.current);
+    a.current = createSessionV2(alice, bob.publicKey, secret, ephA, ephB.publicKey);
+    expect(receive(b, send(a, 'ça remarche'))).toBe('ça remarche');
+    expect(receive(a, send(b, 'dans les deux sens'))).toBe('dans les deux sens');
+    expect(receive(b, send(a, 'et encore'))).toBe('et encore');
+  });
+
+  it("efface l'ancienne session au bout de 7 jours", () => {
+    const { a } = setup();
+    const retired = retireSession(a.current, 1000);
+    expect(isRetiredSessionExpired(retired, 1000 + RETIRED_SESSION_MS)).toBe(false);
+    expect(isRetiredSessionExpired(retired, 1001 + RETIRED_SESSION_MS)).toBe(true);
+    // Sans date (session d'avant cette règle) : jamais considérée comme expirée, elle reçoit une date.
+    expect(isRetiredSessionExpired(a.current, Number.MAX_SAFE_INTEGER)).toBe(false);
+    // La date suit l'état quand il sert encore à déchiffrer un message en route.
+    const other = setup();
+    const late = send(other.a, 'en route');
+    const result = decryptWithSessions({ previous: retireSession(other.b.current, 5) }, late);
+    expect(result.text).toBe('en route');
+    expect(result.state.retiredAt).toBe(5);
   });
 
   it('refuse un message forgé dans toutes les sessions', () => {

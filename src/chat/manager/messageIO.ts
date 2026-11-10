@@ -28,7 +28,7 @@ import { notifyMessage } from './notify';
 import { addSystemMessage, flush } from './outbox';
 import { reshareProfile } from './profile';
 import { receiveRelayOffer } from './relay';
-import { decryptIncoming, receiveRekey, receiveRekeyAck } from './sessions';
+import { decryptIncoming, receiveRekey, receiveRekeyAck, receiveRepair, receiveRepairAck } from './sessions';
 import { queuePushAck } from './wake';
 import { dropIncomingFile, receiveFileOffer, setProgress, streamFile } from './transfers';
 import { AFTER_ACTIVITY_MS, asPayload, isCount, isSupportedVersion, UPDATE_REQUIRED, MAX_PROFILE_NAME_LENGTH, MAX_REACTION_LENGTH, MAX_SAVED_ID_LENGTH, MAX_TEXT_LENGTH, Payload } from './types';
@@ -204,5 +204,10 @@ export function receive(core: ChatCore, contact: string, received: unknown) {
     receiveTyping(core, contact, data.state === 'start');
   } else if (data.type === 'token' && typeof data.token === 'string' && data.token.length <= 4096) {
     setContactToken(contact, data.token);
+  } else if (data.type === 'repair') {
+    // Hors du ratchet exprès : c'est lui qui est cassé. Le canal direct est chiffré par le secret du pairing.
+    receiveRepair(core, contact, data);
+  } else if (data.type === 'repair-ack') {
+    receiveRepairAck(core, contact, data);
   }
 }

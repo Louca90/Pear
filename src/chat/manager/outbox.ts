@@ -38,11 +38,20 @@ export function addSystemMessage(contact: string, mine: number, text = '', id = 
   });
 }
 
-// Tout ce qui n'a pas été confirmé repart : l'autre téléphone ignore les doublons grâce à l'id.
+// Tout ce qui n'a pas été confirmé repart, une fois par connexion : l'autre téléphone ignore les doublons
+// grâce à l'id. Dans une même connexion, le canal est fiable : renvoyer ne ferait que consommer des clés.
 export function flush(core: ChatCore, contact: string) {
   const peer = core.links.get(contact)?.peer;
   if (!peer) return;
+  const epoch = peer.epoch;
+  const once = (id: string, send: () => boolean) => {
+    if (core.sentOnce.has(contact, epoch, id)) return true;
+    if (!send()) return false;
+    core.sentOnce.add(contact, epoch, id);
+    return true;
+  };
   for (const message of getUndelivered(contact)) {
+    if (core.sentOnce.has(contact, epoch, message.id)) continue;
     if (message.kind !== 'text') {
       // Déjà déposé dans le relais : le destinataire le télécharge de là, on ne l'envoie pas deux fois.
       if (core.sendingFiles.has(message.id) || getUpload(message.id, contact)?.state === 'uploaded') continue;
@@ -69,14 +78,14 @@ export function flush(core: ChatCore, contact: string) {
         camera: message.from_camera === 1,
         forwarded: message.forwarded === 1,
       };
-      if (!sendSecure(core, contact, offer)) return;
-    } else if (!sendSecure(core, contact, { type: 'message', id: message.id, text: message.text, reply_to: message.reply_to, ...(message.forwarded ? { forwarded: true } : {}) })) {
+      if (!once(message.id, () => sendSecure(core, contact, offer))) return;
+    } else if (!once(message.id, () => sendSecure(core, contact, { type: 'message', id: message.id, text: message.text, reply_to: message.reply_to, ...(message.forwarded ? { forwarded: true } : {}) }))) {
       return;
     }
   }
   // Après les messages : une modification ou une réaction arrive toujours après ce qu'elle vise.
   for (const event of getOutboxEvents(contact)) {
-    if (!sendSecure(core, contact, { type: 'event', eventId: event.id, ...JSON.parse(event.payload) })) return;
+    if (!once(`event:${event.id}`, () => sendSecure(core, contact, { type: 'event', eventId: event.id, ...JSON.parse(event.payload) }))) return;
   }
   // Les confirmations de lecture restées en attente pendant une coupure partent aussi.
   for (const message of getPendingReadReceipts(contact)) {

@@ -27,6 +27,9 @@ export type RatchetState = {
   previousSent: number;
   // Clés des messages sautés : ils peuvent encore arriver après une coupure.
   skipped: Record<string, string>;
+  // Session remplacée (passage en v2, réparation) : date du remplacement. Elle n'est plus gardée que pour
+  // les messages encore en route, puis effacée (voir rekey.ts).
+  retiredAt?: number;
 };
 
 export type RatchetEnvelope = {

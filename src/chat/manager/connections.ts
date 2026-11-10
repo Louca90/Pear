@@ -10,7 +10,7 @@ import { ChatCore } from './core';
 import { receivePush } from './incoming';
 import { receive } from './messageIO';
 import { flush } from './outbox';
-import { maybeRekey } from './sessions';
+import { maybeRekey, resumeRepair } from './sessions';
 import { receiveChunk } from './transfers';
 import { AFTER_ACTIVITY_MS, Link, OFFLINE_DELAY_MS } from './types';
 import { shareToken } from './wake';
@@ -36,6 +36,7 @@ export function connect(core: ChatCore, identity: Identity, contact: string) {
           // Nouvelle connexion directe : les messages qui suivent forment une nouvelle session.
           core.sessions.forget(contact);
           shareToken(core, contact);
+          resumeRepair(core, contact);
           flush(core, contact);
           maybeRekey(core, contact);
         }

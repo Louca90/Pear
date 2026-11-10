@@ -8,3 +8,8 @@ export function isSupportedVersion(payload: Record<string, unknown>) {
 
 // Message système affiché à la place d'un message d'une version plus récente de Pear.
 export const UPDATE_REQUIRED = 'update-required';
+
+// Messages système de la réparation de session (src/chat/manager/sessions.ts) : plusieurs messages de suite
+// indéchiffrables (bouton « Réparer la conversation »), puis la nouvelle session en place.
+export const SESSION_BROKEN = 'session-broken';
+export const SESSION_REPAIRED = 'session-repaired';

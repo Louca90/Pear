@@ -2,6 +2,7 @@ import { Identity } from '../../crypto/pairing';
 
 import { IncomingFile, Link } from './types';
 import { SessionTracker } from '../grouping';
+import { SentOnce } from '../sentOnce';
 
 // L'état partagé par les modules du manager. Seule la façade (index.ts) est utilisée par les écrans.
 export class ChatCore {
@@ -15,6 +16,8 @@ export class ChatCore {
   // Messages et événements déjà partis par push : on ne les renvoie pas tant que l'app tourne. Ils
   // repartiront en direct à la prochaine connexion (l'autre téléphone ignore les doublons).
   pushed = new Set<string>();
+  // Messages et événements déjà partis dans la connexion directe en cours (renvoyés à la suivante).
+  sentOnce = new SentOnce();
   // Fichiers en cours d'envoi ou de réception par le relais.
   relaying = new Set<string>();
   // Dernière proposition de session v2 à chaque contact.

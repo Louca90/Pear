@@ -49,6 +49,18 @@ export function isSessionV2(state: RatchetState | null) {
   return state?.context.startsWith('pear-ratchet-v2') ?? false;
 }
 
+// L'ancienne session ne sert qu'aux messages partis juste avant le changement : au-delà de 7 jours, elle
+// est effacée (ses clés ne doivent pas rester sur le téléphone).
+export const RETIRED_SESSION_MS = 7 * 24 * 3600 * 1000;
+
+export function retireSession(state: RatchetState, now = Date.now()): RatchetState {
+  return { ...state, retiredAt: now };
+}
+
+export function isRetiredSessionExpired(state: RatchetState, now = Date.now()) {
+  return state.retiredAt !== undefined && now - state.retiredAt > RETIRED_SESSION_MS;
+}
+
 export type SessionSlot = 'current' | 'pending' | 'previous';
 
 // Essaie chaque session dans l'ordre : l'actuelle, celle qui attend d'être confirmée, puis l'ancienne

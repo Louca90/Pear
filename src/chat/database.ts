@@ -6,7 +6,7 @@ import { LATEST_VERSION, migrate, schemaVersion } from './db/migrations';
 import { deleteStoredFile, formatSize } from './files';
 import { DB_NAME } from '../config';
 import { t } from '../i18n';
-import { UPDATE_REQUIRED } from './protocol';
+import { SESSION_BROKEN, SESSION_REPAIRED, UPDATE_REQUIRED } from './protocol';
 
 // Mes messages : sending (pas encore confirmé), delivered (reçu par l'autre), read (lu par l'autre),
 // refused (fichier refusé par l'autre : il ne repart plus).
@@ -179,6 +179,11 @@ export function editMessage(id: string, contact: string, mine: number, text: str
 
 export function setReaction(id: string, contact: string, column: 'my_reaction' | 'their_reaction', emoji: string | null) {
   db().runSync(`UPDATE messages SET ${column} = ?, ${column}_at = ? WHERE id = ? AND contact = ?`, emoji, emoji ? Date.now() : null, id, contact);
+}
+
+// Retire les messages système d'un type (le bouton « Réparer » une fois la session réparée).
+export function deleteSystemMessages(contact: string, text: string) {
+  db().runSync("DELETE FROM messages WHERE contact = ? AND kind = 'system' AND text = ?", contact, text);
 }
 
 export function deleteMessage(id: string, contact: string, mine?: number) {
@@ -584,6 +589,8 @@ export function describeMessage(message: Message): string {
   if (message.status === 'offered') return t('apercu.enAttente', { type: KIND_LABELS[message.kind] ?? t('apercu.fichier'), taille: formatSize(message.file_size ?? 0) });
   if (message.kind === 'wallpaper') return t('apercu.fondChange');
   if (message.kind === 'system' && message.text === UPDATE_REQUIRED) return t('chat.majRequise');
+  if (message.kind === 'system' && message.text === SESSION_BROKEN) return t('apercu.sessionCassee');
+  if (message.kind === 'system' && message.text === SESSION_REPAIRED) return t('apercu.sessionReparee');
   if (message.kind === 'system' && message.text.startsWith('saved:')) return message.text.includes(':video') ? t('apercu.videoEnregistree') : t('apercu.photoEnregistree');
   if (message.kind === 'system') return t('apercu.fondRetire');
   if (message.kind === 'image') return t('apercu.photo');
