@@ -1,7 +1,7 @@
 {
-  "version": "1.5.1",
-  "versionCode": 8,
-  "summary": "- La mise à jour ne s'arrête plus sur « Téléchargement refusé (504) » : elle réessaie toute seule.\n- Caméra plus fiable : elle ne reste plus noire à l'ouverture, la photo est exactement l'image plein écran, et la caméra avant a un flash d'écran.\n- Photo de profil recadrée en carré et tournée avant d'être enregistrée.\n- Galerie de Pear bien plus rapide, et un nouveau menu pour joindre photos et fichiers.",
+  "version": "1.6.0",
+  "versionCode": 9,
+  "summary": "- Messages éphémères et photos à vue unique : en bas d'une conversation, tirez vers le haut pour activer ou couper les messages qui s'effacent tout seuls.\n- Recherche dans les messages, notes à moi-même, albums photo, stickers maison, aperçu des liens et vocaux avec forme d'onde et vitesse de lecture.\n- Nouvelle interface : couleur poire, coches « lu » animées, bulle « écrit… », poire animée (tirer pour actualiser, transferts, écrans vides).\n- Sécurité : verrou par empreinte, base de messages et fichiers chiffrés sur le téléphone, mises à jour signées.\n- Pear est plus rapide à l'ouverture des conversations et de l'accueil.",
   "pages": {
     "1.6.0": [
       {
