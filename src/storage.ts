@@ -13,6 +13,8 @@ export type Contact = {
   name: string;
   // Notre demande n'a pas encore été acceptée : on ne peut pas encore lui écrire.
   pending?: boolean;
+  // Code de vérification confirmé (ou scans croisés). Propre à ce téléphone, jamais envoyé.
+  verified?: boolean;
 };
 
 // Vrai si une identité existait déjà avant ce lancement.
@@ -33,7 +35,7 @@ export async function loadOrCreateIdentity(): Promise<Identity> {
 // Contacts : dans pear.db. Les anciennes versions les gardaient en un seul bloc JSON dans le SecureStore.
 export async function loadContacts(): Promise<Contact[]> {
   await migrateLegacyContacts();
-  return getContactRows().map((row) => ({ publicKey: row.public_key, name: row.name, ...(row.state === 'pending' ? { pending: true } : {}) }));
+  return getContactRows().map((row) => ({ publicKey: row.public_key, name: row.name, ...(row.state === 'pending' ? { pending: true } : {}), ...(row.verified ? { verified: true } : {}) }));
 }
 
 export async function saveContacts(contacts: Contact[]): Promise<void> {

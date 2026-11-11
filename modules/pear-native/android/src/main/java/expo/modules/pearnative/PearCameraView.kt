@@ -6,6 +6,8 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Matrix
+import android.os.SystemClock
+import android.widget.ImageView
 import android.net.Uri
 import android.util.Log
 import android.util.Size
@@ -55,6 +57,12 @@ import java.io.FileOutputStream
 private const val TAG = "PearCamera"
 private const val MAX_RETRIES = 3
 private const val RETRY_DELAY_MS = 400L
+// Le zoom envoyé directement par le geste prime sur la propriété (qui arrive en retard) pendant ce délai.
+private const val DIRECT_ZOOM_MS = 300L
+
+// La dernière image de l'aperçu, réduite : montrée floue pendant que la caméra se rallume.
+@Volatile
+var lastCameraFrame: Bitmap? = null
 
 // CameraX, déjà préparé au lancement de l'app (PearCameraModule) : ici on attend qu'il soit prêt.
 suspend fun cameraProvider(context: Context): ProcessCameraProvider = suspendCancellableCoroutine { continuation ->
@@ -78,6 +86,7 @@ class PearCameraView(context: Context, appContext: AppContext) : ExpoView(contex
 
   private val onReady by EventDispatcher()
   private val onCameraError by EventDispatcher()
+  private val onFrame by EventDispatcher()
 
   private val previewView = PreviewView(context).apply {
     implementationMode = PreviewView.ImplementationMode.COMPATIBLE
@@ -90,6 +99,16 @@ class PearCameraView(context: Context, appContext: AppContext) : ExpoView(contex
     .build()
     .also { it.surfaceProvider = previewView.surfaceProvider }
   private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+  // La dernière image de la fois d'avant, floutée (réduite puis agrandie), jusqu'à la première vraie image.
+  private val lastFrameView = ImageView(context).apply {
+    scaleType = ImageView.ScaleType.CENTER_CROP
+    val frame = lastCameraFrame
+    if (frame != null) setImageBitmap(frame) else visibility = GONE
+  }
+  private var streamObserver: Observer<PreviewView.StreamState>? = null
+  private var extrasBound = false
+  private var bindStartedAt = 0L
+  private var directZoomAt = 0L
 
   private var provider: ProcessCameraProvider? = null
   private var camera: Camera? = null
@@ -115,6 +134,26 @@ class PearCameraView(context: Context, appContext: AppContext) : ExpoView(contex
 
   init {
     addView(previewView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+    addView(lastFrameView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+  }
+
+  // Le geste de zoom parle directement au natif, sans passer par React.
+  fun setZoomDirect(value: Float) {
+    zoom = value
+    directZoomAt = SystemClock.uptimeMillis()
+    applyZoom()
+  }
+
+  private fun rememberFrame() {
+    try {
+      val frame = previewView.bitmap ?: return
+      val width = 40
+      val height = maxOf(1, frame.height * width / maxOf(1, frame.width))
+      lastCameraFrame = Bitmap.createScaledBitmap(frame, width, height, true)
+      frame.recycle()
+    } catch (e: Exception) {
+      Log.w(TAG, "dernière image", e)
+    }
   }
 
   fun setFacing(value: String) {
@@ -130,6 +169,7 @@ class PearCameraView(context: Context, appContext: AppContext) : ExpoView(contex
   }
 
   fun setZoom(value: Float) {
+    if (SystemClock.uptimeMillis() - directZoomAt < DIRECT_ZOOM_MS) return
     zoom = value
     applyZoom()
   }
@@ -173,7 +213,10 @@ class PearCameraView(context: Context, appContext: AppContext) : ExpoView(contex
     if (value == active) return
     active = value
     needsBind = value
-    if (!value) unbind()
+    if (!value) {
+      rememberFrame()
+      unbind()
+    }
   }
 
   // Après chaque lot de propriétés : on (re)branche la caméra s'il le faut, une seule fois.
@@ -204,6 +247,7 @@ class PearCameraView(context: Context, appContext: AppContext) : ExpoView(contex
   private fun bind() {
     needsBind = false
     val token = ++bindToken
+    bindStartedAt = SystemClock.uptimeMillis()
     scope.launch {
       try {
         val cameraProvider = provider ?: cameraProvider(context).also { provider = it }
@@ -229,18 +273,20 @@ class PearCameraView(context: Context, appContext: AppContext) : ExpoView(contex
         ).also { videoCapture = it }
 
         stateObserver?.let { observer -> camera?.cameraInfo?.cameraState?.removeObserver(observer) }
+        streamObserver?.let { previewView.previewStreamState.removeObserver(it) }
+        extrasBound = false
         cameraProvider.unbindAll()
-        val bound = try {
+        // L'aperçu seul d'abord : la première image arrive plus vite. Photo et vidéo se branchent juste
+        // après (sauf si une vidéo est en cours : elle doit continuer sur la nouvelle caméra).
+        val staged = recording == null
+        val bound = if (staged) {
           photoAvailable = true
-          cameraProvider.bindToLifecycle(owner, selector(), preview, photo, video)
-        } catch (e: IllegalArgumentException) {
-          // Ce téléphone ne sait pas faire photo et vidéo ensemble : la photo viendra de l'aperçu.
-          Log.w(TAG, "photo et vidéo ensemble impossibles", e)
-          photoAvailable = false
-          cameraProvider.unbindAll()
-          cameraProvider.bindToLifecycle(owner, selector(), preview, video)
+          cameraProvider.bindToLifecycle(owner, selector(), preview)
+        } else {
+          bindExtras(cameraProvider, owner, photo, video)
         }
         camera = bound
+        if (!staged) extrasBound = true
         try {
           applyFlash(photo)
         } catch (e: Exception) {
@@ -271,10 +317,50 @@ class PearCameraView(context: Context, appContext: AppContext) : ExpoView(contex
           announced = true
           retries = 0
           val zoomState = bound.cameraInfo.zoomState.value
+          Log.i(TAG, "caméra ouverte après ${SystemClock.uptimeMillis() - bindStartedAt} ms")
           onReady(mapOf("minZoom" to (zoomState?.minZoomRatio ?: 1f).toDouble(), "maxZoom" to (zoomState?.maxZoomRatio ?: 1f).toDouble()))
         }
         stateObserver = observer
         bound.cameraInfo.cameraState.observe(owner, observer)
+
+        // Première vraie image : on retire l'image floue, puis on branche photo et vidéo.
+        var streamed = false
+        val stream = Observer<PreviewView.StreamState> { state ->
+          if (token != bindToken || streamed || state != PreviewView.StreamState.STREAMING) return@Observer
+          streamed = true
+          val elapsed = SystemClock.uptimeMillis() - bindStartedAt
+          Log.i(TAG, "première image après $elapsed ms")
+          onFrame(mapOf("ms" to elapsed.toDouble()))
+          if (lastFrameView.visibility == VISIBLE) {
+            lastFrameView.animate().alpha(0f).setDuration(160).withEndAction {
+              lastFrameView.visibility = GONE
+              lastFrameView.alpha = 1f
+              lastFrameView.setImageDrawable(null)
+            }.start()
+          }
+          if (staged) {
+            post {
+              if (token != bindToken || !active) return@post
+              try {
+                val full = bindExtras(cameraProvider, owner, photo, video)
+                camera = full
+                extrasBound = true
+                try {
+                  applyFlash(photo)
+                } catch (e: Exception) {
+                  photo.flashMode = ImageCapture.FLASH_MODE_OFF
+                }
+                applyZoom()
+                full.cameraControl.enableTorch(torch)
+                Log.i(TAG, "photo et vidéo branchées après ${SystemClock.uptimeMillis() - bindStartedAt} ms")
+              } catch (e: Exception) {
+                Log.w(TAG, "photo et vidéo non branchées", e)
+              }
+            }
+          }
+        }
+        streamObserver = stream
+        previewView.previewStreamState.observe(owner, stream)
       } catch (e: Exception) {
         Log.w(TAG, "caméra non branchée", e)
         onCameraError(mapOf("message" to (e.message ?: e.javaClass.simpleName)))
@@ -282,8 +368,24 @@ class PearCameraView(context: Context, appContext: AppContext) : ExpoView(contex
     }
   }
 
+  // Branche photo et vidéo avec l'aperçu. Si le téléphone ne sait pas les faire ensemble, la photo
+  // viendra de l'aperçu.
+  private fun bindExtras(cameraProvider: ProcessCameraProvider, owner: LifecycleOwner, photo: ImageCapture, video: VideoCapture<Recorder>): Camera {
+    return try {
+      photoAvailable = true
+      cameraProvider.bindToLifecycle(owner, selector(), preview, photo, video)
+    } catch (e: IllegalArgumentException) {
+      Log.w(TAG, "photo et vidéo ensemble impossibles", e)
+      photoAvailable = false
+      cameraProvider.bindToLifecycle(owner, selector(), preview, video)
+    }
+  }
+
   private fun unbind() {
     bindToken++
+    extrasBound = false
+    streamObserver?.let { previewView.previewStreamState.removeObserver(it) }
+    streamObserver = null
     stateObserver?.let { observer -> camera?.cameraInfo?.cameraState?.removeObserver(observer) }
     stateObserver = null
     camera = null
@@ -300,7 +402,7 @@ class PearCameraView(context: Context, appContext: AppContext) : ExpoView(contex
   // La photo, déjà tournée et réduite (le JPEG n'a pas besoin d'orientation EXIF), en un seul passage.
   fun takePicture(maxSize: Int, quality: Int, promise: Promise) {
     val photo = imageCapture
-    if (photo == null || !photoAvailable || camera == null) {
+    if (photo == null || !photoAvailable || !extrasBound || camera == null) {
       val frame = previewView.bitmap ?: return promise.reject("ERR_PEAR_CAMERA", "La caméra n'est pas prête.", null)
       save(frame, 0, maxSize, quality, null, promise)
       return
@@ -374,7 +476,7 @@ class PearCameraView(context: Context, appContext: AppContext) : ExpoView(contex
   @SuppressLint("MissingPermission")
   fun startRecording(promise: Promise) {
     val video = videoCapture
-    if (video == null || camera == null) return promise.reject("ERR_PEAR_CAMERA", "La caméra n'est pas prête.", null)
+    if (video == null || !extrasBound || camera == null) return promise.reject("ERR_PEAR_CAMERA", "La caméra n'est pas prête.", null)
     if (recording != null) return promise.reject("ERR_PEAR_CAMERA", "Une vidéo est déjà en cours.", null)
     val file = File(context.cacheDir, "video-${System.currentTimeMillis()}.mp4")
     var pending = video.output.prepareRecording(context, FileOutputOptions.Builder(file).build())
@@ -405,6 +507,7 @@ class PearCameraView(context: Context, appContext: AppContext) : ExpoView(contex
 
   fun release() {
     recording?.stop()
+    rememberFrame()
     unbind()
     scope.cancel()
   }

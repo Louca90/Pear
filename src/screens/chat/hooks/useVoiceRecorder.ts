@@ -1,18 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Keyboard, Linking, PanResponder } from 'react-native';
 import { RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder } from 'expo-audio';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '../../../haptics';
+import { encodeWave } from '../../../chat/meta';
 
 import { showDialog } from '../../../components/dialog';
 
 import { VOICE_CANCEL_DISTANCE, VOICE_LOCK_DISTANCE, VOICE_MIN_MS } from '../constants';
-import { log } from '../../../log';
 import { t } from '../../../i18n';
 
 // Maintenir le micro enregistre, lâcher envoie. Glisser à gauche annule, glisser vers le haut verrouille :
 // le doigt est alors libre, et on choisit ensuite d'envoyer ou de supprimer.
-export function useVoiceRecorder(onRecorded: (uri: string, seconds: number) => void, onTooShort: () => void) {
-  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+// Le niveau du micro est relevé 10 fois par seconde : il dessine la forme d'onde envoyée avec le vocal.
+const LEVEL_EVERY_MS = 100;
+const RECORDING_OPTIONS = { ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true };
+
+export function useVoiceRecorder(onRecorded: (uri: string, seconds: number, wave?: string) => void, onTooShort: () => void) {
+  const recorder = useAudioRecorder(RECORDING_OPTIONS);
+  const levels = useRef<number[]>([]);
   const [phase, setPhase] = useState<'idle' | 'holding' | 'locked'>('idle');
   const [seconds, setSeconds] = useState(0);
   const dragX = useRef(new Animated.Value(0)).current;
@@ -37,7 +42,18 @@ export function useVoiceRecorder(onRecorded: (uri: string, seconds: number) => v
     if (phase === 'idle') return;
     setSeconds(0);
     const timer = setInterval(() => setSeconds(Math.round((Date.now() - startedAt.current) / 1000)), 500);
-    return () => clearInterval(timer);
+    const meter = setInterval(() => {
+      try {
+        const level = recorder.getStatus().metering;
+        if (typeof level === 'number') levels.current.push(level);
+      } catch {
+        // Enregistreur arrêté entre-temps : rien à relever.
+      }
+    }, LEVEL_EVERY_MS);
+    return () => {
+      clearInterval(timer);
+      clearInterval(meter);
+    };
   }, [phase === 'idle']);
 
   const begin = async () => {
@@ -57,9 +73,10 @@ export function useVoiceRecorder(onRecorded: (uri: string, seconds: number) => v
       await recorder.prepareToRecordAsync();
       if (!fingerDown.current) return;
       recorder.record();
+      levels.current = [];
       startedAt.current = Date.now();
       changePhase('holding');
-      Haptics.performAndroidHapticsAsync(Haptics.AndroidHaptics.Long_Press).catch((e) => log.warn('vibration', e));
+      haptics.action();
     } catch (e) {
       showDialog(t('commun.enregistrementImpossible'), String(e));
     }
@@ -77,7 +94,7 @@ export function useVoiceRecorder(onRecorded: (uri: string, seconds: number) => v
       await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
       if (!send) return;
       if (duration < VOICE_MIN_MS) onTooShort();
-      else if (recorder.uri) onRecorded(recorder.uri, Math.round(duration / 1000));
+      else if (recorder.uri) onRecorded(recorder.uri, Math.round(duration / 1000), encodeWave(levels.current));
     } catch (e) {
       showDialog(t('commun.enregistrementImpossible'), String(e));
     }
@@ -102,12 +119,12 @@ export function useVoiceRecorder(onRecorded: (uri: string, seconds: number) => v
     const cancelling = sideways && dx < -VOICE_CANCEL_DISTANCE;
     if (cancelling !== overCancel.current) {
       overCancel.current = cancelling;
-      if (cancelling) Haptics.selectionAsync().catch((e) => log.warn('vibration', e));
+      if (cancelling) haptics.select();
     }
     if (!sideways && dy < -VOICE_LOCK_DISTANCE) {
       changePhase('locked');
       overCancel.current = false;
-      Haptics.performAndroidHapticsAsync(Haptics.AndroidHaptics.Confirm).catch((e) => log.warn('vibration', e));
+      haptics.action();
       settle(dragX, 0);
       settle(dragY, 0);
       settle(scale, 1);

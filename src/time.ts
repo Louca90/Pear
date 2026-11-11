@@ -21,7 +21,7 @@ function watch() {
   }
 }
 
-// Millisecondes UTC, corrigées de l'écart avec le serveur. L'affichage se fait en fuseau Europe/Paris.
+// Millisecondes UTC, corrigées de l'écart avec le serveur. L'affichage se fait dans le fuseau du téléphone.
 export function parisNow(): number {
   watch();
   return Date.now() + offset;

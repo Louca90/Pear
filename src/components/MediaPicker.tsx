@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { haptics } from '../haptics';
 import { Animated, Easing, FlatList, Linking, Modal, PixelRatio, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { File } from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library/legacy';
@@ -205,13 +206,15 @@ function AlbumList({ onOpen }: { onOpen: (album: MediaLibrary.Album) => void }) 
 
 type PickerProps = {
   onPick: (files: PickedFile[]) => void;
+  // Propose le bouton « vue unique » à côté de l'envoi (conversation avec un contact).
+  allowOnce?: boolean;
   onClose: () => void;
   // Une seule photo (fond d'écran…) : un appui la choisit, sans onglet vidéos.
   single?: boolean;
 };
 
 // Notre propre galerie : photos, vidéos et albums, sans quitter l'app. La permission n'est demandée qu'ici.
-export function MediaPicker({ onPick, onClose, single }: PickerProps) {
+export function MediaPicker({ onPick, onClose, single, allowOnce }: PickerProps) {
   const colors = useColors();
   const styles = useStyles();
   const bottom = useNavigationBarHeight();
@@ -242,9 +245,11 @@ export function MediaPicker({ onPick, onClose, single }: PickerProps) {
     [single, onPick],
   );
 
+  // Vue unique (lot 4.7) : les médias choisis ne pourront être ouverts qu'une fois.
+  const [once, setOnce] = useState(false);
   const send = () => {
     try {
-      onPick(selected.map(toPickedFile));
+      onPick(selected.map(toPickedFile).map((file) => (once ? { ...file, once: true } : file)));
     } catch (e) {
       showDialog(t('chat.envoiImpossible'), String(e));
     }
@@ -289,6 +294,21 @@ export function MediaPicker({ onPick, onClose, single }: PickerProps) {
 
         {selected.length > 0 && (
           <View style={[styles.sendWrapper, { bottom: bottom + spacing.md }]}>
+            {allowOnce && (
+              <IconButton
+                onPress={() => {
+                  haptics.select();
+                  setOnce(!once);
+                }}
+                label={t('unique.bouton')}
+                hitSlop={0}
+                style={[styles.once, once && styles.onceOn]}
+              >
+                <View style={[styles.onceRing, { borderColor: once ? colors.onSignature : colors.text }]}>
+                  <Text style={[styles.onceDigit, { color: once ? colors.onSignature : colors.text }]}>1</Text>
+                </View>
+              </IconButton>
+            )}
             <IconButton onPress={send} label={t('galerie.envoyerElements', { n: selected.length })} hitSlop={0} style={styles.send}>
               <Text style={styles.sendLabel}>{t('galerie.envoyerN', { n: selected.length })}</Text>
               <ArrowUp size={20} color={colors.onAccent} strokeWidth={2} />
@@ -447,7 +467,34 @@ const useStyles = createStyles((colors) => ({
     position: 'absolute',
     left: 0,
     right: 0,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  once: {
+    width: 52,
+    height: 52,
+    borderRadius: radius.full,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  onceOn: {
+    backgroundColor: colors.signature,
+  },
+  onceRing: {
+    width: 26,
+    height: 26,
+    borderRadius: radius.full,
+    borderWidth: 1.75,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  onceDigit: {
+    fontSize: 13,
+    fontWeight: '700',
   },
   send: {
     flexDirection: 'row',

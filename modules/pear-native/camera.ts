@@ -14,6 +14,8 @@ export type PearCameraHandle = {
   // Se résout avec le fichier quand la vidéo s'arrête (stopRecording), même après un changement de caméra.
   startRecording(): Promise<string>;
   stopRecording(): Promise<void>;
+  // Zoom envoyé directement au natif (geste), sans repasser par React.
+  setZoom(zoom: number): Promise<void>;
 };
 
 export type PearCameraProps = ViewProps & {
@@ -26,13 +28,23 @@ export type PearCameraProps = ViewProps & {
   videoBitrate: number;
   active?: boolean;
   onReady?: (event: NativeSyntheticEvent<CameraReady>) => void;
+  onFrame?: (event: NativeSyntheticEvent<{ ms: number }>) => void;
   onCameraError?: (event: NativeSyntheticEvent<{ message: string }>) => void;
   ref?: Ref<PearCameraHandle>;
 };
 
-const PearCamera = requireNativeModule<{ lenses(): Lens[] }>('PearCamera');
+const PearCamera = requireNativeModule<{ lenses(): Lens[]; hasLastFrame(): boolean }>('PearCamera');
 
 export const PearCameraView = requireNativeView<PearCameraProps>('PearCamera') as ComponentType<PearCameraProps>;
+
+// Une image de la fois d'avant est gardée côté natif : l'aperçu peut s'afficher floue tout de suite.
+export function hasLastCameraFrame(): boolean {
+  try {
+    return PearCamera.hasLastFrame();
+  } catch {
+    return false;
+  }
+}
 
 // Le bouton grand-angle : sur une caméra multiple (S24), un simple zoom sous ×1 ; sinon, s'il existe,
 // l'objectif ultra grand-angle séparé (A33), dont on montre le rapport d'angle avec la caméra principale.

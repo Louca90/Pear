@@ -1,11 +1,10 @@
 import { useRef } from 'react';
 import { Animated, PanResponder } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '../../../haptics';
 
 import { Message } from '../../../chat/database';
 
 import { SWIPE_MAX, SWIPE_REPLY, SWIPE_START } from '../constants';
-import { log } from '../../../log';
 
 // Glisser une bulle sur le côté pour y répondre.
 export function useSwipeReply(message: Message, mine: boolean, onReply?: (message: Message) => void) {
@@ -34,7 +33,7 @@ export function useSwipeReply(message: Message, mine: boolean, onReply?: (messag
         const reached = distance >= SWIPE_REPLY;
         if (reached !== armed.current) {
           armed.current = reached;
-          if (reached) Haptics.selectionAsync().catch((e) => log.warn('vibration', e));
+          if (reached) haptics.select();
         }
       },
       onPanResponderRelease: () => {

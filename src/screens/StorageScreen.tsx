@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, ScrollView, Text, View } from 'react-native';
 import { File, Paths } from 'expo-file-system';
 import { Database, HardDrive, Images, Trash2 } from 'lucide-react-native';
+import { isSelf } from '../chat/self';
 
 import { cacheSize, clearCache } from '../chat/cleanup';
 import { deleteConversationMedia, deleteOldMedia, getContactProfile, getMediaUsage, getSetting, MediaUsage, setSetting } from '../chat/database';
 import { formatSize } from '../chat/files';
+import { clearOpenedMedia } from '../chat/media';
 import { chat } from '../chat/manager';
 import { DB_NAME } from '../config';
 import { showDialog } from '../components/dialog';
@@ -73,10 +75,11 @@ export function StorageScreen({ contacts, onBack }: { contacts: Contact[]; onBac
   const [usage, setUsage] = useState<Usage>(measure);
   const [cleanup, setCleanup] = useState<CleanupChoice>(() => (getSetting(AUTO_CLEANUP_SETTING) ?? '0') as CleanupChoice);
   const refresh = () => setUsage(measure());
-  const nameOf = (key: string) => contacts.find((contact) => contact.publicKey === key)?.name ?? t('app.contact');
+  const nameOf = (key: string) => (isSelf(key) ? t('notes.titre') : contacts.find((contact) => contact.publicKey === key)?.name ?? t('app.contact'));
 
   const emptyCache = () => {
     clearCache();
+    clearOpenedMedia('all');
     refresh();
   };
 

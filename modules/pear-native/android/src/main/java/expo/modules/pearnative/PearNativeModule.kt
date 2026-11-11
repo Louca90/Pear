@@ -4,6 +4,10 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
 import android.graphics.Matrix
 import android.hardware.biometrics.BiometricManager
 import android.hardware.biometrics.BiometricPrompt
@@ -186,13 +190,12 @@ class PearNativeModule : Module() {
     AsyncFunction("setShareShortcuts") { contacts: List<Map<String, String>> ->
       val context = appContext.reactContext ?: return@AsyncFunction
       val launch = Intent(context, Class.forName("com.louca.pear.MainActivity")).setAction(Intent.ACTION_VIEW)
-      val icon = IconCompat.createWithResource(context, context.applicationInfo.icon)
       val shortcuts = contacts.take(4).mapIndexed { index, contact ->
         ShortcutInfoCompat.Builder(context, SHORTCUT_PREFIX + contact["key"])
           .setShortLabel(contact["name"] ?: "")
           .setLongLived(true)
           .setRank(index)
-          .setIcon(icon)
+          .setIcon(contactIcon(contact["photo"], contact["name"] ?: ""))
           .setIntent(launch)
           .setCategories(setOf(SHARE_CATEGORY))
           .build()
@@ -669,6 +672,42 @@ class PearNativeModule : Module() {
   }
 
   private var pendingShare: Intent? = null
+
+  // Icône ronde d'un contact : sa photo de profil rognée en cercle (le menu Partager y ajoute lui-même la
+  // petite icône de l'app) ; sans photo, son initiale sur un disque gris.
+  private fun contactIcon(photoPath: String?, name: String): IconCompat {
+    val size = 256
+    val out = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(out)
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    val photo = try {
+      if (photoPath.isNullOrEmpty()) null else {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(photoPath, bounds)
+        val sample = maxOf(1, minOf(bounds.outWidth, bounds.outHeight) / size)
+        BitmapFactory.decodeFile(photoPath, BitmapFactory.Options().apply { inSampleSize = sample })
+      }
+    } catch (e: Exception) {
+      Log.w("PearNative", "photo du raccourci illisible", e)
+      null
+    }
+    if (photo != null) {
+      canvas.drawCircle(size / 2f, size / 2f, size / 2f, paint)
+      paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
+      val side = minOf(photo.width, photo.height)
+      val src = android.graphics.Rect((photo.width - side) / 2, (photo.height - side) / 2, (photo.width + side) / 2, (photo.height + side) / 2)
+      canvas.drawBitmap(photo, src, android.graphics.Rect(0, 0, size, size), paint)
+    } else {
+      paint.color = Color.rgb(142, 142, 147)
+      canvas.drawCircle(size / 2f, size / 2f, size / 2f, paint)
+      paint.color = Color.WHITE
+      paint.textAlign = Paint.Align.CENTER
+      paint.textSize = size * 0.46f
+      val metrics = paint.fontMetrics
+      canvas.drawText(name.trim().take(1).uppercase(), size / 2f, size / 2f - (metrics.ascent + metrics.descent) / 2f, paint)
+    }
+    return IconCompat.createWithBitmap(out)
+  }
 
   private val SHORTCUT_PREFIX = "contact-"
   private val SHARE_CATEGORY = "com.louca.pear.category.SHARE_TARGET"

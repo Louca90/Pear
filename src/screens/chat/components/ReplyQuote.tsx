@@ -1,6 +1,8 @@
+import { useSyncExternalStore } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { describeMessage, getMessage, Message } from '../../../chat/database';
+import { chat } from '../../../chat/manager';
 import { BubblePalette, radius, spacing } from '../../../theme';
 import { t } from '../../../i18n';
 import { Thumbnail } from './ComposerModeCard';
@@ -8,6 +10,9 @@ import { Thumbnail } from './ComposerModeCard';
 // La citation en haut d'une bulle de réponse : barre d'accent, auteur, 2 lignes au plus et miniature
 // pour une photo ou une vidéo. Un appui amène au message d'origine ; supprimé, la citation reste grisée.
 export function ReplyQuote({ message, name, palette, onJump }: { message: Message; name: string; palette: BubblePalette; onJump?: (id: string) => void }) {
+  // La bulle ne se redessine plus à chaque changement de la conversation : la citation suit elle-même
+  // son message d'origine (modifié, supprimé).
+  useSyncExternalStore(chat.subscribe, chat.getVersion);
   const original = message.reply_to ? getMessage(message.reply_to, message.contact) : null;
   if (!message.reply_to) return null;
   const author = original ? (original.mine === 1 ? t('chat.vous') : name) : '';

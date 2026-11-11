@@ -1,5 +1,6 @@
 import { ComponentRef, RefObject, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Animated, findNodeHandle, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { setIncognitoKeyboard } from '../../../../modules/pear-native';
 import { ArrowUp, Check, ChevronUp, Lock, Mic, Trash2 } from 'lucide-react-native';
 
 import { Message } from '../../../chat/database';
@@ -35,7 +36,9 @@ type Props = {
   onCloseAttach: () => void;
   onPhotos: () => void;
   onFile: () => void;
-  onVoiceRecorded: (uri: string, seconds: number) => void;
+  onLocation?: () => void;
+  onStickers?: () => void;
+  onVoiceRecorded: (uri: string, seconds: number, wave?: string) => void;
   onVoiceTooShort: () => void;
 };
 
@@ -57,6 +60,8 @@ export function Composer({
   onCloseAttach,
   onPhotos,
   onFile,
+  onLocation,
+  onStickers,
   onVoiceRecorded,
   onVoiceTooShort,
 }: Props) {
@@ -66,16 +71,20 @@ export function Composer({
   const voice = useVoiceRecorder(onVoiceRecorded, onVoiceTooShort);
   // La pilule vit dans la barre : elle suit le clavier et la barre sans rien mesurer dans la fenêtre.
   const attachProgress = useRef(new Animated.Value(0)).current;
+  // Même progression, sur le fil natif : l'allongement du fond de la pilule. Le trombone, lui, dessine des
+  // tracés SVG, qui ne passent pas sur le fil natif : il garde `attachProgress`.
+  const attachSlide = useRef(new Animated.Value(0)).current;
   const [fieldWidth, setFieldWidth] = useState(0);
   useBackInterceptor(attachOpen, onCloseAttach);
   useEffect(() => {
-    Animated.timing(attachProgress, {
+    const timing = {
       toValue: attachOpen ? 1 : 0,
       duration: attachOpen ? ATTACH_OPEN_MS : ATTACH_CLOSE_MS,
       easing: attachOpen ? ATTACH_EASING : ATTACH_CLOSE_EASING,
-      useNativeDriver: false,
-    }).start();
-  }, [attachOpen, attachProgress]);
+    };
+    Animated.timing(attachProgress, { ...timing, useNativeDriver: false }).start();
+    Animated.timing(attachSlide, { ...timing, useNativeDriver: true }).start();
+  }, [attachOpen, attachProgress, attachSlide]);
   // Le micro devient progressivement une poubelle, au fil du glissé vers la gauche.
   const trashAmount = voice.dragX.interpolate({ inputRange: [-VOICE_CANCEL_DISTANCE, -VOICE_CANCEL_DISTANCE * 0.2], outputRange: [1, 0], extrapolate: 'clamp' });
 
@@ -98,6 +107,10 @@ export function Composer({
             <View style={styles.attachSpace} />
             <TextInput
               ref={input}
+              onLayout={() => {
+                const tag = findNodeHandle(input.current);
+                if (tag) setIncognitoKeyboard(tag).catch(() => {});
+              }}
               style={styles.input}
               value={draft}
               onChangeText={onChangeDraft}
@@ -106,7 +119,7 @@ export function Composer({
               maxLength={MAX_TEXT_LENGTH}
               multiline
             />
-            <AttachPill progress={attachProgress} width={fieldWidth} open={attachOpen} onToggle={onToggleAttach} onPhotos={onPhotos} onFile={onFile} />
+            <AttachPill progress={attachProgress} slide={attachSlide} width={fieldWidth} open={attachOpen} onToggle={onToggleAttach} onPhotos={onPhotos} onFile={onFile} onLocation={onLocation} onStickers={onStickers} />
           </View>
         )}
         {voice.phase === 'holding' && (

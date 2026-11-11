@@ -1,3 +1,5 @@
+import { fixed } from '../../theme';
+
 // Les calques posés sur une photo ou une vidéo : textes et stickers (dessins ensuite).
 // Chaque calque a son centre (x, y, en points de l'aperçu), une échelle et une rotation (radians).
 
@@ -37,7 +39,7 @@ export type Size = { width: number; height: number };
 
 export const TEXT_FONTS: TextFont[] = ['classic', 'strong', 'elegant', 'typewriter', 'hand'];
 export const TEXT_BACKGROUNDS: TextBackground[] = ['none', 'solid', 'soft'];
-export const TEXT_COLORS = ['#FFFFFF', '#000000', '#FF3B30', '#FF9500', '#FFCC00', '#34C759', '#00C7BE', '#007AFF', '#AF52DE', '#FF2D92'];
+export const TEXT_COLORS = fixed.editorTextColors;
 export const TEXT_SIZE_MIN = 18;
 export const TEXT_SIZE_MAX = 64;
 export const TEXT_SIZE_DEFAULT = 32;
@@ -93,5 +95,5 @@ export function readableOn(hex: string) {
   const r = (value >> 16) & 255;
   const g = (value >> 8) & 255;
   const b = value & 255;
-  return 0.299 * r + 0.587 * g + 0.114 * b > 160 ? '#000000' : '#FFFFFF';
+  return 0.299 * r + 0.587 * g + 0.114 * b > 160 ? fixed.black : fixed.white;
 }

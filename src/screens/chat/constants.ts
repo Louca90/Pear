@@ -1,7 +1,12 @@
-import { Easing } from 'react-native';
+import { Dimensions, Easing } from 'react-native';
 
 import { RouteType } from '../../network/peer';
 import { t } from '../../i18n';
+
+// Largeur d'un média dans une bulle (photo, vidéo, album, vocal) : 220 points, moins sur un écran
+// étroit (petit téléphone, affichage agrandi) pour que la bulle tienne dans ses 80 % de largeur avec
+// la photo du contact à côté (34 points) et ses marges (32 points).
+export const MEDIA_WIDTH = Math.max(150, Math.min(220, Math.floor(Dimensions.get('window').width * 0.8) - 66));
 
 export const DOUBLE_TAP_MS = 230;
 export const LIKE = '❤️';

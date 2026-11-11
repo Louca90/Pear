@@ -4,13 +4,14 @@ import { LATEST_RELEASE_URL } from './updates';
 import { parseRelease } from './release';
 import notes from './release-notes.json';
 import { RELEASES_PAGE } from '../config';
+import { pagesFor, WhatsNewPage } from './pages';
 
 export { RELEASES_PAGE };
 
 // Le dernier versionCode pour lequel le popup « Pear est à jour ! » a été vu.
 const LAST_SEEN_KEY = 'last_seen_version_code';
 
-export type UpdatedInfo = { version: string; summary: string | null; pageUrl: string };
+export type UpdatedInfo = { version: string; summary: string | null; pageUrl: string; pages: WhatsNewPage[] };
 
 // Après une mise à jour, renvoie de quoi remplir le popup ; null s'il n'y a rien à montrer.
 // Installation toute neuve : on retient la version sans rien afficher. Mais une identité déjà là
@@ -29,6 +30,7 @@ export function pendingUpdatedInfo(identityExisted: boolean): UpdatedInfo | null
     version,
     summary: notes.versionCode === installed ? notes.summary : null,
     pageUrl: `${RELEASES_PAGE}v${version}`,
+    pages: pagesFor(version),
   };
 }
 

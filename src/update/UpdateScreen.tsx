@@ -3,6 +3,7 @@ import { AppState, BackHandler, Linking, Pressable, ScrollView, Text, View } fro
 import { ArrowRight, Download, ExternalLink, LogOut, RotateCw, Settings } from 'lucide-react-native';
 
 import { formatSize } from '../chat/files';
+import { Pear } from '../components/Pear';
 import { Button, Screen, useNavigationBarHeight } from '../components/ui';
 import { createStyles, radius, spacing, useColors } from '../theme';
 import { Release } from './release';
@@ -47,8 +48,9 @@ export function UpdateScreen({ release }: { release: Release }) {
   return (
     <Screen>
       <View style={[styles.content, { paddingBottom: bottom }]}>
-        <View style={styles.icon}>
-          <Download size={32} color={colors.onAccent} strokeWidth={1.75} />
+        {/* La poire mûrit avec le téléchargement : pâle au départ, pleine quand tout est arrivé. */}
+        <View style={styles.icon} accessible accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: Math.round(progress * 100) }}>
+          <Pear height={72} color={colors.text} state={busy || phase === 'installing' ? 'ripening' : 'idle'} progress={phase === 'downloading' ? progress : 1} />
         </View>
         <Text style={styles.title}>{t('maj.disponible')}</Text>
         <Text style={styles.version}>{t('commun.version')} {release.version} · {formatSize(release.apkSize)}</Text>
@@ -62,11 +64,7 @@ export function UpdateScreen({ release }: { release: Release }) {
         </Pressable>
 
         {status && <Text style={[styles.status, phase === 'failed' && styles.statusError]}>{status}</Text>}
-        {phase === 'downloading' && (
-          <View style={styles.track}>
-            <View style={[styles.bar, { width: `${Math.round(progress * 100)}%` }]} />
-          </View>
-        )}
+
 
         <View style={styles.actions}>
           {phase === 'permission' ? (
@@ -98,12 +96,7 @@ const useStyles = createStyles((colors) => ({
     paddingTop: spacing.lg * 2,
   },
   icon: {
-    width: 64,
-    height: 64,
-    borderRadius: radius.full,
-    backgroundColor: colors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignSelf: 'flex-start',
     marginBottom: spacing.lg,
   },
   title: {
@@ -152,16 +145,7 @@ const useStyles = createStyles((colors) => ({
   statusError: {
     color: colors.danger,
   },
-  track: {
-    height: 4,
-    borderRadius: radius.full,
-    backgroundColor: colors.border,
-    overflow: 'hidden',
-  },
-  bar: {
-    height: 4,
-    backgroundColor: colors.accent,
-  },
+
   actions: {
     marginTop: 'auto',
     gap: spacing.sm,

@@ -32,7 +32,7 @@ export function relativeTime(at: number, now: number): string {
   if (elapsed < HOUR) return t('liste.ilYaMin', { n: Math.floor(elapsed / MINUTE) });
   if (elapsed < DAY) return t('liste.ilYaH', { n: Math.floor(elapsed / HOUR) });
   if (elapsed < 7 * DAY) return t('liste.ilYaJ', { n: Math.floor(elapsed / DAY) });
-  return new Intl.DateTimeFormat(dateLocale(), { day: 'numeric', month: 'short', timeZone: 'Europe/Paris' }).format(at);
+  return new Intl.DateTimeFormat(dateLocale(), { day: 'numeric', month: 'short' }).format(at);
 }
 
 // Recherche insensible à la casse et aux accents : « elodie » trouve « Élodie ».
@@ -47,4 +47,19 @@ export function normalizeSearch(text: string): string {
 export function matchesSearch(name: string, query: string): boolean {
   const wanted = normalizeSearch(query);
   return wanted === '' || normalizeSearch(name).includes(wanted);
+}
+
+// Glissement d'une ligne : au-delà du seuil, vers la droite on épingle, vers la gauche on marque comme lu.
+export const SWIPE_THRESHOLD = 72;
+
+export function swipeOutcome(dx: number, canMarkRead: boolean): 'pin' | 'read' | null {
+  if (dx >= SWIPE_THRESHOLD) return 'pin';
+  if (dx <= -SWIPE_THRESHOLD && canMarkRead) return 'read';
+  return null;
+}
+
+// Décalage du tracé d'anneau d'une ligne à la suivante (ms), plafonné pour les longues listes.
+export const RING_STAGGER_MS = 40;
+export function ringDelay(index: number): number {
+  return Math.min(index, 12) * RING_STAGGER_MS;
 }

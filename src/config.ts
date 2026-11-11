@@ -109,7 +109,7 @@ export const PROFILE_PHOTO_QUALITY = 0.7;
 // --- Notifications ---
 
 export const NOTIFICATION_CHANNEL_ID = 'messages';
-export const NOTIFICATION_SMALL_ICON = 'ic_launcher_monochrome';
+export const NOTIFICATION_SMALL_ICON = 'ic_stat_pear';
 
 // --- Journal ---
 

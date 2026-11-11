@@ -1,5 +1,5 @@
 import { fetchPairRequests, sendPairRequest, subscribePairTopic } from '../../network/pairRequests';
-import { activateContact, addPairingRequest, blockKey, getContactState, getSetting, isBlocked, setRequestState, setSetting } from '../database';
+import { activateContact, addPairingRequest, setContactVerified, blockKey, getContactState, getSetting, isBlocked, setRequestState, setSetting } from '../database';
 import { clearPairNotification, showPairNotification } from '../notifications';
 
 import { ChatCore } from './core';
@@ -53,6 +53,8 @@ export async function syncPairRequests(core: ChatCore) {
     if (state === 'active') continue;
     if (state === 'pending') {
       activateContact(key);
+      // Chacun a scanné le code de l'autre : c'est la vérification en face à face.
+      setContactVerified(key);
       acceptPairing(core, key);
       core.contactsChanged();
       continue;

@@ -5,8 +5,10 @@ import { randombytes_buf, to_base64 } from 'react-native-libsodium';
 
 import { snapshotDatabase } from '../chat/database';
 import { chat } from '../chat/manager';
+import { exportCopy } from '../chat/media';
 import { seal } from '../crypto/box';
 import { DB_NAME } from '../config';
+import { log } from '../log';
 import { languageChoice, LanguageChoice, saveLanguageChoice } from '../i18n';
 import { setThemePreference, ThemePreference, themePreference } from '../theme';
 import {
@@ -74,9 +76,19 @@ const breathe = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 // --- Export ---
 
-function profileEntries(): Entry[] {
+async function profileEntries(): Promise<Entry[]> {
   const { name, photo } = chat.getMyProfile();
-  const photoFile = photo ? new File(photo) : null;
+  // La photo est chiffrée sur le disque avec une clé de la base (lot 2.3), absente d'une sauvegarde du
+  // profil : on y met sa copie déchiffrée (la sauvegarde elle-même est chiffrée par le mot de passe).
+  let photoFile: File | null = null;
+  if (photo && new File(photo).exists) {
+    photoFile = await exportCopy(photo, 'pear-profile-photo')
+      .then((uri) => new File(uri))
+      .catch((e) => {
+        log.warn('photo de la sauvegarde', e);
+        return null;
+      });
+  }
   const hasPhoto = !!photoFile?.exists;
   const manifest: ProfileManifest = { type: 'profile', name, theme: themePreference(), language: languageChoice(), photo: hasPhoto };
   const bytes = textBytes(JSON.stringify(manifest));
@@ -106,6 +118,10 @@ function fullEntries(media: boolean): { entries: Entry[]; snapshot: File } {
       copy.getAllSync<{ wallpaper_uri: string }>('SELECT wallpaper_uri FROM conversation_settings WHERE wallpaper_uri IS NOT NULL').forEach((row) => remember(row.wallpaper_uri));
       copy.getAllSync<Record<string, string | null>>('SELECT * FROM contact_profiles').forEach((row) => Object.values(row).forEach((value) => remember(typeof value === 'string' ? value : null)));
       kept = all.filter((file) => used.has(file.name));
+      // Les clés des fichiers laissés de côté ne partent pas avec la copie.
+      copy.getAllSync<{ id: string }>('SELECT id FROM file_keys').forEach((row) => {
+        if (!used.has(row.id)) copy.runSync('DELETE FROM file_keys WHERE id = ?', row.id);
+      });
     } finally {
       copy.closeSync();
     }
@@ -133,7 +149,7 @@ export async function exportBackup(kind: BackupKind, password: string, media: bo
   const key = deriveKey(password, header);
   const day = new Date().toISOString().slice(0, 10);
   const output = new File(exportsDirectory(), `Pear-${kind === 'full' ? 'sauvegarde' : 'profil'}-${day}${BACKUP_EXTENSION}`);
-  const { entries, snapshot } = kind === 'full' ? fullEntries(media) : { entries: profileEntries(), snapshot: null };
+  const { entries, snapshot } = kind === 'full' ? fullEntries(media) : { entries: await profileEntries(), snapshot: null };
   const total = entries.reduce((sum, entry) => sum + entry.size, 0);
   let done = 0;
   const sink = fileSink(output);

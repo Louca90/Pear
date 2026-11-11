@@ -1,9 +1,12 @@
 import { File, Paths } from 'expo-file-system';
-import { openDatabaseSync, SQLiteDatabase } from 'expo-sqlite';
+import { SQLiteDatabase } from 'expo-sqlite';
 
-import { decryptFileKey, encryptFileKey, isEncryptedFileKey } from './db/fileKeys';
-import { LATEST_VERSION, migrate, schemaVersion } from './db/migrations';
-import { deleteStoredFile, formatSize } from './files';
+import { exportPlainCopy, isDatabaseEncrypted, openEncryptedDatabase } from './db/encryption';
+import { decryptFileKey, encryptFileKey, isEncryptedFileKey, openStoreKey, sealStoreKey } from './db/fileKeys';
+import { hasSearchIndex, LATEST_VERSION, migrate, rebuildSearchIndex, schemaVersion, searchIndexIsStale } from './db/migrations';
+import { ftsQuery, likePattern } from './search';
+import { parseEphemeralSystem } from './ephemeral';
+import { deleteStoredFile, formatSize, storedFileId } from './files';
 import { DB_NAME } from '../config';
 import { t } from '../i18n';
 import { SESSION_BROKEN, SESSION_REPAIRED, UPDATE_REQUIRED } from './protocol';
@@ -15,12 +18,15 @@ import { SESSION_BROKEN, SESSION_REPAIRED, UPDATE_REQUIRED } from './protocol';
 // scheduled : envoi programmé, le message attend sur ce téléphone jusqu'à son heure (scheduled_at).
 export type MessageStatus = 'sending' | 'offered' | 'receiving' | 'delivered' | 'read-pending' | 'read' | 'refused' | 'scheduled';
 // wallpaper et avatar passent par le transfert de fichiers. avatar n'apparaît jamais dans la conversation.
-export type MessageKind = 'text' | 'image' | 'video' | 'audio' | 'file' | 'wallpaper' | 'avatar' | 'system';
+// location : position en direct (lot 4.8), le texte est la dernière position reçue (src/chat/location.ts).
+export type MessageKind = 'text' | 'image' | 'video' | 'audio' | 'file' | 'wallpaper' | 'avatar' | 'system' | 'location';
 
 export type ConversationSettings = {
   my_bubble: string | null;
   their_bubble: string | null;
   wallpaper_uri: string | null;
+  // Messages éphémères (lot 4.7) : durée de vie des nouveaux messages en secondes, null si coupé.
+  ephemeral: number | null;
 };
 
 export type ContactProfile = {
@@ -60,6 +66,14 @@ export type Message = {
   their_reaction_at?: number | null;
   // Heure d'envoi programmée (heure de Paris), tant que le message attend.
   scheduled_at?: number | null;
+  // Compléments du message en JSON (src/chat/meta.ts) : forme d'onde, miniature floue, aperçu de lien.
+  meta?: string | null;
+  // Album (lot 4.5) : les médias envoyés ensemble portent le même identifiant.
+  album?: string | null;
+  // Message éphémère (lot 4.7) : l'heure à laquelle il s'efface de ce téléphone.
+  expires_at?: number | null;
+  // Média à vue unique : 1 = à voir une fois, 2 = déjà ouvert (le fichier est effacé).
+  view_once?: number;
 };
 
 export type NewMessage = Pick<Message, 'id' | 'contact' | 'mine' | 'text' | 'status' | 'created_at'> & Partial<Message>;
@@ -83,12 +97,66 @@ export function openDatabase(): SQLiteDatabase {
   return instance;
 }
 
-const db = openDatabase;
+// --- Cache de lecture ---
+// Les écrans relisent la base à chaque rendu (dernier message, profil, série, réglages de chaque
+// conversation). Tant que rien n'a été écrit, une même requête rend le même résultat : il est gardé
+// en mémoire, et tout est oublié à la moindre écriture. Toutes les lectures et écritures de ce fichier
+// passent par db() ; un accès direct à la base (migration, sauvegarde) doit appeler forgetReads().
+// Chaque appel reçoit ses propres objets : modifier un résultat ne touche pas au cache.
+type SqlParams = Parameters<SQLiteDatabase['getAllSync']> extends [string, ...infer Rest] ? Rest : never;
+const reads = new Map<string, unknown>();
+const READS_MAX = 800;
+const NO_ROW = Symbol('aucune ligne');
+
+export function forgetReads() {
+  if (reads.size > 0) reads.clear();
+}
+
+function remember<T>(kind: string, sql: string, params: unknown[], read: () => T): T {
+  const key = kind + sql + ' | ' + JSON.stringify(params);
+  if (reads.has(key)) return reads.get(key) as T;
+  const value = read();
+  // Les requêtes datées (« depuis maintenant ») ne se répètent jamais : le cache ne doit pas grossir sans fin.
+  if (reads.size >= READS_MAX) reads.clear();
+  reads.set(key, value);
+  return value;
+}
+
+const cached = {
+  getAllSync<T>(sql: string, ...params: unknown[]): T[] {
+    const rows = remember('a', sql, params, () => openDatabase().getAllSync<T>(sql, ...(params as SqlParams)));
+    return rows.map((row) => ({ ...row }));
+  },
+  getFirstSync<T>(sql: string, ...params: unknown[]): T | null {
+    const row = remember('f', sql, params, () => openDatabase().getFirstSync<T>(sql, ...(params as SqlParams)) ?? NO_ROW);
+    return row === NO_ROW ? null : ({ ...(row as T) });
+  },
+  runSync(sql: string, ...params: unknown[]) {
+    forgetReads();
+    return openDatabase().runSync(sql, ...(params as SqlParams));
+  },
+  execSync(sql: string) {
+    forgetReads();
+    openDatabase().execSync(sql);
+  },
+  withTransactionSync(task: () => void) {
+    forgetReads();
+    try {
+      openDatabase().withTransactionSync(task);
+    } finally {
+      // Annulée ou non : ce qui a été lu pendant la transaction n'est plus sûr.
+      forgetReads();
+    }
+  },
+};
+
+const db = () => cached;
 
 // Copie cohérente et compacte de la base, sans son journal (sauvegarde, lot 12). Le chemin est un
 // chemin de fichier brut, pas une URI.
 export function snapshotDatabase(path: string) {
-  db().execSync(`VACUUM INTO '${path.replace(/'/g, "''")}'`);
+  if (isDatabaseEncrypted()) exportPlainCopy(openDatabase(), path);
+  else db().execSync(`VACUUM INTO '${path.replace(/'/g, "''")}'`);
 }
 
 // expo-sqlite range ses bases dans files/SQLite. defaultDatabaseDirectory est un chemin brut que File
@@ -114,11 +182,21 @@ function protectFileKeys(database: SQLiteDatabase) {
   });
 }
 
+// Copies d'avant migration : effacées une fois la base à jour (celles d'avant le lot 2.2 étaient en clair).
+function deleteMigrationBackups() {
+  for (const suffix of ['', '-wal']) {
+    const backup = databaseFile(suffix + BACKUP_SUFFIX);
+    if (backup.exists) backup.delete();
+  }
+}
+
 function openAndMigrate() {
-  let database = openDatabaseSync(DB_NAME);
+  let database = openEncryptedDatabase(DB_NAME);
   const version = schemaVersion(database);
   if (version >= LATEST_VERSION) {
     protectFileKeys(database);
+    deleteMigrationBackups();
+    checkSearchIndex(database);
     return database;
   }
 
@@ -127,9 +205,11 @@ function openAndMigrate() {
     database.closeSync();
     for (const suffix of ['', '-wal']) {
       const file = databaseFile(suffix);
-      if (file.exists) file.copy(databaseFile(suffix + BACKUP_SUFFIX));
+      const backup = databaseFile(suffix + BACKUP_SUFFIX);
+      if (backup.exists) backup.delete();
+      if (file.exists) file.copySync(backup);
     }
-    database = openDatabaseSync(DB_NAME);
+    database = openEncryptedDatabase(DB_NAME);
   }
   migrate(database);
 
@@ -138,21 +218,62 @@ function openAndMigrate() {
     throw new Error(`Mise à jour de la base de messages incomplète (version ${schemaVersion(database)}, ${integrity}).`);
   }
   protectFileKeys(database);
-  if (existing) {
-    for (const suffix of ['', '-wal']) {
-      const backup = databaseFile(suffix + BACKUP_SUFFIX);
-      if (backup.exists) backup.delete();
+  if (existing) deleteMigrationBackups();
+  checkSearchIndex(database);
+  return database;
+}
+
+// --- Recherche (lot 4.1) ---
+
+let searchIndexed = false;
+
+// L'index de recherche existe-t-il, et désigne-t-il toujours les bons messages ? Reconstruit sinon
+// (base restaurée d'une sauvegarde, par exemple). Sans FTS5, la recherche passe par LIKE.
+function checkSearchIndex(database: SQLiteDatabase) {
+  try {
+    searchIndexed = hasSearchIndex(database);
+    if (searchIndexed && searchIndexIsStale(database)) database.withTransactionSync(() => rebuildSearchIndex(database));
+  } catch {
+    searchIndexed = false;
+  }
+}
+
+export type SearchHit = { id: string; contact: string; mine: number; text: string; created_at: number };
+
+// Les messages texte qui contiennent tous les mots cherchés (début de mot, sans casse ni accents), du
+// plus récent au plus ancien. contact : dans une seule conversation.
+export function searchMessages(query: string, contact?: string, limit = 60): SearchHit[] {
+  const columns = 'm.id, m.contact, m.mine, m.text, m.created_at';
+  const scope = contact ? 'AND m.contact = ?' : '';
+  const scopeArgs = contact ? [contact] : [];
+  const match = ftsQuery(query);
+  if (searchIndexed && match) {
+    try {
+      return db().getAllSync<SearchHit>(
+        `SELECT ${columns} FROM messages_fts f JOIN messages m ON m.rowid = f.rowid WHERE f.text MATCH ? ${scope} AND m.status != 'scheduled' ORDER BY m.created_at DESC LIMIT ?`,
+        match,
+        ...scopeArgs,
+        limit,
+      );
+    } catch {
+      // Index illisible : la recherche simple prend le relais.
     }
   }
-  return database;
+  if (!query.trim()) return [];
+  return db().getAllSync<SearchHit>(
+    `SELECT ${columns} FROM messages m WHERE m.kind = 'text' AND m.text LIKE ? ESCAPE '\\' ${scope} AND m.status != 'scheduled' ORDER BY m.created_at DESC LIMIT ?`,
+    likePattern(query),
+    ...scopeArgs,
+    limit,
+  );
 }
 
 // Renvoie false si le message existait déjà.
 export function addMessage(message: NewMessage): boolean {
   // INSERT OR IGNORE : un message renvoyé après une coupure n'apparaît pas en double.
   const result = db().runSync(
-    `INSERT OR IGNORE INTO messages (id, contact, mine, text, status, created_at, kind, file_uri, file_size, file_mime, file_key, reply_to, from_camera, forwarded, conn_session)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT OR IGNORE INTO messages (id, contact, mine, text, status, created_at, kind, file_uri, file_size, file_mime, file_key, reply_to, from_camera, forwarded, conn_session, meta, album, expires_at, view_once)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     message.id,
     message.contact,
     message.mine,
@@ -168,13 +289,56 @@ export function addMessage(message: NewMessage): boolean {
     message.from_camera ?? 0,
     message.forwarded ?? 0,
     message.conn_session ?? null,
+    message.meta ?? null,
+    message.album ?? null,
+    message.expires_at ?? null,
+    message.view_once ?? 0,
   );
   return result.changes > 0;
 }
 
+// Position en direct (lot 4.8) : la nouvelle position remplace l'ancienne dans le même message.
+export function setLocationText(id: string, contact: string, mine: number, text: string) {
+  db().runSync("UPDATE messages SET text = ? WHERE id = ? AND contact = ? AND mine = ? AND kind = 'location'", text, id, contact, mine);
+}
+
+// --- Éphémères et vue unique (lot 4.7) ---
+
+// Les messages dont l'heure d'effacement est passée. Un message à moi pas encore parti (contact hors
+// ligne plus longtemps que le minuteur) attend d'être reçu : il s'efface d'ici juste après, et sa durée
+// de vie repart de la réception chez le contact. Un message éphémère n'est donc jamais perdu en route.
+export function getExpiredMessages(now: number): { id: string; contact: string }[] {
+  return db().getAllSync<{ id: string; contact: string }>(
+    "SELECT id, contact FROM messages WHERE expires_at IS NOT NULL AND expires_at <= ? AND NOT (mine = 1 AND status = 'sending')",
+    now,
+  );
+}
+
+// Média à vue unique ouvert (chez le destinataire) ou vu par l'autre (chez l'expéditeur).
+export function markOnceOpened(id: string, contact: string) {
+  db().runSync('UPDATE messages SET view_once = 2 WHERE id = ? AND contact = ? AND view_once = 1', id, contact);
+}
+
+// Efface le fichier d'un message, qui reste dans la conversation sans lui.
+export function dropMessageFile(id: string, contact: string) {
+  const uri = db().getFirstSync<{ file_uri: string | null }>('SELECT file_uri FROM messages WHERE id = ? AND contact = ?', id, contact)?.file_uri;
+  if (!uri) return;
+  deleteFileAndKey(uri);
+  db().runSync('UPDATE messages SET file_uri = NULL WHERE id = ? AND contact = ?', id, contact);
+}
+
+// Les médias à vue unique dont le fichier n'a plus à rester : les miens une fois reçus par l'autre,
+// les siens une fois ouverts (app fermée pendant l'affichage, par exemple).
+export function getSpentOnce(): { id: string; contact: string }[] {
+  return db().getAllSync<{ id: string; contact: string }>(
+    "SELECT id, contact FROM messages WHERE view_once > 0 AND file_uri IS NOT NULL AND ((mine = 1 AND status IN ('delivered', 'read')) OR (mine = 0 AND view_once = 2))",
+  );
+}
+
 // "mine" vérifie l'auteur : un téléphone ne peut modifier que ses propres messages, ici comme chez l'autre.
 export function editMessage(id: string, contact: string, mine: number, text: string) {
-  db().runSync("UPDATE messages SET text = ?, edited = 1 WHERE id = ? AND contact = ? AND mine = ? AND kind = 'text'", text, id, contact, mine);
+  // L'aperçu de lien de l'ancien texte ne vaut plus pour le nouveau.
+  db().runSync("UPDATE messages SET text = ?, edited = 1, meta = NULL WHERE id = ? AND contact = ? AND mine = ? AND kind = 'text'", text, id, contact, mine);
 }
 
 export function setReaction(id: string, contact: string, column: 'my_reaction' | 'their_reaction', emoji: string | null) {
@@ -189,7 +353,7 @@ export function deleteSystemMessages(contact: string, text: string) {
 export function deleteMessage(id: string, contact: string, mine?: number) {
   const message = getMessage(id, contact);
   if (!message || (mine !== undefined && message.mine !== mine)) return;
-  if (message.file_uri) deleteStoredFile(message.file_uri);
+  if (message.file_uri) deleteFileAndKey(message.file_uri);
   db().runSync('DELETE FROM messages WHERE id = ? AND contact = ?', id, contact);
 }
 
@@ -253,15 +417,20 @@ export function getPendingIncomingBytes(contact: string): number {
 
 // Contacts, dans l'ordre où ils ont été ajoutés (src/storage.ts garde la même interface qu'avant).
 // pending : on a envoyé une demande, le contact ne l'a pas encore acceptée.
-export type ContactRow = { public_key: string; name: string; state?: 'active' | 'pending' };
+export type ContactRow = { public_key: string; name: string; state?: 'active' | 'pending'; verified?: number };
 
 export function getContactRows(): ContactRow[] {
-  return db().getAllSync<ContactRow>("SELECT public_key, name, state FROM contacts WHERE state IN ('active', 'pending') ORDER BY created_at, rowid");
+  return db().getAllSync<ContactRow>("SELECT public_key, name, state, verified FROM contacts WHERE state IN ('active', 'pending') ORDER BY created_at, rowid");
 }
 
 // Le contact a accepté notre demande (ou nous a ajouté de son côté).
 export function activateContact(contact: string): boolean {
   return db().runSync("UPDATE contacts SET state = 'active' WHERE public_key = ? AND state = 'pending'", contact).changes > 0;
+}
+
+// Vérifié : le code a été confirmé sur la fiche, ou les deux téléphones se sont scannés face à face.
+export function setContactVerified(contact: string): boolean {
+  return db().runSync('UPDATE contacts SET verified = 1 WHERE public_key = ? AND verified = 0', contact).changes > 0;
 }
 
 export function getContactState(contact: string): 'active' | 'pending' | null {
@@ -337,7 +506,7 @@ export function replaceContactRows(contacts: ContactRow[]) {
 // Photos, vidéos et fichiers échangés avec un contact (pas les vocaux), du plus récent au plus ancien.
 export function getMediaMessages(contact: string): Message[] {
   return db().getAllSync<Message>(
-    "SELECT * FROM messages WHERE contact = ? AND kind IN ('image', 'video', 'file') AND file_uri IS NOT NULL ORDER BY created_at DESC",
+    "SELECT * FROM messages WHERE contact = ? AND kind IN ('image', 'video', 'file') AND file_uri IS NOT NULL AND view_once = 0 ORDER BY created_at DESC",
     contact,
   );
 }
@@ -362,11 +531,13 @@ export function setMessagePinned(id: string, contact: string, pinned: boolean) {
   );
 }
 
-export function getNotificationMessages(contact: string): Message[] {
-  const firstUnread = db().getFirstSync<{ at: number | null }>(
+// since : un fichier proposé (statut offered, jamais « non lu ») qui doit quand même prévenir.
+export function getNotificationMessages(contact: string, since?: number): Message[] {
+  const unread = db().getFirstSync<{ at: number | null }>(
     "SELECT MIN(created_at) AS at FROM messages WHERE contact = ? AND mine = 0 AND status = 'delivered' AND kind NOT IN ('system', 'avatar')",
     contact,
   )?.at;
+  const firstUnread = since === undefined ? unread : Math.min(unread ?? since, since);
   if (firstUnread == null) return [];
   return db()
     .getAllSync<Message>(
@@ -495,6 +666,15 @@ export function setSetting(key: string, value: string | null) {
   db().runSync('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', key, value);
 }
 
+// Brouillon d'une conversation (affiché à la place du dernier message dans la liste).
+export function getDraft(contact: string): string {
+  return getSetting(`draft.${contact}`) ?? '';
+}
+
+export function setDraft(contact: string, text: string) {
+  setSetting(`draft.${contact}`, text.trim() ? text : null);
+}
+
 // Types de messages dont la conversation ne prévient plus (réglage local, par conversation).
 export function getMutedKinds(contact: string): MessageKind[] {
   try {
@@ -510,15 +690,16 @@ export function setMutedKinds(contact: string, kinds: MessageKind[]) {
 
 export function getConversationSettings(contact: string): ConversationSettings {
   return (
-    db().getFirstSync<ConversationSettings>('SELECT my_bubble, their_bubble, wallpaper_uri FROM conversation_settings WHERE contact = ?', contact) ?? {
+    db().getFirstSync<ConversationSettings>('SELECT my_bubble, their_bubble, wallpaper_uri, ephemeral FROM conversation_settings WHERE contact = ?', contact) ?? {
       my_bubble: null,
       their_bubble: null,
       wallpaper_uri: null,
+      ephemeral: null,
     }
   );
 }
 
-export function setConversationSetting(contact: string, column: keyof ConversationSettings, value: string | null) {
+export function setConversationSetting(contact: string, column: keyof ConversationSettings, value: string | number | null) {
   db().runSync('INSERT OR IGNORE INTO conversation_settings (contact) VALUES (?)', contact);
   db().runSync(`UPDATE conversation_settings SET ${column} = ? WHERE contact = ?`, value, contact);
 }
@@ -586,6 +767,9 @@ export function getStreakState(contact: string): { count: number; today: boolean
 const KIND_LABELS: Partial<Record<MessageKind, string>> = { image: t('apercu.photo'), video: t('apercu.video'), audio: t('apercu.vocal'), file: t('apercu.fichier') };
 
 export function describeMessage(message: Message): string {
+  if (message.view_once) return message.kind === 'video' ? t('unique.video') : t('unique.photo');
+  if (message.kind === 'location') return t('position.titre');
+  if (message.kind === 'system' && parseEphemeralSystem(message.text) !== null) return parseEphemeralSystem(message.text) ? t('ephemere.apercuActive') : t('ephemere.apercuCoupe');
   if (message.status === 'offered') return t('apercu.enAttente', { type: KIND_LABELS[message.kind] ?? t('apercu.fichier'), taille: formatSize(message.file_size ?? 0) });
   if (message.kind === 'wallpaper') return t('apercu.fondChange');
   if (message.kind === 'system' && message.text === UPDATE_REQUIRED) return t('chat.majRequise');
@@ -717,7 +901,7 @@ export function deleteConversationMedia(contact: string, before = Number.MAX_SAF
     before,
   );
   for (const row of rows) {
-    deleteStoredFile(row.file_uri);
+    deleteFileAndKey(row.file_uri);
     db().runSync('UPDATE messages SET file_uri = NULL WHERE id = ? AND contact = ?', row.id, contact);
   }
   return rows.length;
@@ -732,7 +916,7 @@ export function deleteOldMedia(days: number): number {
 
 export function deleteMessages(contact: string) {
   db().getAllSync<{ file_uri: string }>('SELECT file_uri FROM messages WHERE contact = ? AND file_uri IS NOT NULL', contact).forEach(
-    (row) => deleteStoredFile(row.file_uri),
+    (row) => deleteFileAndKey(row.file_uri),
   );
   db().runSync('DELETE FROM messages WHERE contact = ?', contact);
   db().runSync('DELETE FROM contact_tokens WHERE contact = ?', contact);
@@ -745,4 +929,46 @@ export function deleteMessages(contact: string) {
   db().runSync('DELETE FROM relay_incoming WHERE contact = ?', contact);
   db().runSync('DELETE FROM pairing_requests WHERE from_key = ?', contact);
   db().runSync('DELETE FROM settings WHERE key = ?', `peer_state.${contact}`);
+  db().runSync('DELETE FROM settings WHERE key IN (?, ?)', `ephemeral_at.${contact}`, `ephemeral_last.${contact}`);
+}
+
+// --- Clés des fichiers de pear-files/ (lot 2.3) ---
+
+// La clé (base64) du fichier id, null s'il n'en a pas (fichier d'avant le lot 2.3, encore en clair).
+export function getStoreKey(id: string): string | null {
+  const row = db().getFirstSync<{ key: string }>('SELECT key FROM file_keys WHERE id = ?', id);
+  return row ? openStoreKey(row.key) : null;
+}
+
+export function setStoreKey(id: string, key: string) {
+  db().runSync('INSERT OR REPLACE INTO file_keys (id, key) VALUES (?, ?)', id, sealStoreKey(key));
+}
+
+export function deleteStoreKey(id: string) {
+  db().runSync('DELETE FROM file_keys WHERE id = ?', id);
+}
+
+// Les clés dont le fichier n'existe plus.
+export function pruneStoreKeys(existing: Set<string>) {
+  const stale = db().getAllSync<{ id: string }>('SELECT id FROM file_keys').filter((row) => !existing.has(row.id));
+  if (stale.length === 0) return 0;
+  db().withTransactionSync(() => {
+    for (const row of stale) db().runSync('DELETE FROM file_keys WHERE id = ?', row.id);
+  });
+  return stale.length;
+}
+
+// Les fichiers qu'il ne faut pas toucher pendant la migration : réception pas finie.
+export function getUnfinishedFileIds(): Set<string> {
+  return new Set(
+    db()
+      .getAllSync<{ id: string }>("SELECT id FROM messages WHERE file_uri IS NOT NULL AND status IN ('receiving', 'offered')")
+      .map((row) => row.id),
+  );
+}
+
+export function deleteFileAndKey(uri: string) {
+  deleteStoredFile(uri);
+  const id = storedFileId(uri);
+  if (id) deleteStoreKey(id);
 }

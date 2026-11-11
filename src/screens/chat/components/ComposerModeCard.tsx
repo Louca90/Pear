@@ -3,7 +3,7 @@ import { Animated, Easing, Image, Pressable, Text, View } from 'react-native';
 import { Pencil, Play, Reply, X } from 'lucide-react-native';
 
 import { describeMessage, Message } from '../../../chat/database';
-import { videoThumbnail } from '../../../chat/files';
+import { useMediaPreview } from '../../../chat/media';
 import { IconButton } from '../../../components/ui';
 import { t } from '../../../i18n';
 import { createStyles, radius, spacing, useColors } from '../../../theme';
@@ -17,17 +17,8 @@ type Mode = { kind: 'reply' | 'edit'; message: Message };
 export function Thumbnail({ message, size = 40 }: { message: Message; size?: number }) {
   const colors = useColors();
   const styles = useStyles();
-  const [uri, setUri] = useState(message.kind === 'image' ? message.file_uri : null);
-  useEffect(() => {
-    if (message.kind !== 'video' || !message.file_uri) return;
-    let cancelled = false;
-    videoThumbnail(message.id, message.file_uri)
-      .then((value) => !cancelled && setUri(value))
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [message]);
+  // Photo déchiffrée ou miniature de la vidéo (lot 2.3).
+  const uri = useMediaPreview(message);
   if (!uri) return null;
   return (
     <View style={[styles.thumbnail, { width: size, height: size }]}>

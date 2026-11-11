@@ -4,6 +4,7 @@ import { ChevronRight, CircleAlert, CircleCheck, FileText } from 'lucide-react-n
 
 import { chat } from '../chat/manager';
 import { shareLog } from '../components/ErrorBoundary';
+import { Pear, type PearState } from '../components/Pear';
 import { Header, Screen } from '../components/ui';
 import {
   collectDiagnostics,
@@ -36,6 +37,7 @@ export function DiagnosticScreen({ onBack }: { onBack: () => void }) {
   const styles = useStyles();
   const [data, setData] = useState<Diagnostics | null>(null);
   const opacity = useRef(new Animated.Value(0)).current;
+  const [showPear, setShowPear] = useState(false);
 
   const refresh = useCallback(() => {
     collectDiagnostics()
@@ -103,13 +105,57 @@ export function DiagnosticScreen({ onBack }: { onBack: () => void }) {
               <Text style={styles.detail}>{t('diag.journalAide')}</Text>
             </View>
           </Pressable>
+          <Pressable onPress={() => setShowPear((v) => !v)} style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
+            <Text style={styles.label}>{t('diag.poire')}</Text>
+          </Pressable>
+          {showPear ? <PearGallery /> : null}
         </Animated.View>
       </ScrollView>
     </Screen>
   );
 }
 
+// Galerie de test de la poire : chaque état, et « + » pour faire avancer `progress`.
+const PEAR_STATES: PearState[] = ['idle', 'bitten', 'ripening', 'searching', 'resting', 'leaf'];
+const PROGRESS_STEPS = [0, 0.34, 0.68, 1];
+
+function PearGallery() {
+  const colors = useColors();
+  const styles = useStyles();
+  const [step, setStep] = useState(0);
+  // Au retour à 0, la poire mordue repasse par `idle` pour montrer la reformation.
+  const progress = PROGRESS_STEPS[step];
+  return (
+    <View style={styles.gallery}>
+      {PEAR_STATES.map((state) => {
+        const driven = state === 'bitten' || state === 'ripening';
+        const shown = driven && step === 0 ? 'idle' : state;
+        return (
+          <Pressable key={state} disabled={!driven} onPress={() => setStep((s) => (s + 1) % PROGRESS_STEPS.length)} style={styles.cell}>
+            <Pear height={64} color={state === 'resting' ? colors.textMuted : colors.text} state={shown} progress={progress} leafColor={colors.signatureStrong} />
+            <Text style={styles.detail}>{driven ? `${state} ${Math.round(progress * 100)} % (+)` : state}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 const useStyles = createStyles((colors) => ({
+  gallery: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  cell: {
+    width: '31%',
+    flexGrow: 1,
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+  },
   content: {
     padding: spacing.lg,
     paddingTop: spacing.sm,

@@ -1,11 +1,10 @@
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '../../haptics';
 
 import type { WideLens } from '../../../modules/pear-native/camera';
 import { t } from '../../i18n';
-import { log } from '../../log';
-import { spacing } from '../../theme';
+import { fixed, spacing } from '../../theme';
 
 const EASING = Easing.bezier(0.2, 0.8, 0.2, 1);
 const PILL = 34;
@@ -65,7 +64,7 @@ export function ZoomBar({ levels, active, zoom, lens, bottom, onChoose }: Props)
             zoom={zoom}
             lens={lens}
             onPress={() => {
-              Haptics.selectionAsync().catch((e) => log.warn('vibration', e));
+              haptics.select();
               onChoose(level);
             }}
           />
@@ -97,7 +96,7 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: fixed.white,
   },
   labelActive: {
     fontSize: 13,

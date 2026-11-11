@@ -1,10 +1,11 @@
 import { AppState } from 'react-native';
-import { File, FileMode, Paths } from 'expo-file-system';
+import { FileMode, Paths } from 'expo-file-system';
 import { from_base64, randombytes_buf, to_base64 } from 'react-native-libsodium';
 
 import { openBytes, sealBytes } from '../../crypto/box';
 import {
   addMessage,
+  deleteFileAndKey,
   deleteOldAvatars,
   finishIncomingFile,
   getMessage,
@@ -15,10 +16,17 @@ import {
   setFileSize,
   setIncomingStatus,
 } from '../database';
-import { CHUNK_BYTES, deleteStoredFile, isValidFileId, MAX_FILE_BYTES, storedFile, storedSize, storeOutgoingFile } from '../files';
+import { CHUNK_BYTES, isValidFileId, MAX_FILE_BYTES, storedFile, storedFileId } from '../files';
+import { makeBlurThumb } from '../thumb';
+import { isSelf } from '../self';
+import { expiryFor, validTtl } from '../ephemeral';
+import { ephemeralFor } from './outbox';
+import { createStored, openStored, StoredReader, STORE_CHUNK_BYTES, storedSize, storeOutgoingFile } from '../media';
+import { sealedLength } from '../sealedFormat';
+import { encodeMeta, sanitizeMeta } from '../meta';
 
 import { decideOffer } from '../limits';
-import { clearFileProgress, showFileProgress } from '../notifications';
+import { clearFileProgress, showFilePaused, showFileProgress } from '../notifications';
 
 import { ChatCore } from './core';
 import { notifyMessage } from './notify';
@@ -43,21 +51,36 @@ import { log } from '../../log';
 
 export async function sendFile(core: ChatCore, contact: string, file: PickedFile) {
   const id = to_base64(randombytes_buf(FILE_ID_BYTES));
+  // Miniature floue (lot 4.4) : faite avant le rangement, tant que le fichier est encore lisible tel
+  // quel. Un fichier transféré garde celle du message d'origine ; un sticker n'en a pas.
+  // Un média à vue unique n'a pas de miniature : rien ne doit en rester.
+  const once = file.once === true && !isSelf(contact) && (file.kind === 'image' || file.kind === 'video');
+  if (once) file = { ...file, meta: undefined, album: undefined };
+  else if (!file.meta?.thumb && !file.meta?.sticker && !storedFileId(file.uri)) {
+    const thumb = await makeBlurThumb(file.uri, file.kind);
+    if (thumb) file = { ...file, meta: { ...file.meta, thumb } };
+  }
   const uri = await storeOutgoingFile(file.uri, id, file.keepSource);
   // Seule la taille du fichier stocké compte : le sélecteur donne parfois celle de l'original avant
   // compression (photo réduite par quality).
   const size = storedSize(uri) || file.size;
   if (size === 0) {
-    deleteStoredFile(uri);
+    deleteFileAndKey(uri);
     throw new Error('Ce fichier semble vide.');
   }
+  const now = Date.now();
+  // Fond et photo de profil ne sont pas des messages : ils ne s'effacent pas avec le minuteur.
+  const ttl = file.kind === 'wallpaper' || file.kind === 'avatar' ? null : ephemeralFor(contact);
   addMessage({
     id,
     contact,
     mine: 1,
     text: file.name,
-    status: 'sending',
-    created_at: Date.now(),
+    // Notes à moi-même : le fichier est rangé, il ne part nulle part.
+    status: isSelf(contact) ? 'read' : 'sending',
+    created_at: now,
+    expires_at: expiryFor(now, ttl),
+    view_once: once ? 1 : 0,
     kind: file.kind,
     file_uri: uri,
     file_size: size,
@@ -65,6 +88,8 @@ export async function sendFile(core: ChatCore, contact: string, file: PickedFile
     from_camera: file.fromCamera ? 1 : 0,
     forwarded: file.forwarded ? 1 : 0,
     conn_session: core.sessionFor(contact),
+    meta: encodeMeta(file.meta),
+    album: file.album ?? null,
   });
   flush(core, contact);
   wakeIfNeeded(core, contact);
@@ -78,7 +103,7 @@ export function dropIncomingFile(core: ChatCore, contact: string, id: string) {
   core.incomingFiles.delete(id);
   core.progress.delete(id);
   clearFileProgress(id);
-  core.writeQueue = core.writeQueue.then(() => incoming.handle.close()).catch((e) => log.warn('écriture du fichier', e));
+  core.writeQueue = core.writeQueue.then(() => incoming.writer.close()).catch((e) => log.warn('écriture du fichier', e));
 }
 
 export function setProgress(core: ChatCore, id: string, value: number) {
@@ -93,7 +118,7 @@ export function setProgress(core: ChatCore, id: string, value: number) {
     const incoming = core.incomingFiles.get(id);
     const kind = incoming ? getMessage(id, incoming.contact)?.kind : undefined;
     if (incoming && kind !== 'avatar' && kind !== 'wallpaper' && AppState.currentState !== 'active') {
-      showFileProgress(id, core.names.get(incoming.contact) ?? 'Pear', value).catch((e) => log.warn('notification', e));
+      showFileProgress(id, core.names.get(incoming.contact) ?? 'Pear', value);
     }
   }
 }
@@ -111,16 +136,18 @@ export async function streamFile(core: ChatCore, contact: string, id: string, fr
   const key = from_base64(message.file_key);
   const context = fileContext(id);
   const epoch = peer.epoch;
-  const handle = new File(message.file_uri).open(FileMode.ReadOnly);
+  const uri = message.file_uri;
+  let reader: StoredReader | null = null;
   core.confirmedChunks.set(id, from);
   try {
-    handle.offset = from * CHUNK_BYTES;
+    // Le fichier est déchiffré morceau par morceau (lot 2.3), puis rechiffré avec la clé du transfert.
+    reader = openStored(uri);
     let index = from;
     while (index * CHUNK_BYTES < size) {
       // Le message a été supprimé pendant l'envoi, ou l'autre a refusé le fichier : on arrête.
       const current = getMessage(id, contact);
       if (!current || current.status === 'refused') return;
-      const batch = await handle.readBytes(Math.min(DISK_BATCH_BYTES, size - index * CHUNK_BYTES));
+      const batch = await reader.read(index * CHUNK_BYTES, Math.min(DISK_BATCH_BYTES, size - index * CHUNK_BYTES));
       if (batch.length === 0) throw new Error('Fin de fichier inattendue');
       for (let offset = 0; offset < batch.length; offset += CHUNK_BYTES) {
         const data = batch.subarray(offset, offset + CHUNK_BYTES);
@@ -142,7 +169,7 @@ export async function streamFile(core: ChatCore, contact: string, id: string, fr
   } catch (e) {
     log.warn('envoi du fichier', e);
   } finally {
-    handle.close();
+    reader?.close();
     core.sendingFiles.delete(id);
     core.confirmedChunks.delete(id);
   }
@@ -192,10 +219,14 @@ export function receiveFileOffer(core: ChatCore, contact: string, data: Payload)
       from_camera: data.camera === true ? 1 : 0,
       forwarded: data.forwarded === true ? 1 : 0,
       conn_session: core.sessionFor(contact),
+      meta: encodeMeta(sanitizeMeta(data.meta)),
+      album: isValidFileId(data.album) ? data.album : null,
+      expires_at: expiryFor(Date.now(), validTtl(data.ttl)),
+      view_once: data.once === true && (data.kind === 'image' || data.kind === 'video') ? 1 : 0,
     });
     if (decision === 'ask') {
       const message = getMessage(data.id, contact);
-      if (message && AppState.currentState !== 'active') notifyMessage(core, contact);
+      if (message && AppState.currentState !== 'active') notifyMessage(core, contact, message.created_at);
       core.notify();
       return;
     }
@@ -220,17 +251,15 @@ function startReceiving(core: ChatCore, contact: string, id: string, size: numbe
       partialSize = partial.size ?? 0;
       partial.close();
     }
-    if (size - partialSize > Paths.availableDiskSpace) {
+    if (sealedLength(size, STORE_CHUNK_BYTES) - partialSize > Paths.availableDiskSpace) {
       log.warn('pas assez de place pour recevoir un fichier');
       return;
     }
-    if (!file.exists) file.create();
-    // Reprise : les morceaux déjà écrits ne sont pas redemandés.
-    const next = Math.floor(partialSize / CHUNK_BYTES);
-    const handle = file.open(FileMode.ReadWrite);
-    handle.offset = next * CHUNK_BYTES;
-    // En cas de reprise, la clé enregistrée reste celle du début du fichier.
-    incoming = { contact, key: from_base64(message.file_key), handle, size, next, received: next * CHUNK_BYTES, pending: [], pendingBytes: 0 };
+    // Reprise : les morceaux déjà écrits (chiffrés sur le disque) ne sont pas redemandés.
+    const writer = createStored(id, size, true);
+    const next = Math.floor(writer.written / CHUNK_BYTES);
+    // En cas de reprise, la clé du transfert reste celle du début du fichier.
+    incoming = { contact, key: from_base64(message.file_key), writer, size, next, received: writer.written >= size ? size : next * CHUNK_BYTES, pending: [], pendingBytes: 0 };
     core.incomingFiles.set(id, incoming);
   }
 
@@ -269,7 +298,7 @@ export async function receiveChunk(core: ChatCore, contact: string, bytes: Uint8
   if (incoming.received + data.length > incoming.size) {
     log.warn("fichier plus gros qu'annoncé, réception coupée");
     dropIncomingFile(core, contact, id);
-    deleteStoredFile(storedFile(id).uri);
+    deleteFileAndKey(storedFile(id).uri);
     setIncomingStatus(id, contact, 'receiving', 'refused');
     core.links.get(contact)?.peer.send({ type: 'file-refused', id });
     core.notify();
@@ -298,11 +327,11 @@ async function writePending(incoming: IncomingFile) {
   }
   incoming.pending = [];
   incoming.pendingBytes = 0;
-  await incoming.handle.writeBytes(batch);
+  await incoming.writer.append(batch);
 }
 
 function finishFile(core: ChatCore, contact: string, id: string, incoming: IncomingFile) {
-  incoming.handle.close();
+  incoming.writer.close();
   core.incomingFiles.delete(id);
   core.progress.delete(id);
   clearFileProgress(id);
@@ -323,13 +352,17 @@ function finishFile(core: ChatCore, contact: string, id: string, incoming: Incom
 
 export function closeIncomingFiles(core: ChatCore) {
   // Ce qui attend encore d'être écrit passe après les écritures en cours : rien n'est perdu.
+  const ids = [...core.incomingFiles.keys()];
   const files = [...core.incomingFiles.values()];
+  // Coupé en pleine réception, app fermée : la barre disparaît et on le dit.
+  if (files.length > 0 && AppState.currentState !== 'active') showFilePaused();
+  else ids.forEach(clearFileProgress);
   core.incomingFiles.clear();
   core.writeQueue = core.writeQueue
     .then(async () => {
       for (const incoming of files) {
         await writePending(incoming);
-        incoming.handle.close();
+        incoming.writer.close();
       }
     })
     .catch((e) => log.warn('écriture du fichier', e));

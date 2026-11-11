@@ -1,5 +1,4 @@
 import { AppState } from 'react-native';
-import { File, FileMode } from 'expo-file-system';
 import { from_base64, to_base64 } from 'react-native-libsodium';
 
 import { openBytes, sealBytes } from '../../crypto/box';
@@ -13,20 +12,26 @@ import {
   getMessage,
   getPendingIncomingBytes,
   getRelayIncoming,
+  getSetting,
   getUndelivered,
   getUpload,
   Message,
   saveUpload,
 } from '../database';
 import { isValidFileId, storedFile } from '../files';
+import { createStored, openStored, StoredWriter } from '../media';
 import { decideOffer } from '../limits';
+import { encodeMeta, parseMeta, sanitizeMeta } from '../meta';
 
 import { ChatCore } from './core';
 import { notifyMessage } from './notify';
 import { sendEvent } from './outbox';
+import { fileExtras } from './payloads';
+import { expiryFor, validTtl } from '../ephemeral';
 import { setProgress } from './transfers';
 import { FILE_KEY_BYTES, isCount, isFileKind, Payload } from './types';
 import { queuePushAck } from './wake';
+import { t } from '../../i18n';
 import { log } from '../../log';
 
 // Relais chiffré des fichiers : seulement si le contact n'est pas joignable en direct depuis quelques
@@ -43,9 +48,12 @@ const relayContext = (relayId: string, index: number) => `pear-relay-v1.${relayI
 const chunkCount = (size: number) => Math.ceil(size / RELAY_CHUNK_BYTES);
 const isConnected = (core: ChatCore, contact: string) => core.links.get(contact)?.status === 'connected';
 
+// Réglage « Relais des fichiers » : activé tant qu'il n'a pas été coupé.
+export const isRelayEnabled = () => getSetting('relay_enabled') !== '0';
+
 // Appelée régulièrement (app ouverte) : les fichiers qui n'ont pas pu partir en direct passent par le relais.
 export function relayPending(core: ChatCore, contact: string) {
-  if (!core.online || isConnected(core, contact)) return;
+  if (!isRelayEnabled() || !core.online || isConnected(core, contact)) return;
   for (const message of getUndelivered(contact)) {
     if (!RELAY_KINDS.includes(message.kind) || core.relaying.has(message.id)) continue;
     if (!message.file_uri || !message.file_key || !message.file_size || message.file_size > RELAY_MAX_BYTES) continue;
@@ -70,24 +78,24 @@ async function upload(core: ChatCore, contact: string, message: Message) {
   }
   const chunks = chunkCount(size);
   const key = from_base64(message.file_key ?? '');
-  const handle = new File(message.file_uri ?? '').open(FileMode.ReadOnly);
+  // Le fichier stocké est déchiffré (lot 2.3) puis rechiffré pour le relais avec la clé du transfert.
+  const reader = openStored(message.file_uri ?? '');
   try {
     for (let index = state.parts_done; index < chunks; index += 1) {
       // Le contact s'est connecté : le direct reprend la main, le fichier partiel est supprimé.
-      if (isConnected(core, contact) || !getMessage(message.id, contact)) {
+      if (isConnected(core, contact) || !isRelayEnabled() || !getMessage(message.id, contact)) {
         await deleteRelay(state.file_id);
         deleteUpload(message.id, contact);
         return;
       }
-      handle.offset = index * RELAY_CHUNK_BYTES;
-      const plain = await handle.readBytes(Math.min(RELAY_CHUNK_BYTES, size - index * RELAY_CHUNK_BYTES));
+      const plain = await reader.read(index * RELAY_CHUNK_BYTES, Math.min(RELAY_CHUNK_BYTES, size - index * RELAY_CHUNK_BYTES));
       await uploadRelayChunk(state.file_id, index, to_base64(sealBytes(plain, key, relayContext(state.file_id, index))));
       state = { ...state, parts_done: index + 1 };
       saveUpload(state);
       setProgress(core, message.id, (index + 1) / chunks);
     }
   } finally {
-    handle.close();
+    reader.close();
   }
   saveUpload({ ...state, state: 'uploaded' });
   core.progress.delete(message.id);
@@ -103,6 +111,9 @@ async function upload(core: ChatCore, contact: string, message: Message) {
     key: message.file_key,
     camera: message.from_camera === 1,
     forwarded: message.forwarded === 1,
+    ...(message.meta ? { meta: parseMeta(message.meta) } : {}),
+    ...(message.album ? { album: message.album } : {}),
+    ...fileExtras(message),
   });
 }
 
@@ -133,10 +144,15 @@ export function receiveRelayOffer(core: ChatCore, contact: string, data: Payload
     file_size: size,
     file_mime: typeof data.mime === 'string' ? data.mime.slice(0, 255) : null,
     file_key: data.key,
+    meta: encodeMeta(sanitizeMeta(data.meta)),
+    album: isValidFileId(data.album) ? data.album : null,
+    expires_at: expiryFor(Date.now(), validTtl(data.ttl)),
+    view_once: data.once === true && (kind === 'image' || kind === 'video') ? 1 : 0,
   });
   addRelayIncoming({ file_id: relay, contact, message_id: id, size });
   if (auto) downloadRelayFile(core, contact, id).catch((e) => log.warn('réception par le relais', e));
-  else if (AppState.currentState !== 'active') notifyMessage(core, contact);
+  // Un fichier proposé ne compte pas comme « non lu » : sans sa date, la notification ne partait pas.
+  else if (AppState.currentState !== 'active') notifyMessage(core, contact, getMessage(id, contact)?.created_at);
   core.notify();
 }
 
@@ -146,21 +162,20 @@ export async function downloadRelayFile(core: ChatCore, contact: string, id: str
   const message = getMessage(id, contact);
   if (!incoming || !message?.file_key || core.relaying.has(id)) return;
   core.relaying.add(id);
-  const file = storedFile(id);
-  if (file.exists) file.delete();
-  file.create();
-  const handle = file.open(FileMode.ReadWrite);
   const key = from_base64(message.file_key);
   const chunks = chunkCount(incoming.size);
+  let writer: StoredWriter | null = null;
   try {
+    // Toujours repris de zéro : le fichier est rechiffré sur le disque avec sa propre clé.
+    writer = createStored(id, incoming.size, false);
     for (let index = 0; index < chunks; index += 1) {
       const data = await downloadRelayChunk(incoming.file_id, index);
-      if (!data) throw new Error('Fichier du relais incomplet ou expiré');
-      await handle.writeBytes(openBytes(from_base64(data), key, relayContext(incoming.file_id, index)));
+      if (!data) throw new Error(t('erreur.relaisExpire'));
+      await writer.append(openBytes(from_base64(data), key, relayContext(incoming.file_id, index)));
       setProgress(core, id, (index + 1) / chunks);
     }
   } finally {
-    handle.close();
+    writer?.close();
     core.relaying.delete(id);
   }
   core.progress.delete(id);

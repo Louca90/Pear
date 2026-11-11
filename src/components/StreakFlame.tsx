@@ -3,13 +3,13 @@ import { Animated, Easing, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
 import { t } from '../i18n';
-import { createStyles, useColors } from '../theme';
+import { createStyles, fixed, useColors } from '../theme';
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 
 // Orange vif une fois la journée validée (les deux ont envoyé une photo ou une vidéo aujourd'hui).
-const FLAME = '#FF7A1A';
-const FLAME_CORE = '#FFC94D';
+const FLAME = fixed.flame;
+const FLAME_CORE = fixed.flameCore;
 const WAKE_MS = 520;
 const FLARE_MS = 260;
 const OUT_MS = 360;

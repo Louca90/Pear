@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, Pressable } from 'react-native';
 
-import { createStyles, radius, useColors } from '../theme';
+import { createStyles, fixed, radius, useColors } from '../theme';
 
 const TRACK_WIDTH = 46;
 const TRACK_HEIGHT = 28;
@@ -41,7 +41,7 @@ export function Toggle({ value, onChange, label }: { value: boolean; onChange: (
           style={[
             styles.thumb,
             {
-              backgroundColor: on.interpolate({ inputRange: [0, 1], outputRange: [colors.scheme === 'dark' ? colors.textMuted : '#FFFFFF', colors.onAccent] }),
+              backgroundColor: on.interpolate({ inputRange: [0, 1], outputRange: [colors.scheme === 'dark' ? colors.textMuted : fixed.white, colors.onAccent] }),
               transform: [{ translateX: on.interpolate({ inputRange: [0, 1], outputRange: [0, TRACK_WIDTH - THUMB - 6] }) }],
             },
           ]}

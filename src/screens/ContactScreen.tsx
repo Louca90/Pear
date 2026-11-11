@@ -3,6 +3,7 @@ import { Animated, Easing, KeyboardAvoidingView, Pressable, ScrollView, Text, Te
 import { Ban, Check, Trash2 } from 'lucide-react-native';
 
 import { ContactProfile } from '../chat/database';
+import { Pear } from '../components/Pear';
 import { showDialog } from '../components/dialog';
 import { Avatar, Button, Header, Screen } from '../components/ui';
 import { SegmentedControl } from '../components/SegmentedControl';
@@ -21,14 +22,25 @@ type Props = {
   blocked: boolean;
   onToggleBlock: () => void;
   contactKey: string;
+  // 4 groupes de 4 chiffres, identiques sur les deux téléphones.
+  code: string[];
+  verified: boolean;
+  onVerify: () => void;
 };
 
-export function ContactScreen({ initialName, profile, isNew, onBack, onSave, onRemove, blocked, onToggleBlock, contactKey }: Props) {
+export function ContactScreen({ initialName, profile, isNew, onBack, onSave, onRemove, blocked, onToggleBlock, contactKey, code, verified, onVerify }: Props) {
   const colors = useColors();
   const styles = useStyles();
   const [name, setName] = useState(initialName);
   const [tab, setTab] = useState<'profile' | 'media'>('profile');
   const fade = useRef(new Animated.Value(1)).current;
+  const tick = useRef(new Animated.Value(verified ? 1 : 0)).current;
+
+  // Validation : la coche apparaît en fondu.
+  const confirmCode = () => {
+    onVerify();
+    Animated.timing(tick, { toValue: 1, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+  };
 
   // Changement d'onglet : le contenu s'efface puis revient, sans saut.
   const chooseTab = (next: 'profile' | 'media') => {
@@ -61,6 +73,13 @@ export function ContactScreen({ initialName, profile, isNew, onBack, onSave, onR
             <View style={styles.profile}>
               <Avatar uri={profile.photo_uri} size={96} />
               {profile.name && <Text style={styles.profileName}>{profile.name}</Text>}
+              {verified && (
+                <Animated.View style={[styles.verified, { opacity: tick }]}>
+                  {/* Contact vérifié : la feuille de la poire pousse, en couleur signature. */}
+                  <Pear height={20} color={colors.text} state="leaf" leafColor={colors.signatureStrong} />
+                  <Text style={styles.verifiedLabel}>{t('contact.verifie')}</Text>
+                </Animated.View>
+              )}
             </View>
           )}
           {!isNew && (
@@ -80,6 +99,19 @@ export function ContactScreen({ initialName, profile, isNew, onBack, onSave, onR
             <ContactMedia contactKey={contactKey} />
           ) : (
           <>
+          <Text style={styles.label}>{t('contact.codeVerification')}</Text>
+          <View style={styles.codeBox}>
+            <View style={styles.codeRow}>
+              {code.map((group, index) => (
+                <Text key={index} style={styles.codeGroup}>
+                  {group}
+                </Text>
+              ))}
+            </View>
+            <Text style={styles.codeHelp}>{verified ? t('contact.verifie') : t('contact.codeAide')}</Text>
+            {!isNew && !verified && <Button label={t('contact.codesIdentiques')} icon={Check} onPress={confirmCode} />}
+          </View>
+
           <Text style={styles.label}>{t('contact.nom')}</Text>
           <TextInput
             style={styles.input}
@@ -135,6 +167,36 @@ const useStyles = createStyles((colors) => ({
     fontSize: 16,
     fontWeight: '500',
     color: colors.text,
+  },
+  verified: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  verifiedLabel: {
+    fontSize: 13,
+    color: colors.textMuted,
+  },
+  codeBox: {
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    padding: spacing.md,
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  codeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  codeGroup: {
+    fontSize: 22,
+    fontWeight: '600',
+    color: colors.text,
+    fontVariant: ['tabular-nums'],
+  },
+  codeHelp: {
+    fontSize: 13,
+    color: colors.textMuted,
   },
   label: {
     fontSize: 14,

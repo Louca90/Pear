@@ -5,9 +5,11 @@ import * as Sharing from 'expo-sharing';
 import { File, Play } from 'lucide-react-native';
 
 import { getMediaMessages, Message } from '../../chat/database';
-import { exportCopy, formatSize, videoThumbnail } from '../../chat/files';
+import { formatSize } from '../../chat/files';
+import { exportCopy, openMedia as openStoredMedia, retainOpenedMedia, useMediaPreview, videoThumbnail } from '../../chat/media';
 import { showDialog } from '../../components/dialog';
 import { t } from '../../i18n';
+import { EmptyState } from '../../components/EmptyState';
 import { createStyles, radius, spacing, useColors } from '../../theme';
 import { MediaViewer, Viewing } from '../chat/components/MediaViewer';
 
@@ -24,19 +26,9 @@ function Tile({ message, size, onOpen }: { message: Message; size: number; onOpe
   const colors = useColors();
   const styles = useStyles();
   const view = useRef<ViewRef>(null);
-  const [poster, setPoster] = useState(message.kind === 'image' ? message.file_uri : null);
+  // Photo déchiffrée ou miniature de la vidéo (lot 2.3).
+  const poster = useMediaPreview(message);
   const appear = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (message.kind !== 'video' || !message.file_uri) return;
-    let cancelled = false;
-    videoThumbnail(message.id, message.file_uri)
-      .then((uri) => !cancelled && setPoster(uri))
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [message]);
 
   return (
     <Pressable ref={view} onPress={() => onOpen(message, view.current)} style={{ width: size, height: size }}>
@@ -65,6 +57,8 @@ export function ContactMedia({ contactKey }: { contactKey: string }) {
   const [messages] = useState(() => getMediaMessages(contactKey));
   const [kind, setKind] = useState<Kind>('media');
   const [viewing, setViewing] = useState<Viewing | null>(null);
+  // Les médias déchiffrés pour la grille sont effacés du cache en quittant la fiche (lot 2.3).
+  useEffect(() => retainOpenedMedia(), []);
   const fade = useRef(new Animated.Value(1)).current;
   const media = messages.filter((message) => message.kind === 'image' || message.kind === 'video');
   const files = messages.filter((message) => message.kind === 'file');
@@ -84,7 +78,7 @@ export function ContactMedia({ contactKey }: { contactKey: string }) {
     view?.measureInWindow(async (x, y, width, height) => {
       try {
         const uri = message.file_uri ?? '';
-        const poster = message.kind === 'video' ? await videoThumbnail(message.id, uri) : uri;
+        const poster = message.kind === 'video' ? await videoThumbnail(message.id, uri) : await openStoredMedia(uri, { mime: message.file_mime });
         setViewing({ message, rect: { x, y, width, height }, poster, size: await Image.getSize(poster) });
       } catch (e) {
         showDialog(t('chat.ouvertureImpossible'), String(e));
@@ -118,7 +112,7 @@ export function ContactMedia({ contactKey }: { contactKey: string }) {
       </View>
       <Animated.View style={{ opacity: fade }}>
         {shown.length === 0 ? (
-          <Text style={styles.empty}>{kind === 'media' ? t('contact.aucunMedia') : t('contact.aucunFichier')}</Text>
+          <EmptyState label={kind === 'media' ? t('contact.aucunMedia') : t('contact.aucunFichier')} />
         ) : kind === 'media' ? (
           <View style={styles.grid} onLayout={({ nativeEvent }) => setGridWidth(nativeEvent.layout.width)}>
             {tileSize > 0 && media.map((message) => (
@@ -190,12 +184,7 @@ const useStyles = createStyles((colors) => ({
     top: 6,
     right: 6,
   },
-  empty: {
-    textAlign: 'center',
-    fontSize: 15,
-    color: colors.textMuted,
-    marginTop: spacing.lg,
-  },
+
   file: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -1,25 +1,36 @@
 import { ComponentRef, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { FlatList, Image, Keyboard, KeyboardAvoidingView, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Animated, FlatList, Image, Keyboard, KeyboardAvoidingView, Linking, PermissionsAndroid, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { BlurTargetView } from 'expo-blur';
 import * as Clipboard from 'expo-clipboard';
 import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '../../haptics';
 import * as Sharing from 'expo-sharing';
-import { Copy, Download, Forward, MessageCircle, Pencil, Pin, PinOff, Reply, Send, Trash2 } from 'lucide-react-native';
+import { Copy, Download, Forward, Pencil, Pin, PinOff, Reply, Send, Trash2 } from 'lucide-react-native';
 
-import { getContactProfile, getContactRows, getConversationSettings, getMessagePosition, getMessages, getPeerState, getPinnedMessages, isBlocked, Message } from '../../chat/database';
-import { exportCopy, formatSize, MAX_FILE_BYTES, saveToGallery, videoThumbnail } from '../../chat/files';
-import { GroupPosition, groupPosition } from '../../chat/grouping';
+import { getContactProfile, getContactRows, getConversationSettings, getDraft, getMessagePosition, getMessages, getPeerState, getPinnedMessages, isBlocked, Message, setDraft as saveDraft } from '../../chat/database';
+import { formatSize, MAX_FILE_BYTES } from '../../chat/files';
+import { exportCopy, openMedia, retainOpenedMedia, saveToGallery, useMediaUri, videoThumbnail } from '../../chat/media';
+import { ALBUM_MAX, albumAt, GroupPosition, groupPosition } from '../../chat/grouping';
 import { chat, PickedFile } from '../../chat/manager';
 import { MESSAGE_PAGE_SIZE } from '../../config';
 import { showDialog } from '../../components/dialog';
 import { ContactPickerSheet } from '../../components/ContactPickerSheet';
 import { MediaPicker } from '../../components/MediaPicker';
+import { Pear } from '../../components/Pear';
 import { Screen, useInsets } from '../../components/ui';
-import { bubblePalette, createStyles, radius, spacing, useColors } from '../../theme';
+import { bubblePalette, createStyles, motion, radius, spacing, useColors } from '../../theme';
 
 import { ChatHeader } from './components/ChatHeader';
+import { ChatSearch } from './components/ChatSearch';
+import { DraftPreviewCard } from './components/LinkPreview';
+import { StickerSheet } from './components/StickerSheet';
+import { useDraftPreview } from '../../chat/linkPreview';
+import { isSelf, SELF } from '../../chat/self';
+import { EPHEMERAL_CHOICES } from '../../chat/ephemeral';
+import { LOCATION_DURATIONS } from '../../chat/location';
+import { useEphemeralPull } from './hooks/useEphemeralPull';
+import { PullPear, PullView } from '../../components/pull';
 import { Composer } from './components/Composer';
 import { ComposerFade } from './components/ComposerFade';
 import { MediaViewer, Viewing } from './components/MediaViewer';
@@ -30,13 +41,15 @@ import { PinnedBanner } from './components/PinnedBanner';
 import { ReactionsSheet } from './components/ReactionsSheet';
 import { ScheduleSheet, scheduleLabel } from './components/ScheduleSheet';
 import { Toast } from './components/Toast';
+import { TypingBubble } from './components/TypingBubble';
+import { dayLabel, ephemeralLabel, nextVoice } from './format';
+import { playSound } from './sounds';
 import { JUMP_PULSE_DELAY_MS, LIKE } from './constants';
 import { useChatScroll } from './hooks/useChatScroll';
 import { useKeyboardOpen } from './hooks/useKeyboardOpen';
 import { useChatStyles } from './styles';
 import { Action, Palettes, Rect, ViewRef } from './types';
-import { log } from '../../log';
-import { t } from '../../i18n';
+import { dateLocale, t } from '../../i18n';
 
 type Props = {
   contactKey: string;
@@ -48,22 +61,32 @@ type Props = {
   onCustomize: () => void;
   // Affichée sous la page pendant le geste de retour : elle ne doit pas marquer les messages comme lus.
   preview?: boolean;
+  // Message à rejoindre à l'ouverture (résultat de la recherche de l'accueil).
+  jump?: string;
 };
 
-export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustomize, preview }: Props) {
+export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustomize, preview, jump }: Props) {
   const styles = useStyles();
   const colors = useColors();
-  const [draft, setDraft] = useState('');
+  const [draft, setDraft] = useState(() => getDraft(contactKey));
   const [attachOpen, setAttachOpen] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [toast, setToast] = useState<{ text: string; token: number } | null>(null);
   const [forwarding, setForwarding] = useState<Message | null>(null);
   const [showingReactions, setShowingReactions] = useState<Message | null>(null);
   const [scheduling, setScheduling] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [stickersOpen, setStickersOpen] = useState(false);
   const [viewing, setViewing] = useState<Viewing | null>(null);
   const [selection, setSelection] = useState<{ message: Message; rect: Rect; origin: { y: number; height: number }; clip: { top: number; bottom: number }; position: GroupPosition; keepOriginal: boolean } | null>(null);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [editing, setEditing] = useState<Message | null>(null);
+  // Le brouillon est gardé pour la liste des conversations (« Brouillon : … »), sauf pendant la modification d'un message.
+  useEffect(() => {
+    if (!editing) saveDraft(contactKey, draft);
+  }, [contactKey, draft, editing]);
+  // Aperçu du lien en cours de saisie (lot 4.3) : pas pendant la modification d'un message.
+  const draftPreview = useDraftPreview(draft, !editing);
   const blurTarget = useRef<ViewRef>(null);
   const root = useRef<ViewRef>(null);
   const listArea = useRef<ViewRef>(null);
@@ -109,12 +132,74 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
   }
   newestShown.current = Math.max(newestShown.current, messages[0]?.created_at ?? 0);
   const scroll = useChatScroll(list, messages, preview);
-  const settings = getConversationSettings(contactKey);
-  const palettes: Palettes = {
-    mine: bubblePalette(settings.my_bubble ?? colors.bubbleMine),
-    theirs: bubblePalette(settings.their_bubble ?? colors.bubbleTheirs),
-    hasWallpaper: settings.wallpaper_uri !== null,
+
+  // Sons (lot 3.4) : seulement pour un message plus récent que tout ce qui était affiché, pas au
+  // chargement de la conversation ni en remontant l'historique.
+  const newestSounded = useRef<{ contact: string; at: number } | null>(null);
+  useEffect(() => {
+    const newest = messages[0];
+    const previous = newestSounded.current;
+    newestSounded.current = { contact: contactKey, at: Math.max(newest?.created_at ?? 0, previous?.contact === contactKey ? previous.at : 0) };
+    if (preview || !newest || previous?.contact !== contactKey || newest.created_at <= previous.at) return;
+    if (newest.kind === 'system' || newest.kind === 'wallpaper') return;
+    if (newest.mine === 1) {
+      if (newest.status !== 'scheduled') playSound('sent');
+    } else playSound('received');
+  }, [messages, contactKey, preview]);
+
+  // Date collante (lot 3.4) : pendant qu'on fait défiler, le jour des messages du haut de l'écran.
+  // Effacée 800 ms après l'arrêt du défilement.
+  const [stickyDay, setStickyDay] = useState('');
+  const stickyOpacity = useRef(new Animated.Value(0)).current;
+  const stickyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showSticky = (visible: boolean) =>
+    Animated.timing(stickyOpacity, { toValue: visible ? 1 : 0, duration: motion.small, easing: motion.easing, useNativeDriver: true }).start();
+  const stickyProps = {
+    onScrollBeginDrag: () => {
+      if (stickyTimer.current) clearTimeout(stickyTimer.current);
+      showSticky(true);
+    },
+    onMomentumScrollBegin: () => {
+      if (stickyTimer.current) clearTimeout(stickyTimer.current);
+    },
+    onScrollEndDrag: () => hideStickyLater(),
+    onMomentumScrollEnd: () => hideStickyLater(),
   };
+  const hideStickyLater = () => {
+    if (stickyTimer.current) clearTimeout(stickyTimer.current);
+    stickyTimer.current = setTimeout(() => showSticky(false), STICKY_HIDE_MS);
+  };
+  useEffect(() => () => {
+    if (stickyTimer.current) clearTimeout(stickyTimer.current);
+  }, []);
+  // Liste inversée : le message le plus haut à l'écran est celui de plus grand index.
+  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: { index?: number | null; item: Message }[] }) => {
+    let top: Message | null = null;
+    let topIndex = -1;
+    for (const { index, item } of viewableItems) {
+      if (index != null && index > topIndex) {
+        topIndex = index;
+        top = item;
+      }
+    }
+    if (top) setStickyDay(dayLabel(top.created_at, Date.now(), dateLocale()));
+  }).current;
+  const settings = getConversationSettings(contactKey);
+  // Le même objet tant que les couleurs ne changent pas : les bulles ne se redessinent pas pour rien.
+  const hasWallpaper = settings.wallpaper_uri !== null;
+  const palettes: Palettes = useMemo(
+    () => ({
+      mine: bubblePalette(settings.my_bubble ?? colors.bubbleMine),
+      theirs: bubblePalette(settings.their_bubble ?? colors.bubbleTheirs),
+      hasWallpaper,
+    }),
+    [settings.my_bubble, settings.their_bubble, hasWallpaper, colors],
+  );
+  // Le fond est chiffré sur le disque (lot 2.3) : affiché depuis sa copie déchiffrée.
+  const wallpaper = useMediaUri(settings.wallpaper_uri, { scope: 'app' });
+
+  // Les médias déchiffrés de la conversation sont effacés du cache quand on la quitte.
+  useEffect(() => retainOpenedMedia(), []);
 
   useEffect(() => {
     if (preview) return;
@@ -124,8 +209,22 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
 
   const closeSelection = useRef(() => setSelection(null)).current;
 
+  // Messages éphémères (lot 4.7) : le geste bascule le mode, la pastille de l'en-tête règle la durée.
+  const ephemeral = settings.ephemeral;
+  const canWrite = !pending && !blockedByMe && peerState === null && !isSelf(contactKey);
+  const pull = useEphemeralPull(
+    () => canWrite && !preview && !keyboardOpen && chat.atBottom && !selection && !viewing,
+    () => chat.toggleEphemeral(contactKey),
+  );
+  const chooseEphemeral = () =>
+    showDialog(t('ephemere.titre'), t('ephemere.aide'), [
+      ...EPHEMERAL_CHOICES.map((seconds) => ({ label: ephemeralLabel(seconds), onPress: () => chat.setEphemeral(contactKey, seconds) })),
+      { label: t('ephemere.desactiver'), style: 'danger' as const, onPress: () => chat.setEphemeral(contactKey, 0) },
+      { label: t('commun.annuler'), style: 'cancel' as const },
+    ]);
+
   const selectMessage = (message: Message, measure: (done: (rect: Rect) => void) => void) => {
-    Haptics.performAndroidHapticsAsync(Haptics.AndroidHaptics.Long_Press).catch((e) => log.warn('vibration', e));
+    haptics.action();
     const open = () =>
       measure((rect) =>
         root.current?.measureInWindow((_x, y, _width, height) =>
@@ -152,7 +251,9 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
       chat.edit(contactKey, editing.id, text);
       setEditing(null);
     } else {
-      chat.send(contactKey, text, replyingTo?.id ?? null);
+      // L'aperçu part avec le message s'il est prêt ; sinon le lien part seul, sans attendre.
+      const preview = draftPreview.current?.preview;
+      chat.send(contactKey, text, replyingTo?.id ?? null, false, preview ? { preview } : null);
       setReplyingTo(null);
       scroll.followSent();
     }
@@ -176,7 +277,13 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
 
   // Remonte jusqu'au message cité, puis le fait grossir un instant pour le repérer.
   const jumpTo = (id: string) => {
-    const index = messages.findIndex((message) => message.id === id);
+    let index = messages.findIndex((message) => message.id === id);
+    // Un média rangé dans un album : c'est la grille (dessinée par le plus récent) qu'on rejoint.
+    const album = index >= 0 ? albumAt(messages, index) : null;
+    if (album && !album.lead) {
+      id = album.members[album.members.length - 1].id;
+      index = messages.findIndex((message) => message.id === id);
+    }
     if (index < 0) {
       const position = getMessagePosition(contactKey, id);
       if (position < 0) {
@@ -198,6 +305,15 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
     requestAnimationFrame(() => jumpTo(pendingJump));
   }, [pendingJump, messages]);
 
+  // Ouverte depuis un résultat de recherche : on rejoint le message une fois la liste en place.
+  const jumped = useRef(false);
+  useEffect(() => {
+    if (!jump || jumped.current || preview) return;
+    jumped.current = true;
+    const timer = setTimeout(() => jumpTo(jump), JUMP_PULSE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [jump, preview]);
+
   // Double appui : met le cœur, ou l'enlève s'il y est déjà.
   const likeMessage = (message: Message) => chat.react(contactKey, message.id, LIKE);
 
@@ -211,7 +327,7 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
   const saveMedia = async (message: Message) => {
     try {
       await saveToGallery(message.file_uri ?? '', message.text);
-      Haptics.selectionAsync().catch((e) => log.warn('vibration', e));
+      haptics.select();
       setToast({ text: t('chat.enregistreTelephone'), token: Date.now() });
       if (message.kind === 'image' || message.kind === 'video') chat.markSaved(contactKey, message.id, message.kind);
     } catch (e) {
@@ -236,7 +352,13 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
     { label: t('programme.annuler'), icon: Trash2, danger: true, onPress: () => chat.deleteForMe(contactKey, message.id) },
   ];
 
-  const actionsFor = (message: Message): Action[] => message.status === 'scheduled' ? scheduledActions(message) : [
+  // Un média à vue unique ne se copie, ne se transfère, ne s'enregistre ni ne s'épingle.
+  const onceActions = (message: Message): Action[] => [
+    { label: t('chat.repondre'), icon: Reply, onPress: () => startReply(message) },
+    { label: t('commun.supprimer'), icon: Trash2, danger: true, onPress: () => confirmDelete(message) },
+  ];
+
+  const actionsFor = (message: Message): Action[] => message.status === 'scheduled' ? scheduledActions(message) : message.view_once ? onceActions(message) : [
     { label: t('chat.repondre'), icon: Reply, onPress: () => startReply(message) },
     ...(message.kind === 'text'
       ? [{ label: t('chat.copier'), icon: Copy, onPress: () => Clipboard.setStringAsync(message.text) }]
@@ -286,9 +408,22 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
     }
   };
 
+  // Plusieurs photos ou vidéos choisies ensemble partent en album (lot 4.5), par paquets de 10.
   const sendFromGallery = async (files: PickedFile[]) => {
     setGalleryOpen(false);
-    for (const file of files) await sendPicked(file);
+    const isMedia = (file: PickedFile) => (file.kind === 'image' || file.kind === 'video') && !file.once;
+    const grouped = files.filter(isMedia).length >= 2;
+    let album = '';
+    let inAlbum = 0;
+    for (const file of files) {
+      if (!grouped || !isMedia(file)) {
+        await sendPicked(file);
+        continue;
+      }
+      if (inAlbum % ALBUM_MAX === 0) album = chat.newAlbumId();
+      inAlbum += 1;
+      await sendPicked({ ...file, album });
+    }
   };
 
   const pickDocument = async () => {
@@ -305,6 +440,32 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
     });
   };
 
+  // Position en direct (lot 4.8) : la durée, puis l'autorisation de position (approximative), puis le partage.
+  const shareLocation = () => {
+    setAttachOpen(false);
+    const start = async (seconds: number) => {
+      try {
+        const granted = (await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION)) === PermissionsAndroid.RESULTS.GRANTED;
+        if (!granted) {
+          showDialog(t('position.refusee'), t('position.refuseeAide'), [
+            { label: t('commun.ouvrirReglages'), onPress: () => Linking.openSettings() },
+            { label: t('commun.annuler'), style: 'cancel' },
+          ]);
+          return;
+        }
+        if (chat.startLocation(contactKey, seconds)) scroll.followSent();
+        else showDialog(t('position.indisponible'), t('position.indisponibleAide'));
+      } catch (e) {
+        showDialog(t('position.indisponible'), String(e));
+      }
+    };
+    const labels = [t('position.min15'), t('position.h1'), t('position.h8')];
+    showDialog(t('position.partager'), t('position.aide'), [
+      ...LOCATION_DURATIONS.map((seconds, index) => ({ label: labels[index], onPress: () => void start(seconds) })),
+      { label: t('commun.annuler'), style: 'cancel' as const },
+    ]);
+  };
+
   // L'image et sa taille sont préparées dès le toucher, pendant la fenêtre du double appui : la
   // visionneuse s'ouvre sans attendre une fois l'appui simple confirmé.
   const prepared = useRef(new Map<string, Promise<{ poster: string; size: { width: number; height: number } }>>()).current;
@@ -314,7 +475,7 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
     if (!media) {
       const uri = message.file_uri ?? '';
       media = (async () => {
-        const poster = message.kind === 'video' ? await videoThumbnail(message.id, uri) : uri;
+        const poster = message.kind === 'video' ? await videoThumbnail(message.id, uri) : await openMedia(uri, { mime: message.file_mime });
         return { poster, size: await Image.getSize(poster) };
       })();
       media.catch(() => prepared.delete(message.id));
@@ -327,8 +488,14 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
     if (message.kind !== 'file') {
       // Une photo ou une vidéo s'ouvre dès l'appui, sans attendre : on la like avec un appui long (réactions).
       Keyboard.dismiss();
+      // Vue unique : seul le destinataire l'ouvre, et une seule fois.
+      if (message.view_once && (message.mine === 1 || message.view_once !== 1)) return;
       try {
-        const media = await (prepareMedia(message) ?? Promise.reject(new Error('Média introuvable.')));
+        const media = await (prepareMedia(message) ?? Promise.reject(new Error(t('chat.mediaIntrouvable'))));
+        // La copie déchiffrée peut être effacée (arrière-plan) : elle sera refaite à la prochaine ouverture.
+        prepared.delete(message.id);
+        // Elle compte comme vue dès qu'elle s'affiche ; le fichier part à la fermeture de la visionneuse.
+        if (message.view_once) chat.openOnce(contactKey, message.id);
         setViewing({ message, rect, ...media });
       } catch (e) {
         showDialog(t('chat.ouvertureImpossible'), String(e));
@@ -346,23 +513,41 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
     }
   };
 
+  // Les actions passées aux bulles gardent la même identité d'un rendu à l'autre (elles appellent
+  // toujours la version la plus récente) : une bulle dont le message n'a pas changé n'est pas redessinée.
+  const latestActions = useRef({ openFile, prepareMedia, selectMessage, likeMessage, startReply, jumpTo });
+  latestActions.current = { openFile, prepareMedia, selectMessage, likeMessage, startReply, jumpTo };
+  const bubbleActions = useRef({
+    onJump: (id: string) => latestActions.current.jumpTo(id),
+    onOpenFile: (message: Message, rect: Rect) => void latestActions.current.openFile(message, rect),
+    onPrepareFile: (message: Message) => latestActions.current.prepareMedia(message),
+    onAcceptFile: (message: Message) => chat.acceptFile(message.contact, message.id),
+    onRefuseFile: (message: Message) => chat.refuseFile(message.contact, message.id),
+    onSelect: (message: Message, measure: (done: (rect: Rect) => void) => void) => latestActions.current.selectMessage(message, measure),
+    onDoubleTap: (message: Message) => latestActions.current.likeMessage(message),
+    onReply: (message: Message) => latestActions.current.startReply(message),
+    onShowReactions: (message: Message) => setShowingReactions(message),
+  }).current;
+
   return (
     <Screen edgeToEdgeBottom>
       <View ref={root} collapsable={false} pointerEvents="none" style={StyleSheet.absoluteFill} />
       <BlurTargetView ref={blurTarget} style={styles.flex}>
-        {settings.wallpaper_uri && <Image source={{ uri: settings.wallpaper_uri }} style={styles.wallpaper} resizeMode="cover" />}
-        <ChatHeader contactKey={contactKey} name={name} onBack={onBack} onInfo={onInfo} onCustomize={onCustomize} />
+        {wallpaper && <Image source={{ uri: wallpaper }} style={styles.wallpaper} resizeMode="cover" />}
+        <ChatHeader contactKey={contactKey} name={name} onBack={onBack} onInfo={onInfo} onCustomize={onCustomize} onSearch={() => setSearching(true)} ephemeral={ephemeral} onEphemeral={chooseEphemeral} />
         {/* Le décalage compense la barre d'état, placée au-dessus de la zone floutée. */}
         <KeyboardAvoidingView behavior="padding" keyboardVerticalOffset={topInset} style={styles.flex}>
           <View ref={listArea} collapsable={false} style={styles.flex}>
           {palettes.hasWallpaper && <ComposerFade />}
           <PinnedBanner messages={pinnedMessages} onJump={jumpTo} />
+          <PullView gesture={pull.gesture} offset={pull.offset} indicator={canWrite ? <PullPear offset={pull.offset} dir={-1} kind="ripening" label={(full) => t(full ? (ephemeral ? 'ephemere.relacherCouper' : 'ephemere.relacherActiver') : 'ephemere.tirer')} /> : null}>
           {messages.length === 0 ? (
             <View style={styles.empty}>
-              <MessageCircle size={28} color={colors.textMuted} strokeWidth={1.75} />
-              <Text style={styles.emptyText}>{t('chat.vide')}</Text>
+              <Pear height={56} color={colors.textMuted} state="resting" />
+              <Text style={styles.emptyText}>{isSelf(contactKey) ? t('notes.vide') : t('chat.vide')}</Text>
             </View>
           ) : (
+            <View style={styles.flex}>
             <FlatList
               ref={list}
               inverted
@@ -374,30 +559,32 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
                 list.current?.scrollToOffset({ offset: index * averageItemLength, animated: true });
                 setTimeout(() => list.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true }), JUMP_PULSE_DELAY_MS);
               }}
-              renderItem={({ item, index }) => (
+              renderItem={({ item, index }) => {
+                const album = albumAt(messages, index);
+                return (
                 <Bubble
                   message={item}
+                  album={album}
+                  viewingId={viewing?.message.id}
                   position={groupPosition(messages, index)}
                   avatar={contactPhoto}
                   name={name}
                   palettes={palettes}
                   pulse={pulsing?.id === item.id ? pulsing.token : undefined}
-                  onJump={jumpTo}
-                  hidden={selection?.message.id === item.id && !selection.keepOriginal}
+                  hidden={!!selection && !selection.keepOriginal && (selection.message.id === item.id || !!album?.members.some(({ id }) => id === selection.message.id))}
                   mediaHidden={viewing?.message.id === item.id}
-                  onOpenFile={openFile}
-                  onPrepareFile={prepareMedia}
-                  onAcceptFile={(message) => chat.acceptFile(contactKey, message.id)}
-                  onRefuseFile={(message) => chat.refuseFile(contactKey, message.id)}
-                  onSelect={selectMessage}
-                  onDoubleTap={likeMessage}
-                  onReply={startReply}
-                  onShowReactions={setShowingReactions}
+                  {...bubbleActions}
+                  nextVoice={nextVoice(messages, index)}
                 />
-              )}
+                );
+              }}
+              // Liste inversée : l'en-tête est en bas, juste sous le dernier message.
+              ListHeaderComponent={<TypingBubble typing={!preview && chat.isTyping(contactKey)} palette={palettes.theirs} avatar={contactPhoto} />}
+              onViewableItemsChanged={onViewableItemsChanged}
               contentContainerStyle={styles.list}
               keyboardShouldPersistTaps="handled"
               {...scroll.listProps}
+              {...stickyProps}
               onEndReached={loadOlder}
               onEndReachedThreshold={0.6}
               showsVerticalScrollIndicator
@@ -406,7 +593,14 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
               maxToRenderPerBatch={10}
               windowSize={11}
             />
+            {stickyDay !== '' && (
+              <Animated.View pointerEvents="none" style={[styles.sticky, { opacity: stickyOpacity }]}>
+                <Text style={styles.stickyText}>{stickyDay}</Text>
+              </Animated.View>
+            )}
+            </View>
           )}
+          </PullView>
           <NewMessagesButton count={scroll.newCount} onPress={scroll.scrollToBottom} />
           {/* Menu des pièces jointes ouvert : un appui dans la conversation le referme seulement. */}
           {attachOpen && <Pressable style={StyleSheet.absoluteFill} onPress={() => setAttachOpen(false)} accessibilityLabel={t('commun.fermer')} />}
@@ -423,9 +617,13 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
           {forwarding && (
             <ContactPickerSheet
               title={t('transfert.titre')}
-              contacts={getContactRows()
-                .filter((row) => !isBlocked(row.public_key))
-                .map((row) => ({ publicKey: row.public_key, name: row.name, ...(row.state === 'pending' ? { pending: true } : {}) }))}
+              contacts={[
+                ...getContactRows()
+                  .filter((row) => !isBlocked(row.public_key))
+                  .map((row) => ({ publicKey: row.public_key, name: row.name, ...(row.state === 'pending' ? { pending: true } : {}) })),
+                // Garder un message pour soi : il se transfère aussi vers ses notes.
+                ...(isSelf(contactKey) ? [] : [{ publicKey: SELF, name: t('notes.titre') }]),
+              ]}
               onClose={() => setForwarding(null)}
               onSend={(keys) => {
                 chat
@@ -449,6 +647,8 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
               <Text style={styles.pendingText}>{notice.text}</Text>
             </View>
           ) : (
+            <>
+            {draftPreview.current && <DraftPreviewCard key={draftPreview.current.url} draft={draftPreview.current} onDismiss={draftPreview.dismiss} />}
             <Composer
               name={name}
               draft={draft}
@@ -472,9 +672,15 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
                 setGalleryOpen(true);
               }}
               onFile={pickDocument}
-              onVoiceRecorded={(uri, seconds) => sendPicked({ uri, name: `vocal-${seconds}s.m4a`, size: 0, mime: 'audio/mp4', kind: 'audio' })}
+              onLocation={isSelf(contactKey) ? undefined : shareLocation}
+              onStickers={() => {
+                setAttachOpen(false);
+                setStickersOpen(true);
+              }}
+              onVoiceRecorded={(uri, seconds, wave) => sendPicked({ uri, name: `vocal-${seconds}s.m4a`, size: 0, mime: 'audio/mp4', kind: 'audio', ...(wave ? { meta: { wave } } : {}) })}
               onVoiceTooShort={() => setToast({ text: t('chat.maintenirMicro'), token: Date.now() })}
             />
+            </>
           )}
         </KeyboardAvoidingView>
       </BlurTargetView>
@@ -494,13 +700,48 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
           onClose={closeSelection}
         />
       )}
-      {viewing && <MediaViewer viewing={viewing} onClose={() => setViewing(null)} />}
-      {galleryOpen && <MediaPicker onPick={sendFromGallery} onClose={() => setGalleryOpen(false)} />}
+      {viewing && (
+        <MediaViewer
+          viewing={viewing}
+          onClose={() => {
+            // Vue unique : refermée, elle est effacée de ce téléphone.
+            if (viewing.message.view_once) chat.closeOnce(contactKey, viewing.message.id);
+            setViewing(null);
+          }}
+        />
+      )}
+      {stickersOpen && (
+        <StickerSheet
+          onClose={() => setStickersOpen(false)}
+          // Envoyé comme une image : le fichier du sticker reste sur le téléphone (copié, jamais déplacé).
+          onSend={(sticker) => sendPicked({ uri: sticker.uri, name: 'sticker.png', size: 0, mime: 'image/png', kind: 'image', keepSource: true, meta: { sticker: true } })}
+        />
+      )}
+      {searching && <ChatSearch contactKey={contactKey} name={name} onClose={() => setSearching(false)} onPick={jumpTo} />}
+      {galleryOpen && <MediaPicker onPick={sendFromGallery} onClose={() => setGalleryOpen(false)} allowOnce={!isSelf(contactKey)} />}
     </Screen>
   );
 }
 
+const STICKY_HIDE_MS = 800;
+
 const useLocalStyles = createStyles((colors) => ({
+  sticky: {
+    position: 'absolute',
+    top: spacing.sm,
+    alignSelf: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+    backgroundColor: colors.background,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  stickyText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: colors.textMuted,
+  },
   pendingBar: {
     gap: 2,
     paddingHorizontal: spacing.lg,

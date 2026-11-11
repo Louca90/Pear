@@ -5,6 +5,7 @@ import { Bell, ChevronRight, ImageMinus, Images, LucideIcon, User } from 'lucide
 
 import { getConversationSettings, setConversationSetting } from '../chat/database';
 import { chat, PickedFile } from '../chat/manager';
+import { useMediaUri } from '../chat/media';
 import { showDialog } from '../components/dialog';
 import { MediaPicker } from '../components/MediaPicker';
 import { resizeImage } from '../../modules/pear-native';
@@ -62,6 +63,8 @@ export function CustomizeScreen({ contactKey, name, onBack, onInfo, onNotificati
   useSyncExternalStore(chat.subscribe, chat.getVersion);
 
   const settings = getConversationSettings(contactKey);
+  // Fond chiffré sur le disque (lot 2.3) : affiché depuis sa copie déchiffrée.
+  const wallpaper = useMediaUri(settings.wallpaper_uri, { scope: 'app' });
   const mine = bubblePalette((target === 'my_bubble' && draft) || (settings.my_bubble ?? colors.bubbleMine));
   const theirs = bubblePalette((target === 'their_bubble' && draft) || (settings.their_bubble ?? colors.bubbleTheirs));
 
@@ -102,7 +105,7 @@ export function CustomizeScreen({ contactKey, name, onBack, onInfo, onNotificati
       <Header title={t('perso.titre')} subtitle={name} onBack={onBack} />
       <ScrollView contentContainerStyle={styles.content} scrollEnabled={draft === null}>
         <View style={styles.preview}>
-          {settings.wallpaper_uri && <Image source={{ uri: settings.wallpaper_uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />}
+          {wallpaper && <Image source={{ uri: wallpaper }} style={StyleSheet.absoluteFill} resizeMode="cover" />}
           <View style={[styles.previewBubble, styles.previewTheirs, { backgroundColor: theirs.background }]}>
             <Text style={{ color: theirs.text }}>{t('perso.lisible')}</Text>
           </View>

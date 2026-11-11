@@ -1,5 +1,56 @@
 # Journal des versions
 
+## 1.6.0 (versionCode 9)
+
+### Résumé
+
+- Messages éphémères et photos à vue unique : en bas d'une conversation, tirez vers le haut pour activer ou couper les messages qui s'effacent tout seuls.
+- Recherche dans les messages, notes à moi-même, albums photo, stickers maison, aperçu des liens et vocaux avec forme d'onde et vitesse de lecture.
+- Nouvelle interface : couleur poire, coches « lu » animées, bulle « écrit… », poire animée (tirer pour actualiser, transferts, écrans vides).
+- Sécurité : verrou par empreinte, base de messages et fichiers chiffrés sur le téléphone, mises à jour signées.
+- Pear est plus rapide à l'ouverture des conversations et de l'accueil.
+
+### Détails
+
+#### Nouveautés
+
+- Messages éphémères : minuteur par conversation (1 heure, 1 jour, 1 semaine), activé ou coupé par les deux en tirant vers le haut en bas de la conversation ; un message l'annonce chez les deux, et les bulles éphémères sont cernées de pointillés.
+- Photo ou vidéo à vue unique (bouton « 1 » dans la galerie de la conversation) : ouverte une seule fois, puis effacée des deux téléphones.
+- Recherche de messages, dans une conversation (loupe) et partout depuis l'accueil, sans tenir compte des accents.
+- Notes à moi-même : une conversation qui ne quitte jamais le téléphone.
+- Albums : plusieurs photos envoyées ensemble s'affichent en grille.
+- Stickers maison : découpez au doigt un sujet dans une photo, gardé sur le téléphone.
+- Aperçu des liens (titre et image), préparé par l'expéditeur seulement ; désactivable dans Paramètres > Confidentialité.
+- Vocaux : forme d'onde, vitesse ×1 / ×1,5 / ×2, reprise de la lecture, enchaînement des vocaux à la suite.
+- Position en direct (15 min, 1 h, 8 h), envoyée seulement par la connexion directe.
+- Miniature floue pendant la réception d'une photo ou d'une vidéo.
+- Accueil : tirer vers le bas pour actualiser, glisser une ligne pour épingler ou marquer lu, anneau « en ligne » autour des photos, « écrit… » et « Brouillon : » dans la liste.
+- Conversation : bulle « écrit… », date collante pendant le défilement, emoji seul en grand, sons d'envoi et de réception (désactivables), coches « lu » en couleur poire.
+- La poire s'anime : elle mûrit pendant un transfert ou une mise à jour, se fait croquer quand on actualise, pousse une feuille pour un contact vérifié.
+- « Quoi de neuf » après une mise à jour et « Découvrir Pear » dans les Paramètres, avec des démos animées.
+- Filtres d'ambiance de la caméra : Heure, Date et Pellicule redessinés, nouveaux filtres Jour, Lieu, Série et Batterie.
+- Menu Partager d'Android : les contacts récents apparaissent avec leur photo de profil.
+- Paramètres : taille du texte (4 crans), écran « Ce que les serveurs voient », luminosité au maximum sur « Mon QR ».
+- Verrou de l'app par empreinte ou code du téléphone, captures d'écran bloquées, clavier incognito.
+
+#### Corrections
+
+- Vocaux en thème sombre : bouton, barres et vitesse bien visibles sur toutes les couleurs de bulle.
+- Fichier à accepter : carte compacte qui tient sur les petits écrans, et notification même quand il arrive pendant que Pear est fermé.
+- « Brouillon : » sur l'accueil n'abîme plus le texte.
+- Caméra : zoom et cadenas du déclencheur ne se déclenchent plus ensemble sur une diagonale.
+- Conversation cassée : après 3 messages indéchiffrables, « Réparer la conversation » relance l'échange de clés.
+- Mise à jour : après 3 échecs d'installation, « Continuer pour cette fois ».
+
+#### Technique
+
+- Base SQLite chiffrée (SQLCipher) et fichiers chiffrés sur le disque ; migrations 14 à 17 (recherche FTS5, `meta`, `album`, messages éphémères), sans perte.
+- Release signée Ed25519 (versionCode + sha256) : une release sans signature valide est ignorée.
+- Cache de lecture de la base, bulles et lignes de l'accueil mémoïsées.
+- Gestes de tirage avec react-native-gesture-handler.
+- Serveur : nettoyage réservé au cron, budget du relais borné.
+- Natif : `batteryStatus`, `lastKnownLocation`, icônes rondes des raccourcis de partage.
+
 ## 1.5.1 (versionCode 8)
 
 ### Résumé

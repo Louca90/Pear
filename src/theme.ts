@@ -335,9 +335,41 @@ function luminance(hex: string) {
 export function readableOn(background: string): BubblePalette {
   const level = luminance(background);
   const whiteWins = 1.05 / (level + 0.05) > (level + 0.05) / 0.05;
+  // La piste (bouton du vocal, barres pas encore écoutées, barre de transfert) est le fond de la bulle
+  // tiré vers la couleur du texte : elle se détache toujours, sur une bulle claire comme sur une foncée.
   return whiteWins
-    ? { background, text: light.background, muted: light.onDarkMuted, track: light.onDarkTrack }
-    : { background, text: light.text, muted: light.textMuted, track: light.border };
+    ? { background, text: light.background, muted: light.onDarkMuted, track: mix(background, fixed.white, 0.26) }
+    : { background, text: light.text, muted: light.textMuted, track: mix(background, fixed.black, 0.16) };
+}
+
+// Mélange deux couleurs « #RRGGBB » : `amount` = part de la seconde, de 0 à 1.
+export function mix(from: string, to: string, amount: number) {
+  const channel = (start: number) => {
+    const a = parseInt(from.slice(start, start + 2), 16);
+    const b = parseInt(to.slice(start, start + 2), 16);
+    return Math.round(a + (b - a) * amount)
+      .toString(16)
+      .padStart(2, '0');
+  };
+  return `#${channel(1)}${channel(3)}${channel(5)}`;
+}
+
+function contrast(a: string, b: string) {
+  const [high, low] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (high + 0.05) / (low + 0.05);
+}
+
+// Bulle d'un message éphémère : vide, cernée de pointillés de la couleur de la bulle normale. On la
+// reconnaît d'un coup d'œil, sans nouvelle couleur. Si la bulle normale se confond avec le fond de
+// l'app (bulle reçue par défaut), le contour prend le gris du texte secondaire.
+export type EphemeralBubble = BubblePalette & { border: string };
+
+export function ephemeralBubble(base: BubblePalette, colors: Palette): EphemeralBubble {
+  return {
+    ...readableOn(colors.background),
+    muted: colors.textMuted,
+    border: contrast(base.background, colors.background) >= 1.6 ? base.background : colors.textMuted,
+  };
 }
 
 export const bubblePalette = readableOn;

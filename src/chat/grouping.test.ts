@@ -1,4 +1,5 @@
 import { describe, expect, it } from '@jest/globals';
+import { albumAt } from './grouping';
 
 import { GROUP_GAP_MS, groupPosition, sameGroup, SessionTracker } from './grouping';
 
@@ -49,5 +50,32 @@ describe('SessionTracker', () => {
     sessions.forget('a');
     expect(sessions.current('a', 'direct', at + 10 * GROUP_GAP_MS + 1000)).not.toBe(second);
     expect(sessions.current('a', 'remote', at)).not.toBe(sessions.current('b', 'remote', at + 1));
+  });
+});
+
+describe('albumAt', () => {
+  const media = (id: string, album: string | null, extra: Record<string, unknown> = {}) => ({ id, mine: 1, kind: 'image', status: 'delivered', album, file_uri: 'file:///x', ...extra });
+  // Liste inversée : le plus récent d'abord.
+  const list = [media('c', 'A'), media('b', 'A'), media('a', 'A'), { ...media('t', null), kind: 'text' }, media('seul', 'B')];
+
+  it('regroupe les médias voisins du même album, le plus récent dessine la grille', () => {
+    expect(albumAt(list, 0)).toEqual({ lead: true, members: [list[2], list[1], list[0]] });
+    expect(albumAt(list, 1)?.lead).toBe(false);
+    expect(albumAt(list, 2)?.members.map((m) => m.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('laisse en bulle un message hors album ou seul dans le sien', () => {
+    expect(albumAt(list, 3)).toBeNull();
+    expect(albumAt(list, 4)).toBeNull();
+  });
+
+  it('ne fait pas de grille si un média attend un accord, est refusé ou supprimé', () => {
+    expect(albumAt([media('b', 'A', { status: 'offered' }), media('a', 'A')], 1)).toBeNull();
+    expect(albumAt([media('b', 'A', { file_uri: null }), media('a', 'A')], 0)).toBeNull();
+    expect(albumAt([media('b', 'A', { status: 'receiving' }), media('a', 'A')], 0)?.members).toHaveLength(2);
+  });
+
+  it('ne mélange pas les médias de deux auteurs', () => {
+    expect(albumAt([media('b', 'A', { mine: 0 }), media('a', 'A')], 0)).toBeNull();
   });
 });

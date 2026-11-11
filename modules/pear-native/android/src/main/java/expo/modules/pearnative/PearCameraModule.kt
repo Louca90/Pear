@@ -26,6 +26,9 @@ class PearCameraModule : Module() {
       }
     }
 
+    // Une image de la fois d'avant est gardée : l'écran peut s'afficher tout de suite.
+    Function("hasLastFrame") { lastCameraFrame != null }
+
     // Les objectifs que le téléphone ouvre aux applications : côté, plage de zoom et angle de champ
     // (largeur du capteur / focale : plus c'est grand, plus l'image est large).
     Function("lenses") {
@@ -34,7 +37,7 @@ class PearCameraModule : Module() {
     }
 
     View(PearCameraView::class) {
-      Events("onReady", "onCameraError")
+      Events("onReady", "onCameraError", "onFrame")
 
       Prop("facing") { view: PearCameraView, facing: String -> view.setFacing(facing) }
       Prop("cameraId") { view: PearCameraView, id: String? -> view.setCameraId(id) }
@@ -47,6 +50,10 @@ class PearCameraModule : Module() {
 
       OnViewDidUpdateProps { view -> view.applyChanges() }
       OnViewDestroys { view -> view.release() }
+
+      AsyncFunction("setZoom") { view: PearCameraView, zoom: Float ->
+        view.setZoomDirect(zoom)
+      }.runOnQueue(Queues.MAIN)
 
       AsyncFunction("takePicture") { view: PearCameraView, maxSize: Int, quality: Int, promise: Promise ->
         view.takePicture(maxSize, quality, promise)

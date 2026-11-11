@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '../../haptics';
 
 import { t, TextKey } from '../../i18n';
-import { log } from '../../log';
 import { createMediaStyles, radius, spacing } from '../../theme';
 
 const OPEN_MS = 240;
@@ -46,7 +45,7 @@ export function StickerPicker({ bottom, onPick, onClose }: Props) {
   };
 
   const pick = (emoji: string) => {
-    Haptics.selectionAsync().catch((e) => log.warn('vibration', e));
+    haptics.select();
     close(() => onPick(emoji));
   };
 

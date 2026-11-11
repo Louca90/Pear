@@ -1,6 +1,6 @@
 import { describe, expect, it } from '@jest/globals';
 
-import { matchesSearch, previewFor, relativeTime } from './listFormat';
+import { matchesSearch, previewFor, relativeTime, ringDelay, swipeOutcome } from './listFormat';
 
 describe('liste des conversations', () => {
   const last = (mine: number) => ({ mine, created_at: 1000 });
@@ -32,5 +32,20 @@ describe('liste des conversations', () => {
     expect(matchesSearch('Élodie', 'LOD')).toBe(true);
     expect(matchesSearch('Élodie', 'marc')).toBe(false);
     expect(matchesSearch('Élodie', '  ')).toBe(true);
+  });
+});
+
+describe('glissement et anneau', () => {
+  it('décide de l’action au seuil de 72 points', () => {
+    expect(swipeOutcome(71, true)).toBeNull();
+    expect(swipeOutcome(72, false)).toBe('pin');
+    expect(swipeOutcome(-72, true)).toBe('read');
+    expect(swipeOutcome(-100, false)).toBeNull();
+  });
+
+  it('décale chaque anneau de 40 ms, sans dépasser un plafond', () => {
+    expect(ringDelay(0)).toBe(0);
+    expect(ringDelay(3)).toBe(120);
+    expect(ringDelay(500)).toBe(480);
   });
 });

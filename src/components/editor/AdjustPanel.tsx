@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, PanResponder, Pressable, Text, View } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '../../haptics';
 
 import { t } from '../../i18n';
-import { log } from '../../log';
 import { createMediaStyles, radius, spacing, useMediaColors } from '../../theme';
 import { ADJUSTMENTS, Adjustments, NO_ADJUSTMENTS } from './filters';
 
@@ -25,7 +24,7 @@ function CenteredSlider({ value, label, onChange }: { value: number; label: stri
     if (track <= 0) return;
     let next = Math.max(-1, Math.min(1, (x / track) * 2 - 1));
     if (Math.abs(next) < SNAP) next = 0;
-    if (next === 0 && previous !== 0) Haptics.selectionAsync().catch((e) => log.warn('vibration', e));
+    if (next === 0 && previous !== 0) haptics.select();
     change(Math.round(next * 100) / 100);
   };
 
@@ -98,10 +97,10 @@ export function AdjustPanel({ value, bottom, onChange, onClose }: Props) {
         </View>
       ))}
       <View style={styles.actions}>
-        <Pressable onPress={() => onChange(NO_ADJUSTMENTS)} style={({ pressed }) => [styles.action, pressed && styles.pressed]}>
+        <Pressable accessibilityRole="button" accessibilityLabel={t('editeur.reinitialiser')} onPress={() => onChange(NO_ADJUSTMENTS)} style={({ pressed }) => [styles.action, pressed && styles.pressed]}>
           <Text style={styles.actionLabel}>{t('editeur.reinitialiser')}</Text>
         </Pressable>
-        <Pressable onPress={close} style={({ pressed }) => [styles.action, styles.done, pressed && styles.pressed]}>
+        <Pressable accessibilityRole="button" accessibilityLabel={t('editeur.termine')} onPress={close} style={({ pressed }) => [styles.action, styles.done, pressed && styles.pressed]}>
           <Text style={[styles.actionLabel, { color: colors.text }]}>{t('editeur.termine')}</Text>
         </Pressable>
       </View>

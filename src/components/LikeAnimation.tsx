@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Animated, Easing, StyleSheet, View, ViewStyle } from 'react-native';
 import { Heart } from 'lucide-react-native';
+import { fixed } from '../theme';
 
 const HEART_MS = 700;
 const MAX_HEARTS = 3;
-const HEART_COLOR = '#FF3B5C';
+const HEART_COLOR = fixed.heart;
 
 // « Réduire les animations » du système : un simple fondu, sans mouvement.
 let reduceMotion = false;

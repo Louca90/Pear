@@ -2,9 +2,11 @@ import { fetchContactToken } from '../../network/tokens';
 import { PushResult, sendPush } from '../../network/wake';
 import { deleteContactToken, getContactToken, getOutboxEvents, getUndelivered, setContactToken } from '../database';
 import { encodePushPayload } from '../pushPayload';
+import { parseMeta } from '../meta';
 
 import { ChatCore } from './core';
 import { pushKeysFor, sealSecure } from './secure';
+import { textPayload } from './payloads';
 import { WAKE_INTERVAL_MS } from './types';
 import { log } from '../../log';
 
@@ -64,10 +66,12 @@ async function pushPending(core: ChatCore, contact: string, token: string) {
   const keys = pushKeysFor(core, contact);
   let needsWake = false;
   let sent = 0;
-  const send = async (id: string, message: Record<string, unknown>) => {
+  // lighter : le même message allégé (aperçu de lien sans son image), essayé si le premier ne tient pas dans un push.
+  const send = async (id: string, message: Record<string, unknown>, lighter?: Record<string, unknown>) => {
     if (core.pushed.has(id)) return true;
     if (sent >= MAX_PUSHES_PER_ROUND) return false;
-    const payload = encodePushPayload(keys.tag, keys.key, sealSecure(core, contact, message));
+    let payload = encodePushPayload(keys.tag, keys.key, sealSecure(core, contact, message));
+    if (!payload && lighter) payload = encodePushPayload(keys.tag, keys.key, sealSecure(core, contact, lighter));
     if (!payload) {
       needsWake = true;
       return true;
@@ -82,7 +86,9 @@ async function pushPending(core: ChatCore, contact: string, token: string) {
       needsWake = true;
       continue;
     }
-    if (!(await send(message.id, { type: 'message', id: message.id, text: message.text, reply_to: message.reply_to, ...(message.forwarded ? { forwarded: true } : {}) }))) return;
+    const meta = message.meta ? parseMeta(message.meta) : null;
+    const lighter = meta?.preview?.image ? { ...textPayload(message, false), meta: { ...meta, preview: { ...meta.preview, image: undefined } } } : undefined;
+    if (!(await send(message.id, textPayload(message), lighter))) return;
   }
   for (const event of getOutboxEvents(contact)) {
     if (!(await send(event.id, { type: 'event', eventId: event.id, ...JSON.parse(event.payload) }))) return;

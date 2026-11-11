@@ -5,7 +5,7 @@ import { t } from '../i18n';
 import { createStyles, radius, spacing, useColors } from '../theme';
 
 // Champ de recherche compact (conversations, contacts) : loupe, texte, croix pour effacer.
-export function SearchField({ value, onChange, placeholder }: { value: string; onChange: (text: string) => void; placeholder: string }) {
+export function SearchField({ value, onChange, placeholder, autoFocus }: { value: string; onChange: (text: string) => void; placeholder: string; autoFocus?: boolean }) {
   const colors = useColors();
   const styles = useStyles();
   return (
@@ -18,6 +18,7 @@ export function SearchField({ value, onChange, placeholder }: { value: string; o
         placeholder={placeholder}
         placeholderTextColor={colors.textMuted}
         returnKeyType="search"
+        autoFocus={autoFocus}
       />
       {value.length > 0 && (
         <Pressable onPress={() => onChange('')} hitSlop={8} accessibilityLabel={t('liste.effacer')}>

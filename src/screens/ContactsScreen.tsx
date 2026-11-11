@@ -7,14 +7,16 @@ import { getContactProfile, getPendingRequests } from '../chat/database';
 import { chat } from '../chat/manager';
 import { useBottomBarSpace } from '../components/BottomBar';
 import { showDialog } from '../components/dialog';
+import { OnlineRing, useRingArrival } from '../components/OnlineRing';
 import { MyQrSheet } from '../components/MyQrSheet';
 import { SearchField } from '../components/SearchField';
+import { EmptyState } from '../components/EmptyState';
 import { Avatar, Button, Header, IconButton, RowPressable, Screen } from '../components/ui';
 import { PairingLink, parsePairingLink } from '../crypto/pairing';
 import { t } from '../i18n';
 import { Contact } from '../storage';
 import { createStyles, radius, spacing, useColors } from '../theme';
-import { matchesSearch } from './home/listFormat';
+import { matchesSearch, ringDelay } from './home/listFormat';
 
 type Props = {
   publicKey: string;
@@ -36,6 +38,7 @@ export function ContactsScreen({ publicKey, contacts, onScan, onKeyReceived, onR
   const [query, setQuery] = useState('');
   const [showingCode, setShowingCode] = useState(false);
   const requests = getPendingRequests().length;
+  const arriving = useRingArrival();
 
   const pasteLink = async () => {
     const link = parsePairingLink(await Clipboard.getStringAsync());
@@ -79,10 +82,12 @@ export function ContactsScreen({ publicKey, contacts, onScan, onKeyReceived, onR
         ListHeaderComponent={header}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingBottom: barSpace }}
-        ListEmptyComponent={<Text style={styles.empty}>{query.trim() ? t('liste.aucunTrouve') : t('contacts.aucun')}</Text>}
-        renderItem={({ item }) => (
+        ListEmptyComponent={<EmptyState label={query.trim() ? t('liste.aucunTrouve') : t('contacts.aucun')} />}
+        renderItem={({ item, index }) => (
           <RowPressable onPress={() => onOpenContact(item)} style={styles.contact}>
-            <Avatar uri={getContactProfile(item.publicKey).photo_uri} size={40} />
+            <OnlineRing online={!item.pending && chat.isContactOnline(item.publicKey)} size={40} delay={ringDelay(index)} trace={arriving.current}>
+              <Avatar uri={getContactProfile(item.publicKey).photo_uri} size={40} />
+            </OnlineRing>
             <View style={styles.flex}>
               <Text style={styles.name} numberOfLines={1}>
                 {item.name}
@@ -157,12 +162,7 @@ const useStyles = createStyles((colors) => ({
     fontSize: 13,
     color: colors.textMuted,
   },
-  empty: {
-    textAlign: 'center',
-    fontSize: 15,
-    color: colors.textMuted,
-    marginTop: spacing.lg,
-  },
+
   pressed: {
     opacity: 0.6,
   },

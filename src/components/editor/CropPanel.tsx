@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Image, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '../../haptics';
 import { RotateCw } from 'lucide-react-native';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
 
 import { t } from '../../i18n';
-import { log } from '../../log';
 import { createMediaStyles, radius, spacing, useMediaColors } from '../../theme';
 import { IconButton, useInsets } from '../ui';
 import { Aspect, ASPECTS, Crop, fullRect, nextRotation, NO_CROP, Rect, rotatedSize } from './crop';
@@ -61,7 +60,7 @@ function AspectIcon({ id, ratio, color }: { id: Aspect; ratio: number | null; co
 type Mode = 'move' | 'tl' | 'tr' | 'bl' | 'br' | 't' | 'b' | 'l' | 'r' | null;
 
 function vibrate() {
-  Haptics.selectionAsync().catch((e) => log.warn('vibration', e));
+  haptics.select();
 }
 
 type Props = {
@@ -244,7 +243,7 @@ export function CropPanel({ uri, image, crop: initial, bottom, onDone, lockedAsp
         <IconButton onPress={rotate} label={t('editeur.tourner')} style={styles.round}>
           <RotateCw size={22} color={colors.background} strokeWidth={1.75} />
         </IconButton>
-        <Pressable onPress={finish} style={styles.done}>
+        <Pressable accessibilityRole="button" accessibilityLabel={t('editeur.termine')} onPress={finish} style={styles.done}>
           <Text style={styles.doneLabel}>{t('editeur.termine')}</Text>
         </Pressable>
       </View>
@@ -277,6 +276,8 @@ export function CropPanel({ uri, image, crop: initial, bottom, onDone, lockedAsp
             setAspect('free');
             swap(NO_CROP);
           }}
+          accessibilityRole="button"
+          accessibilityLabel={t('editeur.reinitialiser')}
           style={({ pressed }) => [styles.reset, pressed && styles.pressed]}
         >
           <Text style={styles.resetLabel}>{t('editeur.reinitialiser')}</Text>

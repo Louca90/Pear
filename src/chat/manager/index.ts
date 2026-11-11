@@ -5,8 +5,10 @@ import { Identity } from '../../crypto/pairing';
 import { PeerStatus, RouteType } from '../../network/peer';
 import { Contact, loadContacts, loadOrCreateIdentity, saveContacts } from '../../storage';
 import { t } from '../../i18n';
-import { addMessage, blockKey, deleteMessage, deleteRelayIncoming, editMessage, getMessage, getPendingRequests, getRelayIncoming, unblockKey, markConversationRead, Message, addScheduledMessage, getDueScheduled, releaseScheduled, setConversationSetting, setMessagePinned, setIncomingStatus, setReaction } from '../database';
+import { addMessage, blockKey, dropMessageFile, getExpiredMessages, getSpentOnce, markOnceOpened, deleteMessage, deleteRelayIncoming, editMessage, getMessage, getPendingRequests, getRelayIncoming, unblockKey, markConversationRead, Message, addScheduledMessage, getDueScheduled, releaseScheduled, setConversationSetting, setMessagePinned, setIncomingStatus, setReaction, setStatus } from '../database';
 import { clearMessageNotification } from '../notifications';
+import { encodeMeta, MessageMeta, parseMeta } from '../meta';
+import { isSelf } from '../self';
 
 import { deleteRelay } from '../../network/relay';
 import { unpublishToken } from '../../network/tokens';
@@ -15,7 +17,9 @@ import { parisNow } from '../../time';
 
 import { publishMyToken, retryAll, watch } from './connections';
 import { ChatCore } from './core';
-import { addSystemMessage, flush, sendEvent } from './outbox';
+import { addSystemMessage, applyEphemeral, ephemeralFor, ephemeralSettingTime, flush, lastEphemeralChoice, sendEvent } from './outbox';
+import { expiryFor } from '../ephemeral';
+import { sharedLocationId, startLocation, stopLocation, tickLocations } from './location';
 import { isRepairPending, requestRepair } from './sessions';
 import { getMyProfile, saveProfile, shareProfile } from './profile';
 import { acceptFile, closeIncomingFiles, dropIncomingFile, refuseFile, sendFile } from './transfers';
@@ -49,10 +53,13 @@ class ChatManager extends ChatCore {
     }
     publishMyToken(this);
     this.releaseDueScheduled();
+    this.purge();
     reconcile(this);
     if (!this.wakeTimer) {
       this.wakeTimer = setInterval(() => {
         this.releaseDueScheduled();
+        this.purge();
+        tickLocations(this);
         reconcile(this);
         this.names.forEach((_, contact) => {
           wakeIfNeeded(this, contact);
@@ -82,6 +89,7 @@ class ChatManager extends ChatCore {
       return;
     }
     receivePush(this, data);
+    this.purge();
     await settlePushAcks(this);
   }
 
@@ -285,17 +293,23 @@ class ChatManager extends ChatCore {
     return isRepairPending(contact);
   }
 
-  send(contact: string, text: string, replyTo: string | null = null, forwarded = false) {
+  // meta : l'aperçu du lien préparé pendant la saisie (lot 4.3).
+  send(contact: string, text: string, replyTo: string | null = null, forwarded = false, meta: MessageMeta | null = null) {
+    const now = Date.now();
     addMessage({
       id: to_base64(randombytes_buf(16)),
       contact,
       mine: 1,
       text,
-      status: 'sending',
-      created_at: Date.now(),
+      // Notes à moi-même : enregistré sur ce téléphone, sans rien envoyer.
+      status: isSelf(contact) ? 'read' : 'sending',
+      created_at: now,
+      // Conversation en mode éphémère : le message porte sa durée de vie.
+      expires_at: expiryFor(now, ephemeralFor(contact)),
       reply_to: replyTo,
       forwarded: forwarded ? 1 : 0,
       conn_session: this.sessionFor(contact),
+      meta: encodeMeta(meta),
     });
     this.afterSend(contact);
     flush(this, contact);
@@ -326,8 +340,10 @@ class ChatManager extends ChatCore {
   // Transférer un message : mention « Transféré », sans la citation. Un fichier repart du fichier
   // local, copié et chiffré avec une nouvelle clé pour chaque destinataire (chemin d'envoi normal).
   async forward(message: Message, contacts: string[]) {
+    // L'aperçu du lien, la forme d'onde et la miniature floue suivent le message transféré.
+    const meta = parseMeta(message.meta);
     for (const contact of contacts) {
-      if (message.kind === 'text') this.send(contact, message.text, null, true);
+      if (message.kind === 'text') this.send(contact, message.text, null, true, meta);
       else if (message.file_uri) {
         await this.sendFile(contact, {
           uri: message.file_uri,
@@ -336,6 +352,7 @@ class ChatManager extends ChatCore {
           mime: message.file_mime,
           kind: message.kind,
           forwarded: true,
+          meta,
         });
       }
     }
@@ -349,6 +366,7 @@ class ChatManager extends ChatCore {
 
   sendScheduledNow(contact: string, id: string) {
     releaseScheduled(id, contact, Date.now(), this.sessionFor(contact));
+    if (isSelf(contact)) setStatus(id, contact, 'read');
     this.afterSend(contact);
     flush(this, contact);
     wakeIfNeeded(this, contact);
@@ -368,12 +386,30 @@ class ChatManager extends ChatCore {
     sendEvent(this, contact, { action: 'pin', id, pinned });
   }
 
+  // --- Position en direct (lot 4.8) ---
+
+  // Partage ma position avec ce contact pendant `seconds`, seulement par la connexion directe.
+  // false si le téléphone ne donne aucune position.
+  startLocation(contact: string, seconds: number) {
+    if (isSelf(contact)) return false;
+    const started = startLocation(this, contact, seconds);
+    if (started) reconcile(this);
+    return started;
+  }
+
+  stopLocation(contact: string) {
+    stopLocation(this, contact);
+  }
+
   deleteForEveryone(contact: string, id: string) {
+    // Supprimer le message de ma position arrête aussi le partage.
+    if (sharedLocationId(contact) === id) stopLocation(this, contact);
     deleteMessage(id, contact, 1);
     sendEvent(this, contact, { action: 'delete', id });
   }
 
   deleteForMe(contact: string, id: string) {
+    if (sharedLocationId(contact) === id) stopLocation(this, contact);
     dropIncomingFile(this, contact, id);
     deleteMessage(id, contact);
     this.notify();
@@ -432,6 +468,61 @@ class ChatManager extends ChatCore {
       deleteRelayIncoming(id, contact);
     }
     refuseFile(this, contact, id);
+  }
+
+  // --- Messages éphémères et vue unique (lot 4.7) ---
+
+  // Règle le minuteur de la conversation (secondes, 0 pour couper) : appliqué ici, annoncé par un
+  // message système et synchronisé avec le contact par un événement chiffré.
+  setEphemeral(contact: string, seconds: number) {
+    if (isSelf(contact)) return;
+    const at = ephemeralSettingTime(contact);
+    applyEphemeral(contact, seconds, at, 1);
+    sendEvent(this, contact, { action: 'ephemeral', id: '', seconds, at });
+  }
+
+  // Le geste : active avec la dernière durée choisie, ou coupe. Renvoie le nouvel état.
+  toggleEphemeral(contact: string) {
+    const next = ephemeralFor(contact) ? 0 : lastEphemeralChoice(contact);
+    this.setEphemeral(contact, next);
+    return next;
+  }
+
+  getEphemeral(contact: string) {
+    return ephemeralFor(contact);
+  }
+
+  // Média à vue unique qu'on ouvre : il compte comme vu dès l'ouverture, et l'expéditeur est prévenu.
+  openOnce(contact: string, id: string) {
+    markOnceOpened(id, contact);
+    sendEvent(this, contact, { action: 'viewed', id });
+  }
+
+  // Visionneuse refermée : le fichier est effacé de ce téléphone.
+  closeOnce(contact: string, id: string) {
+    dropMessageFile(id, contact);
+    this.notify();
+  }
+
+  // Efface ce qui doit l'être : messages éphémères arrivés à leur heure, fichiers à vue unique qui
+  // n'ont plus à rester. Au lancement, à chaque tour d'horloge (15 s) et à chaque push reçu.
+  purge() {
+    let changed = false;
+    for (const { id, contact } of getExpiredMessages(Date.now())) {
+      dropIncomingFile(this, contact, id);
+      deleteMessage(id, contact);
+      changed = true;
+    }
+    for (const { id, contact } of getSpentOnce()) {
+      dropMessageFile(id, contact);
+      changed = true;
+    }
+    if (changed) this.notify();
+  }
+
+  // Identifiant d'un nouvel album (lot 4.5).
+  newAlbumId() {
+    return to_base64(randombytes_buf(16));
   }
 
   sendFile(contact: string, file: PickedFile) {

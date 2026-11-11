@@ -6,6 +6,8 @@ import { useVideoPlayer, VideoPlayer, VideoView } from 'expo-video';
 import { Pause, Play, X } from 'lucide-react-native';
 
 import { Message } from '../../../chat/database';
+import { openMedia } from '../../../chat/media';
+import { log } from '../../../log';
 import { IconButton, useNavigationBarHeight } from '../../../components/ui';
 import { createMediaStyles, radius, spacing, useMediaColors } from '../../../theme';
 
@@ -98,9 +100,24 @@ export function MediaViewer({ viewing: { message, rect, poster, size }, onClose 
   const [closing, setClosing] = useState(false);
   const [frameReady, setFrameReady] = useState(false);
   const { width, height } = Dimensions.get('screen');
-  const player = useVideoPlayer(isVideo ? message.file_uri : null, (created) => {
+  const player = useVideoPlayer(null, (created) => {
     created.timeUpdateEventInterval = 0.25;
   });
+
+  // La vidéo est chiffrée sur le disque (lot 2.3) : le lecteur reçoit sa copie déchiffrée dès qu'elle est
+  // prête (la miniature reste affichée en attendant, la lecture automatique attend readyToPlay).
+  useEffect(() => {
+    if (!isVideo || !message.file_uri) return;
+    let cancelled = false;
+    openMedia(message.file_uri, { mime: message.file_mime })
+      .then((uri) => {
+        if (!cancelled) player.replace(uri);
+      })
+      .catch((e) => log.warn('ouverture de la vidéo', e));
+    return () => {
+      cancelled = true;
+    };
+  }, [isVideo, message.file_uri, message.file_mime, player]);
 
   // Lecture automatique à l'ouverture : si la vidéo n'était pas encore prête quand on a demandé la
   // lecture, elle démarre dès qu'elle l'est (une seule fois : une pause de l'utilisateur est respectée).

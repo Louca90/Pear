@@ -30,6 +30,10 @@ type Callbacks = {
   onRoute: (route: RouteType | null) => void;
   onMessage: (message: unknown) => void;
   onBytes: (bytes: Uint8Array) => void;
+  // Pear est-il au premier plan ? Annoncé dans chaque battement de coeur.
+  isForeground: () => boolean;
+  // Battement reçu : `fg` vaut null pour un téléphone d'une ancienne version (sans le champ).
+  onPresence: (fg: boolean | null) => void;
 };
 
 export class PeerLink {
@@ -102,6 +106,11 @@ export class PeerLink {
     return !this.stopped && this.epoch === epoch && this.channel?.readyState === 'open';
   }
 
+  // Annonce tout de suite l'état au premier plan (l'app vient de s'ouvrir ou de passer en arrière-plan).
+  beat() {
+    if (!this.stopped) this.send({ type: 'heartbeat', fg: this.callbacks.isForeground() });
+  }
+
   // Le réseau vient de revenir : inutile d'attendre le prochain essai.
   retryNow() {
     if (this.stopped) return;
@@ -116,7 +125,7 @@ export class PeerLink {
         this.closeConnection();
         this.markOffline();
       } else {
-        this.send({ type: 'heartbeat' });
+        this.beat();
         return;
       }
     }
@@ -177,6 +186,7 @@ export class PeerLink {
       if (this.pc !== pc) return;
       this.lastSeen = Date.now();
       this.callbacks.onStatus('connected');
+      this.beat();
       this.signaling.clearSent();
       this.reportRoute(pc);
     });
@@ -192,7 +202,8 @@ export class PeerLink {
           return;
         }
         const message = JSON.parse(open(event.data, this.messageKey, CONTEXT));
-        if (message.type !== 'heartbeat') this.callbacks.onMessage(message);
+        if (message.type === 'heartbeat') this.callbacks.onPresence(typeof message.fg === 'boolean' ? message.fg : null);
+        else this.callbacks.onMessage(message);
       } catch (e) {
         log.warn('message illisible', e);
       }

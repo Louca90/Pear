@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '../../haptics';
 
 import { t, TextKey } from '../../i18n';
-import { log } from '../../log';
 import { createMediaStyles, radius, spacing, useMediaColors } from '../../theme';
 import { useInsets } from '../ui';
 import { TEXT_BACKGROUNDS, TEXT_COLORS, TEXT_FONTS, TEXT_SIZE_MAX, TEXT_SIZE_MIN, TextBackground, TextFont, TextLayer } from './layers';
@@ -29,7 +28,7 @@ const BACKGROUND_LABELS: Record<TextBackground, TextKey> = {
 };
 
 function vibrate() {
-  Haptics.selectionAsync().catch((e) => log.warn('vibration', e));
+  haptics.select();
 }
 
 type Props = { layer: TextLayer; maxWidth: number; onDone: (layer: TextLayer) => void };
@@ -77,7 +76,7 @@ export function TextEditor({ layer, maxWidth, onDone }: Props) {
         <Pressable onPress={nextBackground} style={[styles.backgroundButton, draft.background !== 'none' && styles.backgroundButtonOn]} accessibilityLabel={t(BACKGROUND_LABELS[draft.background])}>
           <Text style={[styles.backgroundIcon, draft.background !== 'none' && { color: colors.text }]}>A</Text>
         </Pressable>
-        <Pressable onPress={finish} style={styles.done}>
+        <Pressable accessibilityRole="button" accessibilityLabel={t('editeur.termine')} onPress={finish} style={styles.done}>
           <Text style={styles.doneLabel}>{t('editeur.termine')}</Text>
         </Pressable>
       </View>
@@ -91,6 +90,8 @@ export function TextEditor({ layer, maxWidth, onDone }: Props) {
                 vibrate();
                 change({ font });
               }}
+              accessibilityRole="button"
+              accessibilityLabel={t(FONT_LABELS[font])}
               accessibilityState={{ selected: draft.font === font }}
               style={[styles.fontChip, draft.font === font && styles.fontChipOn]}
             >
@@ -129,7 +130,7 @@ export function TextEditor({ layer, maxWidth, onDone }: Props) {
                 vibrate();
                 change({ color });
               }}
-              accessibilityLabel={color}
+              accessibilityRole="button" accessibilityLabel={t('editeur.couleur', { n: TEXT_COLORS.indexOf(color) + 1 })}
               accessibilityState={{ selected: draft.color === color }}
               style={[styles.color, { backgroundColor: color }, draft.color === color && styles.colorOn]}
             />

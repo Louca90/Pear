@@ -26,6 +26,9 @@ export const CHUNK_SIZE = 1 << 20;
 // Argon2id : environ une seconde sur un téléphone récent, assez pour ralentir fortement les essais.
 export const KDF_OPS = 3;
 export const KDF_MEM = 64 * 1024 * 1024;
+const MAX_OPS = 10;
+const MIN_MEM = 8 * 1024;
+const MAX_MEM = 256 * 1024 * 1024;
 const KEY_BYTES = 32;
 const SALT_BYTES = 16;
 const HEADER_MAX = 64 * 1024;
@@ -146,6 +149,8 @@ export async function readHeader(source: Source): Promise<{ header: BackupHeader
     throw new BackupError('format');
   }
   if (header?.v !== 1 || (header.kind !== 'profile' && header.kind !== 'full') || typeof header.salt !== 'string') throw new BackupError('format');
+  // L'en-tête est en clair : sans bornes, un fichier piégé ferait réserver des gigaoctets à Argon2.
+  if (!Number.isInteger(header.ops) || header.ops < 1 || header.ops > MAX_OPS || !Number.isInteger(header.mem) || header.mem < MIN_MEM || header.mem > MAX_MEM) throw new BackupError('format');
   return { header, headerHash: to_hex(crypto_generichash(32, json, null)) };
 }
 

@@ -3,7 +3,7 @@ import { PanResponder, View } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
 
 import { Hsv, hexToHsv, hsvToHex } from '../colorMath';
-import { createStyles, radius, useColors } from '../theme';
+import { createStyles, fixed, radius, useColors } from '../theme';
 
 const WEDGES = 90;
 const THUMB = 26;
@@ -88,15 +88,15 @@ export function ColorWheel({ value, size, onPreview, onChange }: { value: string
         <Svg width={size} height={size} pointerEvents="none">
           <Defs>
             <RadialGradient id="pale" cx="50%" cy="50%" r="50%">
-              <Stop offset="0" stopColor="#FFFFFF" stopOpacity={1} />
-              <Stop offset="1" stopColor="#FFFFFF" stopOpacity={0} />
+              <Stop offset="0" stopColor={fixed.white} stopOpacity={1} />
+              <Stop offset="1" stopColor={fixed.white} stopOpacity={0} />
             </RadialGradient>
           </Defs>
           {wedges.map((d, index) => (
             <Path key={index} d={d} fill={`hsl(${(index * 360) / WEDGES}, 100%, 50%)`} />
           ))}
           <Circle cx={size / 2} cy={size / 2} r={size / 2} fill="url(#pale)" />
-          <Circle cx={size / 2} cy={size / 2} r={size / 2} fill="#000000" opacity={1 - hsv.v} />
+          <Circle cx={size / 2} cy={size / 2} r={size / 2} fill={fixed.black} opacity={1 - hsv.v} />
         </Svg>
         <View
           pointerEvents="none"
@@ -114,7 +114,7 @@ export function ColorWheel({ value, size, onPreview, onChange }: { value: string
         <Svg width="100%" height={SLIDER_HEIGHT} pointerEvents="none">
           <Defs>
             <LinearGradient id="dark" x1="0" y1="0" x2="1" y2="0">
-              <Stop offset="0" stopColor="#000000" />
+              <Stop offset="0" stopColor={fixed.black} />
               <Stop offset="1" stopColor={bright} />
             </LinearGradient>
           </Defs>
@@ -137,7 +137,7 @@ const useStyles = createStyles(() => ({
     height: THUMB,
     borderRadius: radius.full,
     borderWidth: 3,
-    borderColor: '#FFFFFF',
+    borderColor: fixed.white,
     boxShadow: '0px 1px 4px rgba(0, 0, 0, 0.35)',
   },
   slider: {

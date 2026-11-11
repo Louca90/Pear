@@ -127,7 +127,9 @@ function draft() {
 
 function writeNotes() {
   const { version, versionCode } = readApp();
-  const notes = { version, versionCode, summary: summaryOf(version) };
+  // Les pages « Quoi de neuf » sont écrites à la main : on les garde.
+  const pages = JSON.parse(readFileSync(NOTES, 'utf8')).pages ?? {};
+  const notes = { version, versionCode, summary: summaryOf(version), pages };
   writeFileSync(NOTES, JSON.stringify(notes, null, 2) + '\n');
   console.log(`Notes embarquées : ${NOTES}`);
 }

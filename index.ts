@@ -8,6 +8,7 @@ import App from './App';
 import { installErrorHandlers } from './src/errors';
 import { handleWake } from './src/chat/background';
 import { handleNotificationEvent } from './src/chat/notificationActions';
+import { registerFileService } from './src/chat/notifications';
 
 // Avant tout le reste : une erreur au démarrage doit aussi finir dans le journal.
 installErrorHandlers();
@@ -17,6 +18,7 @@ installErrorHandlers();
 setBackgroundMessageHandler(getMessaging(), handleWake);
 // App en arrière-plan ou fermée : l'appui sur une notification ou sur « Répondre » arrive ici, pas dans App.
 notifee.onBackgroundEvent(handleNotificationEvent);
+registerFileService();
 
 // registerRootComponent calls AppRegistry.registerComponent('main', () => App);
 // It also ensures that whether you load the app in Expo Go or in a native build,

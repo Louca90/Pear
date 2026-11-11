@@ -3,10 +3,11 @@ import { Animated, Easing, Modal, Pressable, Share, StyleSheet, Text, View } fro
 import QRCode from 'react-native-qrcode-svg';
 import { Share2 } from 'lucide-react-native';
 
+import { setScreenBrightness } from '../../modules/pear-native';
 import { chat } from '../chat/manager';
 import { buildPairingLink } from '../crypto/pairing';
 import { t } from '../i18n';
-import { createStyles, radius, spacing } from '../theme';
+import { createStyles, fixed, radius, spacing } from '../theme';
 import { Button, useNavigationBarHeight } from './ui';
 
 const OPEN_MS = 280;
@@ -33,13 +34,22 @@ export function MyQrSheet({ visible, publicKey, onClose }: { visible: boolean; p
     }
   }, [visible, mounted, progress]);
 
+  // Luminosité au maximum tant que le code est affiché, pour qu'il se scanne bien ; le réglage du téléphone revient à la fermeture.
+  useEffect(() => {
+    if (!visible) return;
+    setScreenBrightness(1).catch(() => {});
+    return () => {
+      setScreenBrightness(-1).catch(() => {});
+    };
+  }, [visible]);
+
   if (!mounted) return null;
   const translateY = progress.interpolate({ inputRange: [0, 1], outputRange: [SHEET_OFFSET, 0] });
 
   return (
     <Modal transparent visible statusBarTranslucent navigationBarTranslucent onRequestClose={onClose} animationType="none">
       <Animated.View style={[StyleSheet.absoluteFill, styles.backdrop, { opacity: progress }]}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel={t('commun.fermer')} />
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" accessibilityLabel={t('commun.fermer')} />
       </Animated.View>
       <Animated.View style={[styles.sheet, { paddingBottom: bottom + spacing.lg, transform: [{ translateY }] }]}>
         <View style={styles.handle} />
@@ -47,7 +57,7 @@ export function MyQrSheet({ visible, publicKey, onClose }: { visible: boolean; p
         <Text style={styles.text}>{t('qr.aide')}</Text>
         {/* Noir sur blanc quel que soit le thème, avec sa marge : il reste lisible par tous les appareils photo. */}
         <View style={styles.qr}>
-          <QRCode value={link} size={240} ecl="L" color="#000000" backgroundColor="#FFFFFF" />
+          <QRCode value={link} size={240} ecl="L" color={fixed.black} backgroundColor={fixed.white} />
         </View>
         <Button label={t('ajout.partager')} icon={Share2} variant="secondary" onPress={() => Share.share({ message: link })} />
       </Animated.View>
@@ -92,6 +102,6 @@ const useStyles = createStyles((colors) => ({
   qr: {
     padding: spacing.md,
     borderRadius: radius.md,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: fixed.white,
   },
 }));

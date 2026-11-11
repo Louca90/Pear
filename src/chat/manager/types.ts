@@ -1,8 +1,9 @@
-import { FileHandle } from 'expo-file-system';
+import type { StoredWriter } from '../media';
 
 import { PeerLink, PeerStatus, RouteType } from '../../network/peer';
 import { CHUNK_BYTES } from '../files';
 import { MessageKind } from '../database';
+import type { MessageMeta } from '../meta';
 import { DISK_BATCH_CHUNKS, MAX_PROFILE_NAME_LENGTH, MAX_REACTION_LENGTH, MAX_SAVED_ID_LENGTH, MAX_TEXT_LENGTH, OFFLINE_DELAY_MS, PROGRESS_NOTIFY_MS, SEND_WINDOW_CHUNKS, WAKE_CHECK_MS, WAKE_INTERVAL_MS, WINDOW_POLL_MS } from '../../config';
 
 export { MAX_PROFILE_NAME_LENGTH, MAX_REACTION_LENGTH, MAX_SAVED_ID_LENGTH, MAX_TEXT_LENGTH, OFFLINE_DELAY_MS, PROGRESS_NOTIFY_MS, SEND_WINDOW_CHUNKS, WAKE_CHECK_MS, WAKE_INTERVAL_MS, WINDOW_POLL_MS };
@@ -22,12 +23,19 @@ export type Link = {
   status: PeerStatus;
   route: RouteType | null;
   secret: Uint8Array;
+  // Dernier battement reçu : `fg` null = ancienne version, qui ne dit pas si elle est au premier plan.
+  presence: { fg: boolean | null; at: number } | null;
+  presenceTimer?: ReturnType<typeof setTimeout>;
 };
+
+// « En ligne » : dernier battement au premier plan reçu il y a moins de ce délai.
+export const PRESENCE_MS = 12 * 1000;
 
 export type IncomingFile = {
   contact: string;
   key: Uint8Array;
-  handle: FileHandle;
+  // Écrit le fichier chiffré sur le disque (lot 2.3).
+  writer: StoredWriter;
   size: number;
   next: number;
   received: number;
@@ -48,6 +56,12 @@ export type PickedFile = {
   forwarded?: boolean;
   // Le même fichier part ensuite à un autre contact : copié, jamais déplacé.
   keepSource?: boolean;
+  // Compléments envoyés avec le fichier (forme d'onde d'un vocal, miniature floue…).
+  meta?: MessageMeta;
+  // Album : le même identifiant pour les médias envoyés ensemble.
+  album?: string;
+  // Photo ou vidéo à vue unique (lot 4.7).
+  once?: boolean;
 };
 
 // Après un envoi ou une réception, la connexion reste ouverte un moment : la réponse arrive souvent vite.

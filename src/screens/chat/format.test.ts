@@ -2,7 +2,7 @@ import { describe, expect, it } from '@jest/globals';
 
 import type { Message } from '../../chat/database';
 
-import { formatClock, formatTime, isBareMedia, isMediaDeleted, splitLinks, systemAction } from './format';
+import { dayLabel, emojiOnly, formatClock, formatTime, isBareMedia, isMediaDeleted, nextVoice, splitLinks, systemAction } from './format';
 
 function message(fields: Partial<Message>): Message {
   return {
@@ -95,5 +95,48 @@ describe('isMediaDeleted', () => {
     expect(isMediaDeleted(message({ kind: 'text', file_uri: null }))).toBe(false);
     expect(isMediaDeleted(message({ kind: 'video', file_uri: null, status: 'offered' }))).toBe(false);
     expect(isBareMedia(message({ kind: 'image', file_uri: null }))).toBe(false);
+  });
+});
+
+describe('emojiOnly', () => {
+  it('compte 1 à 3 emojis seuls, assemblages et drapeaux compris', () => {
+    expect(emojiOnly('😀')).toBe(1);
+    expect(emojiOnly(' 😀 👍🏽 ')).toBe(2);
+    expect(emojiOnly('👨‍👩‍👧')).toBe(1);
+    expect(emojiOnly('🇫🇷❤️🔥')).toBe(3);
+  });
+
+  it('refuse le texte, les chiffres et plus de 3 emojis', () => {
+    expect(emojiOnly('ok 😀')).toBe(0);
+    expect(emojiOnly('12')).toBe(0);
+    expect(emojiOnly('😀😀😀😀')).toBe(0);
+    expect(emojiOnly('')).toBe(0);
+  });
+});
+
+describe('nextVoice', () => {
+  const voice = (id: string, mine = 0, fields: Partial<Message> = {}) => message({ id, kind: 'audio', mine, ...fields });
+
+  it('enchaîne sur le vocal juste en dessous, du même auteur', () => {
+    // Liste inversée : l'index 0 est le plus récent.
+    const list = [voice('c'), voice('b'), voice('a')];
+    expect(nextVoice(list, 2)).toBe('b');
+    expect(nextVoice(list, 1)).toBe('c');
+    expect(nextVoice(list, 0)).toBeUndefined();
+  });
+
+  it("s'arrête sur un autre auteur, un texte ou un vocal pas encore arrivé", () => {
+    expect(nextVoice([voice('b', 1), voice('a')], 1)).toBeUndefined();
+    expect(nextVoice([message({ id: 'b' }), voice('a')], 1)).toBeUndefined();
+    expect(nextVoice([voice('b', 0, { status: 'receiving' }), voice('a')], 1)).toBeUndefined();
+  });
+});
+
+describe('dayLabel', () => {
+  const now = new Date(2026, 10, 10, 15).getTime();
+  it("dit aujourd'hui et hier, puis la date", () => {
+    expect(dayLabel(new Date(2026, 10, 10, 1).getTime(), now, 'fr-FR')).toBe("Aujourd'hui");
+    expect(dayLabel(new Date(2026, 10, 9, 23).getTime(), now, 'fr-FR')).toBe('Hier');
+    expect(dayLabel(new Date(2025, 0, 2).getTime(), now, 'fr-FR')).toContain('2025');
   });
 });

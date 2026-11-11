@@ -1,9 +1,10 @@
 import { ReactNode, useEffect, useRef, useSyncExternalStore } from 'react';
-import { Animated, Easing, Image, Pressable, StyleProp, Text, View, ViewStyle } from 'react-native';
-import { ArrowLeft, LucideIcon, User } from 'lucide-react-native';
+import { Animated, Image, Pressable, StyleProp, Text, View, ViewStyle } from 'react-native';
+import { ArrowLeft, LucideIcon, NotebookPen, User } from 'lucide-react-native';
 
 import { getInsets, subscribeInsets } from '../../modules/pear-native';
-import { createStyles, radius, spacing, useColors } from '../theme';
+import { useMediaUri } from '../chat/media';
+import { createStyles, motion, radius, spacing, useColors } from '../theme';
 import { t } from '../i18n';
 
 // Les barres d'Android (en dp), toujours à jour : remesurées au déverrouillage, au retour dans l'app
@@ -44,33 +45,49 @@ type IconButtonProps = {
   children: ReactNode;
 };
 
-// Bouton à icône : il se tasse sous le doigt et revient avec un petit rebond.
+// L'effet d'appui de tous les boutons, défini une seule fois : sous le doigt, échelle 0,97 et
+// opacité 0,85 en motion.press, retour à l'identique avec la même courbe, sans rebond.
+export function usePressFeedback() {
+  const pressed = useRef(new Animated.Value(0)).current;
+  const animate = (toValue: number) =>
+    Animated.timing(pressed, { toValue, duration: motion.press, easing: motion.easing, useNativeDriver: true }).start();
+  const style = {
+    opacity: pressed.interpolate({ inputRange: [0, 1], outputRange: [1, motion.pressOpacity] }),
+    transform: [{ scale: pressed.interpolate({ inputRange: [0, 1], outputRange: [1, motion.pressScale] }) }],
+  };
+  return { onPressIn: () => animate(1), onPressOut: () => animate(0), style };
+}
+
+// Bouton à icône, avec l'effet d'appui commun.
 export function IconButton({ onPress, onLongPress, label, disabled, hitSlop = 12, style, children }: IconButtonProps) {
-  const scale = useRef(new Animated.Value(1)).current;
-  const animate = (toValue: number) => Animated.spring(scale, { toValue, useNativeDriver: true, overshootClamping: true, damping: 12, stiffness: 320 }).start();
+  const feedback = usePressFeedback();
   return (
     <Pressable
       onPress={onPress}
       onLongPress={onLongPress}
-      onPressIn={() => animate(0.82)}
-      onPressOut={() => animate(1)}
+      onPressIn={feedback.onPressIn}
+      onPressOut={feedback.onPressOut}
       disabled={disabled}
       hitSlop={hitSlop}
+      accessibilityRole="button"
       accessibilityLabel={label}
     >
-      <Animated.View style={[style, { transform: [{ scale }] }]}>{children}</Animated.View>
+      <Animated.View style={[style, feedback.style]}>{children}</Animated.View>
     </Pressable>
   );
 }
 
-export function Avatar({ uri, size = 44 }: { uri?: string | null; size?: number }) {
+// notes : l'avatar de la conversation « Notes à moi-même » (un carnet à la place de la silhouette).
+export function Avatar({ uri, size = 44, notes }: { uri?: string | null; size?: number; notes?: boolean }) {
   const colors = useColors();
   const styles = useStyles();
   const shape = { width: size, height: size, borderRadius: size / 2 };
-  if (uri) return <Image source={{ uri }} style={shape} resizeMode="cover" />;
+  // Photo de profil chiffrée sur le disque (lot 2.3) : affichée depuis sa copie déchiffrée.
+  const source = useMediaUri(uri, { scope: 'app' });
+  if (source) return <Image source={{ uri: source }} style={shape} resizeMode="cover" />;
   return (
     <View style={[styles.avatarEmpty, shape]}>
-      <User size={size * 0.46} color={colors.text} strokeWidth={1.75} />
+      {notes ? <NotebookPen size={size * 0.46} color={colors.text} strokeWidth={1.75} /> : <User size={size * 0.46} color={colors.text} strokeWidth={1.75} />}
     </View>
   );
 }
@@ -86,7 +103,7 @@ function FadingSubtitle({ text }: { text: string }) {
       return;
     }
     opacity.setValue(0);
-    Animated.timing(opacity, { toValue: 1, duration: 200, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    Animated.timing(opacity, { toValue: 1, duration: motion.small, easing: motion.easing, useNativeDriver: true }).start();
   }, [text, opacity]);
   return (
     <Animated.Text style={[styles.headerSubtitle, { opacity }]} numberOfLines={1}>
@@ -156,12 +173,11 @@ export function Button({ label, icon: Icon, onPress, variant = 'primary' }: Butt
   const colors = useColors();
   const styles = useStyles();
   const primary = variant === 'primary';
-  const foreground = primary ? colors.background : colors.text;
-  const scale = useRef(new Animated.Value(1)).current;
-  const animate = (toValue: number) => Animated.spring(scale, { toValue, useNativeDriver: true, overshootClamping: true, damping: 14, stiffness: 320 }).start();
+  const foreground = primary ? colors.onSignature : colors.text;
+  const feedback = usePressFeedback();
   return (
-    <Pressable onPress={onPress} onPressIn={() => animate(0.95)} onPressOut={() => animate(1)}>
-      <Animated.View style={[styles.button, primary ? styles.primary : styles.secondary, { transform: [{ scale }] }]}>
+    <Pressable onPress={onPress} onPressIn={feedback.onPressIn} onPressOut={feedback.onPressOut} accessibilityRole="button" accessibilityLabel={label}>
+      <Animated.View style={[styles.button, primary ? styles.primary : styles.secondary, feedback.style]}>
         <Icon size={20} color={foreground} strokeWidth={1.75} />
         <Text style={[styles.buttonLabel, { color: foreground }]}>{label}</Text>
       </Animated.View>
@@ -242,7 +258,7 @@ const useStyles = createStyles((colors) => ({
     paddingHorizontal: spacing.lg,
   },
   primary: {
-    backgroundColor: colors.text,
+    backgroundColor: colors.signature,
   },
   secondary: {
     backgroundColor: colors.surface,

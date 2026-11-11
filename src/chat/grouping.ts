@@ -30,6 +30,35 @@ export function groupPosition(messages: Groupable[], index: number): GroupPositi
   return 'single';
 }
 
+// --- Albums (lot 4.5) ---
+
+// Au plus 10 médias par album : au-delà, l'envoi en ouvre un autre.
+export const ALBUM_MAX = 10;
+
+type AlbumMember = { id: string; mine: number; kind: string; status: string; album?: string | null; file_uri?: string | null };
+
+const inSameAlbum = (a: AlbumMember, b: AlbumMember | undefined) => !!b && b.album === a.album && b.mine === a.mine && (b.kind === 'image' || b.kind === 'video');
+
+// Un média qui ne peut pas tenir dans une case : proposé (boutons Recevoir / Refuser), refusé ou supprimé.
+const outOfGrid = (m: AlbumMember) => m.status === 'offered' || m.status === 'refused' || (!m.file_uri && m.status !== 'receiving' && m.status !== 'sending');
+
+// L'album auquel appartient le message à cet index : ses membres voisins dans la liste, du plus ancien
+// au plus récent. lead : c'est ce message (le plus récent) qui dessine la grille, les autres ne
+// dessinent rien. null hors album, pour un album d'un seul média, ou si l'un d'eux ne peut pas être
+// montré en case (chacun reprend alors sa bulle).
+export function albumAt<T extends AlbumMember>(messages: T[], index: number): { lead: boolean; members: T[] } | null {
+  const message = messages[index];
+  if (!message?.album || (message.kind !== 'image' && message.kind !== 'video')) return null;
+  let newest = index;
+  while (newest > 0 && inSameAlbum(message, messages[newest - 1])) newest -= 1;
+  let oldest = index;
+  while (inSameAlbum(message, messages[oldest + 1])) oldest += 1;
+  if (oldest === newest) return null;
+  const members = messages.slice(newest, oldest + 1).reverse();
+  if (members.some(outOfGrid)) return null;
+  return { lead: index === newest, members };
+}
+
 // Session de connexion : un identifiant par contact et par canal (connexion directe, ou à distance :
 // notification, relais, envoi hors ligne). Il change après GROUP_GAP_MS sans message, et à chaque
 // nouvelle connexion directe (voir forget).

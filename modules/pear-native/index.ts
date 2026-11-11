@@ -13,7 +13,7 @@ export type SharedMedia = { uri: string; mime: string; size: number; contact?: s
 
 declare class PearNativeModule extends NativeModule<{ onBack: (event: BackEvent) => void; onDownloadProgress: (event: DownloadProgress) => void; onInsetsChange: (event: Insets) => void; onShare: () => void }> {
   takeSharedMedia?(): Promise<SharedMedia[]>;
-  setShareShortcuts?(contacts: { key: string; name: string }[]): Promise<void>;
+  setShareShortcuts?(contacts: { key: string; name: string; photo?: string }[]): Promise<void>;
   burnOverlay(videoUri: string, overlayUri: string, bitrate: number): Promise<string>;
   editVideo?(videoUri: string, edit: VideoEdit): Promise<string>;
   captureView?(tag: number, outputUri: string, scale: number): Promise<string>;
@@ -132,7 +132,7 @@ export function burnOverlay(videoUri: string, overlayUri: string, bitrate: numbe
 
 // Photos et vidéos partagées vers Pear depuis une autre app (lot 12), copiées dans le cache. Vide sinon.
 // Les contacts récents dans le menu Partager d'Android (lot 2.6).
-export function setShareShortcuts(contacts: { key: string; name: string }[]) {
+export function setShareShortcuts(contacts: { key: string; name: string; photo?: string }[]) {
   return PearNative.setShareShortcuts?.(contacts) ?? Promise.resolve();
 }
 

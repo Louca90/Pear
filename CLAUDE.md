@@ -6,7 +6,7 @@ Messagerie Android privée, chiffrée de bout en bout, en pair à pair. Expo 58,
 
 - `App.tsx` : navigation maison (`route` / `setRoute`, onglets via `BottomBar`) et retour prédictif.
 - `index.ts` : enregistre les gestionnaires d'arrière-plan (push FCM `handleWake`, Notifee).
-- `src/chat/manager/` : moteur des conversations. `index.ts` est la façade `chat` utilisée par les écrans ; `core.ts` porte l'état partagé ; les modules (`connections`, `messageIO`, `transfers`, `outbox`, `wake`, `notify`, `profile`, `secure`) sont des fonctions qui prennent ce noyau. Ordre des couches, sans dépendance circulaire : types/core → secure, wake, notify → outbox → transfers → messageIO → connections → profile → index.
+- `src/chat/manager/` : moteur des conversations. `index.ts` est la façade `chat` utilisée par les écrans ; `core.ts` porte l'état partagé ; les modules (`connections`, `messageIO`, `transfers`, `outbox`, `wake`, `notify`, `profile`, `secure`) sont des fonctions qui prennent ce noyau. Ordre des couches, sans dépendance circulaire : types/core → payloads, secure, wake, notify → outbox → location → transfers → messageIO → connections → profile → index. Ce qu'un message transporte en plus (forme d'onde, miniature floue, aperçu de lien, sticker) est dans `src/chat/meta.ts` (colonne `meta`), toujours repassé par `sanitizeMeta` à la réception.
 - `src/chat/database.ts` : SQLite (messages, file d'envoi, réglages). `src/storage.ts` : SecureStore (identité, contacts, ratchet).
 - `src/crypto/` : pairing X25519, double ratchet, chiffrement des fichiers. `src/network/` : WebRTC (`peer.ts`), signalisation Firebase, réveil (`wake.ts`).
 - `src/screens/chat/` : conversation. `ChatScreen.tsx` assemble ; `components/` (bulle, saisie, sélection, visionneuse…) ; `hooks/` (gestes, vocal, clavier) ; `constants.ts`, `format.ts`, `types.ts`, `styles.ts` (styles partagés).
@@ -34,3 +34,5 @@ Messagerie Android privée, chiffrée de bout en bout, en pair à pair. Expo 58,
 - Les `PanResponder` créés une seule fois avec `useRef` gardent les valeurs du premier rendu : passer par des références mises à jour à chaque rendu.
 - `patches/` (expo-camera, react-native-libsodium) s'appliquent au `postinstall` ; expo-camera est compilé depuis les sources (`buildFromSource`).
 - npm 11 bloque certains scripts d'installation : vérifier que `node_modules/react-native-libsodium/libsodium/build` existe après une installation propre.
+- `database.ts` garde en mémoire le résultat des lectures et oublie tout à la moindre écriture : lectures et écritures passent par `db()`. Un accès direct à la base (hors de ce fichier) doit appeler `forgetReads()`.
+- `Bubble` (conversation) et `ConversationRow` (accueil) sont mémoïsées : elles ne se redessinent que si leurs props changent. Ce qui change sans passer par les props (avancement d'un transfert, message cité) doit s'abonner lui-même avec `useSyncExternalStore(chat.subscribe, chat.getVersion)`, comme `FileContent`.

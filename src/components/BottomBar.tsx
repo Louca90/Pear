@@ -1,13 +1,13 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { Animated, Easing, Image, Pressable, StyleSheet, View } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '../haptics';
 import { Camera, LucideIcon, MessageCircle, User, Users } from 'lucide-react-native';
 
 import { chat } from '../chat/manager';
+import { useMediaUri } from '../chat/media';
 import { createStyles, radius, spacing, useColors } from '../theme';
 import { useNavigationBarHeight } from './ui';
 import { CameraFilled, ContactsFilled, MessagesFilled, ProfileRing } from './TabIcons';
-import { log } from '../log';
 import { t } from '../i18n';
 
 export type Tab = 'home' | 'camera' | 'contacts' | 'profile';
@@ -42,7 +42,8 @@ function ProfileIcon({ draw }: { draw: Animated.Value }) {
   const colors = useColors();
   const styles = useStyles();
   useSyncExternalStore(chat.subscribe, chat.getVersion);
-  const photo = chat.getMyProfile().photo;
+  // Ma photo est chiffrée sur le disque (lot 2.3) : affichée depuis sa copie déchiffrée.
+  const photo = useMediaUri(chat.getMyProfile().photo, { scope: 'app' });
   return (
     <View style={styles.photoSlot}>
       {photo ? (
@@ -77,7 +78,7 @@ function TabButton({ tab, icon: Icon, filled: Filled, label, active, onPress }: 
   }, [active]);
 
   const press = () => {
-    Haptics.selectionAsync().catch((e) => log.warn('vibration', e));
+    haptics.select();
     if (active) playKick();
     else onPress();
   };

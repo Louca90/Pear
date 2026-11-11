@@ -1,11 +1,13 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Animated, Easing, KeyboardAvoidingView, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { Ban, BellOff, Check, X } from 'lucide-react-native';
+import { Ban, Check, ShieldQuestion, X } from 'lucide-react-native';
+
+import { Pear } from '../components/Pear';
 
 import { getPendingRequests, PairingRequest } from '../chat/database';
 import { chat, MAX_PROFILE_NAME_LENGTH } from '../chat/manager';
 import { Header, Screen } from '../components/ui';
-import { Identity } from '../crypto/pairing';
+import { deriveSharedSecret, getVerificationCode, Identity } from '../crypto/pairing';
 import { t } from '../i18n';
 import { createStyles, radius, spacing, useColors } from '../theme';
 
@@ -36,11 +38,20 @@ function initials(name: string) {
   return [...letters].slice(0, 2).join('').toUpperCase() || '?';
 }
 
-function RequestCard({ request, onAccept }: { request: PairingRequest; onAccept: Props['onAccept'] }) {
+function RequestCard({ request, onAccept, identity }: { request: PairingRequest; onAccept: Props['onAccept']; identity: Identity }) {
   const colors = useColors();
   const styles = useStyles();
   const [name, setName] = useState(request.name);
   const progress = useRef(new Animated.Value(0)).current;
+  const [showCode, setShowCode] = useState(false);
+  // Recalculé à la demande : seule la clé privée est stockée. Une clé invalide n'affiche rien.
+  const code = useMemo(() => {
+    try {
+      return getVerificationCode(deriveSharedSecret(identity, request.from_key));
+    } catch {
+      return [];
+    }
+  }, [identity, request.from_key]);
 
   useEffect(() => {
     Animated.timing(progress, { toValue: 1, duration: ENTER_MS, easing: EASING, useNativeDriver: true }).start();
@@ -68,6 +79,24 @@ function RequestCard({ request, onAccept }: { request: PairingRequest; onAccept:
           <Text style={styles.muted}>{ago(request.at)}</Text>
         </View>
       </View>
+      {code.length > 0 && (
+        <Pressable onPress={() => setShowCode((value) => !value)} style={styles.unverified} hitSlop={6}>
+          <ShieldQuestion size={16} color={colors.textMuted} strokeWidth={1.75} />
+          <Text style={styles.muted}>{t('contact.nonVerifieComparer')}</Text>
+        </Pressable>
+      )}
+      {showCode && code.length > 0 && (
+        <View style={styles.codeBox}>
+          <View style={styles.codeRow}>
+            {code.map((group, index) => (
+              <Text key={index} style={styles.codeGroup}>
+                {group}
+              </Text>
+            ))}
+          </View>
+          <Text style={styles.muted}>{t('contact.codeAide')}</Text>
+        </View>
+      )}
       <Text style={styles.label}>{t('contact.nom')}</Text>
       <TextInput
         style={styles.input}
@@ -99,7 +128,7 @@ function RequestCard({ request, onAccept }: { request: PairingRequest; onAccept:
 }
 
 // Les demandes d'ajout reçues : rien ne se fait sans un « Accepter ».
-export function RequestsScreen({ onBack, onAccept }: Props) {
+export function RequestsScreen({ identity, onBack, onAccept }: Props) {
   const colors = useColors();
   const styles = useStyles();
   useSyncExternalStore(chat.subscribe, chat.getVersion);
@@ -111,16 +140,14 @@ export function RequestsScreen({ onBack, onAccept }: Props) {
       <KeyboardAvoidingView behavior="padding" style={styles.flex}>
         {requests.length === 0 ? (
           <View style={styles.empty}>
-            <View style={styles.emptyIcon}>
-              <BellOff size={28} color={colors.text} strokeWidth={1.75} />
-            </View>
+            <Pear height={56} color={colors.textMuted} state="resting" />
             <Text style={styles.emptyTitle}>{t('demandes.aucune')}</Text>
             <Text style={styles.emptyText}>{t('demandes.aucuneAide')}</Text>
           </View>
         ) : (
           <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
             {requests.map((request) => (
-              <RequestCard key={request.id} request={request} onAccept={onAccept} />
+              <RequestCard key={request.id} request={request} onAccept={onAccept} identity={identity} />
             ))}
           </ScrollView>
         )}
@@ -130,6 +157,29 @@ export function RequestsScreen({ onBack, onAccept }: Props) {
 }
 
 const useStyles = createStyles((colors) => ({
+  unverified: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: spacing.sm,
+  },
+  codeBox: {
+    borderRadius: radius.md,
+    backgroundColor: colors.background,
+    padding: spacing.md,
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  codeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  codeGroup: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: colors.text,
+    fontVariant: ['tabular-nums'],
+  },
   flex: {
     flex: 1,
   },
@@ -225,14 +275,7 @@ const useStyles = createStyles((colors) => ({
     gap: spacing.md,
     padding: spacing.lg,
   },
-  emptyIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: radius.full,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+
   emptyTitle: {
     fontSize: 18,
     fontWeight: '600',

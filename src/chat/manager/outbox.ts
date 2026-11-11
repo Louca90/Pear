@@ -3,6 +3,10 @@ import { randombytes_buf, to_base64 } from 'react-native-libsodium';
 import {
   addMessage,
   addOutboxEvent,
+  getConversationSettings,
+  getSetting,
+  setConversationSetting,
+  setSetting,
   getOutboxEvents,
   getPendingReadReceipts,
   getUpload,
@@ -11,14 +15,57 @@ import {
   setFileSize,
   setReadReceiptSent,
 } from '../database';
-import { storedSize } from '../files';
+import { storedSize } from '../media';
+import { parseMeta } from '../meta';
 
 import { ChatCore } from './core';
 import { sendSecure } from './secure';
 import { FILE_KEY_BYTES } from './types';
+import { isSelf } from '../self';
+import { DEFAULT_EPHEMERAL, ephemeralSystemText, nextSettingTime, validTtl } from '../ephemeral';
+import { fileExtras, textPayload } from './payloads';
+
+// --- Messages éphémères (lot 4.7) ---
+
+const settingTimeKey = (contact: string) => `ephemeral_at.${contact}`;
+const lastChoiceKey = (contact: string) => `ephemeral_last.${contact}`;
+
+// La durée de vie des messages envoyés maintenant dans cette conversation (secondes), null si coupé.
+export function ephemeralFor(contact: string): number | null {
+  return isSelf(contact) ? null : validTtl(getConversationSettings(contact).ephemeral);
+}
+
+// La durée à remettre quand on réactive par le geste : la dernière choisie, sinon 1 jour.
+export function lastEphemeralChoice(contact: string): number {
+  return validTtl(Number(getSetting(lastChoiceKey(contact)))) ?? DEFAULT_EPHEMERAL;
+}
+
+// Applique un réglage du minuteur (le nôtre ou celui reçu), daté : un réglage plus ancien que celui
+// déjà appliqué est ignoré (événements croisés). Le message système n'apparaît que si la valeur change.
+export function applyEphemeral(contact: string, seconds: number, at: number, mine: number): boolean {
+  if (at <= Number(getSetting(settingTimeKey(contact)) ?? 0)) return false;
+  setSetting(settingTimeKey(contact), String(at));
+  const current = getConversationSettings(contact).ephemeral ?? 0;
+  setConversationSetting(contact, 'ephemeral', seconds || null);
+  if (seconds) setSetting(lastChoiceKey(contact), String(seconds));
+  if (current !== seconds) addSystemMessage(contact, mine, ephemeralSystemText(seconds));
+  return true;
+}
+
+// L'heure d'un réglage fait maintenant sur ce téléphone.
+export function ephemeralSettingTime(contact: string) {
+  return nextSettingTime(Date.now(), Number(getSetting(settingTimeKey(contact)) ?? 0));
+}
+
+
 import { wakeIfNeeded } from './wake';
 
 export function sendEvent(core: ChatCore, contact: string, event: object) {
+  // Notes à moi-même : il n'y a personne à prévenir, rien n'attend dans la file d'envoi.
+  if (isSelf(contact)) {
+    core.notify();
+    return;
+  }
   addOutboxEvent(to_base64(randombytes_buf(16)), contact, JSON.stringify(event));
   flush(core, contact);
   wakeIfNeeded(core, contact);
@@ -77,9 +124,12 @@ export function flush(core: ChatCore, contact: string) {
         key,
         camera: message.from_camera === 1,
         forwarded: message.forwarded === 1,
+        ...(message.meta ? { meta: parseMeta(message.meta) } : {}),
+        ...(message.album ? { album: message.album } : {}),
+        ...fileExtras(message),
       };
       if (!once(message.id, () => sendSecure(core, contact, offer))) return;
-    } else if (!once(message.id, () => sendSecure(core, contact, { type: 'message', id: message.id, text: message.text, reply_to: message.reply_to, ...(message.forwarded ? { forwarded: true } : {}) }))) {
+    } else if (!once(message.id, () => sendSecure(core, contact, textPayload(message)))) {
       return;
     }
   }

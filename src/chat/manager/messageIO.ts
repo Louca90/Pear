@@ -16,16 +16,20 @@ import {
   removeOutboxEvent,
   setContactProfileField,
   setContactToken,
+  markOnceOpened,
   setConversationSetting,
   setReaction,
   setStatus,
 } from '../database';
 import { CHUNK_BYTES, isValidFileId } from '../files';
+import { encodeMeta, sanitizeMeta } from '../meta';
 
 import { ChatCore } from './core';
 import { showStatusNotification } from '../notifications';
 import { notifyMessage } from './notify';
-import { addSystemMessage, flush } from './outbox';
+import { addSystemMessage, applyEphemeral, flush } from './outbox';
+import { expiryFor, validEphemeralSetting, validTtl } from '../ephemeral';
+import { receiveLocation } from './location';
 import { reshareProfile } from './profile';
 import { receiveRelayOffer } from './relay';
 import { decryptIncoming, receiveRekey, receiveRekeyAck, receiveRepair, receiveRepairAck } from './sessions';
@@ -58,6 +62,7 @@ export function receiveRatchet(core: ChatCore, contact: string, envelope: unknow
   else if (message?.type === 'event') receiveEvent(core, contact, message);
   else if (message?.type === 'acks') receiveAcks(core, contact, message);
   else if (message?.type === 'status') receiveStatus(core, contact, message);
+  else if (message?.type === 'location') receiveLocation(core, contact, message);
   else if (message?.type === 'rekey') receiveRekey(core, contact, message);
   else if (message?.type === 'rekey-ack') receiveRekeyAck(core, contact, message);
 }
@@ -109,6 +114,13 @@ function receiveEvent(core: ChatCore, contact: string, data: Payload) {
     if (original?.kind === 'image' || original?.kind === 'video') {
       addSystemMessage(contact, 0, `saved:${original.kind}:${original.mine === 1 ? 'yours' : 'theirs'}`, data.eventId.slice(0, MAX_SAVED_ID_LENGTH));
     }
+  } else if (data.action === 'ephemeral') {
+    // Le contact a réglé (ou coupé) le minuteur des messages éphémères : il vaut pour les deux.
+    const seconds = validEphemeralSetting(data.seconds);
+    if (seconds !== null && isCount(data.at)) applyEphemeral(contact, seconds, data.at, 0);
+  } else if (data.action === 'viewed') {
+    // Notre média à vue unique a été ouvert.
+    if (getMessage(data.id, contact)?.mine === 1) markOnceOpened(data.id, contact);
   } else if (data.action === 'relay') {
     // Un fichier qui attend dans le relais (l'expéditeur ne nous joignait pas en direct).
     receiveRelayOffer(core, contact, data);
@@ -150,16 +162,20 @@ function receiveText(core: ChatCore, contact: string, data: Payload) {
   if (getPeerState(contact) === 'removed') setPeerState(contact, null);
   const foreground = AppState.currentState === 'active';
   const text = data.text.slice(0, MAX_TEXT_LENGTH);
+  const now = Date.now();
   const isNew = addMessage({
     id: data.id,
     contact,
     mine: 0,
     text,
     status: foreground && core.isReading(contact) ? 'read-pending' : 'delivered',
-    created_at: Date.now(),
+    created_at: now,
+    expires_at: expiryFor(now, validTtl(data.ttl)),
     reply_to: typeof data.reply_to === 'string' ? data.reply_to : null,
     forwarded: data.forwarded === true ? 1 : 0,
     conn_session: core.sessionFor(contact),
+    // Un texte ne transporte que l'aperçu de son lien, préparé par l'expéditeur.
+    meta: encodeMeta({ preview: sanitizeMeta(data.meta)?.preview }),
   });
   core.typingUntil.delete(contact);
   acknowledge(core, contact, { id: data.id });

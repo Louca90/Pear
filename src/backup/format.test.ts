@@ -85,6 +85,15 @@ describe('sauvegarde chiffrée', () => {
     await expect(read(textBytes('ceci est un fichier texte quelconque'))).rejects.toEqual(new BackupError('format'));
   });
 
+  it("refuse un en-tête aux coûts Argon2 hors bornes", async () => {
+    for (const [ops, mem] of [[1000, crypto_pwhash_MEMLIMIT_MIN], [crypto_pwhash_OPSLIMIT_MIN, 4 * 1024 * 1024 * 1024], [0, crypto_pwhash_MEMLIMIT_MIN], [1.5, crypto_pwhash_MEMLIMIT_MIN]]) {
+      const header = newHeader('full', true, ops, mem);
+      const file = memory();
+      await BackupWriter.start(file.sink, header, new Uint8Array(32));
+      await expect(readHeader(source(file.bytes()))).rejects.toEqual(new BackupError('format'));
+    }
+  });
+
   it('refuse une sauvegarde coupée ou modifiée', async () => {
     const bytes = await write({ db: new Uint8Array(CHUNK_SIZE + 10) });
     // Coupée après le premier morceau : le dernier (marqué) manque.

@@ -1,6 +1,6 @@
 import { Identity } from '../../crypto/pairing';
 
-import { IncomingFile, Link } from './types';
+import { IncomingFile, Link, PRESENCE_MS } from './types';
 import { SessionTracker } from '../grouping';
 import { SentOnce } from '../sentOnce';
 
@@ -75,6 +75,15 @@ export class ChatCore {
   // Garde (ou fait ouvrir, au prochain tri des connexions) la connexion avec ce contact pendant `ms`.
   keepConnected(contact: string, ms: number) {
     this.keepUntil.set(contact, Math.max(this.keepUntil.get(contact) ?? 0, Date.now() + ms));
+  }
+
+  // « En ligne » au sens de la personne : le contact a Pear ouvert, pas seulement une connexion technique.
+  isContactOnline(contact: string) {
+    const link = this.links.get(contact);
+    if (link?.status !== 'connected') return false;
+    // Pas encore de battement, ou ancienne version : on garde « connecté = en ligne ».
+    if (!link.presence || link.presence.fg === null) return true;
+    return link.presence.fg && Date.now() - link.presence.at < PRESENCE_MS;
   }
 
   // Les messages reçus ne comptent comme lus que si on regarde les derniers, pas en étant remonté.

@@ -4,7 +4,8 @@ import { randombytes_buf, to_base64 } from 'react-native-libsodium';
 import { resizeImage } from '../../../modules/pear-native';
 
 import { deleteOldAvatars, getContactProfile, getSetting, setContactProfileField, setSetting } from '../database';
-import { deleteStoredFile, exportCopy, storeOutgoingFile } from '../files';
+import { deleteStoredFile } from '../files';
+import { exportCopy, storeOutgoingFile } from '../media';
 
 import { ChatCore } from './core';
 import { sendEvent } from './outbox';

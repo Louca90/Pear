@@ -5,11 +5,14 @@ import { StatusBar } from 'expo-status-bar';
 import * as Linking from 'expo-linking';
 import notifee from '@notifee/react-native';
 
-import { backHookAvailable, setBackMode } from './modules/pear-native';
+import { backHookAvailable, setBackMode, setSecureWindow } from './modules/pear-native';
+import { LockScreen } from './src/components/LockScreen';
+import { shouldLock } from './src/lockRules';
 import { cleanupCache } from './src/chat/cleanup';
+import { migrateStoredFiles } from './src/chat/media';
 import { handleNotificationEvent } from './src/chat/notificationActions';
 import { refreshRemoteConfig } from './src/remoteConfig';
-import { deleteMessages, getContactProfile, isBlocked, openDatabase } from './src/chat/database';
+import { deleteMessages, getContactProfile, getSetting, isBlocked, openDatabase, setContactVerified } from './src/chat/database';
 import { clearNotificationTarget, REQUESTS_TARGET, setNotificationTarget, useNotificationTarget } from './src/chat/notificationTarget';
 import { chat } from './src/chat/manager';
 import { BottomBar, Tab } from './src/components/BottomBar';
@@ -19,6 +22,7 @@ import { deriveSharedSecret, getVerificationCode, Identity, PairingLink, parsePa
 import { ContactsScreen } from './src/screens/ContactsScreen';
 import { CameraScreen } from './src/screens/CameraScreen';
 import { ChatScreen } from './src/screens/chat/ChatScreen';
+import { isSelf } from './src/chat/self';
 import { ContactScreen } from './src/screens/ContactScreen';
 import { NotificationSettingsScreen } from './src/screens/NotificationSettingsScreen';
 import { CustomizeScreen } from './src/screens/CustomizeScreen';
@@ -30,13 +34,16 @@ import { BlockedScreen } from './src/screens/BlockedScreen';
 import { DiagnosticScreen } from './src/screens/DiagnosticScreen';
 import { RequestsScreen } from './src/screens/RequestsScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
+import { ServersScreen } from './src/screens/ServersScreen';
 import { runAutoCleanup, StorageScreen } from './src/screens/StorageScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { ScannerScreen } from './src/screens/ScannerScreen';
 import { Contact, hasIdentity, loadContacts, loadOrCreateIdentity, saveContacts } from './src/storage';
-import { createStyles, loadTheme, Palette, spacing, useColors } from './src/theme';
+import { createStyles, fixed, loadTheme, motion, Palette, spacing, useColors } from './src/theme';
 import { markUpdateSeen, pendingUpdatedInfo, UpdatedInfo } from './src/update/updated';
 import { UpdatedPopup } from './src/update/UpdatedPopup';
+import { WhatsNew } from './src/update/WhatsNew';
+import { DiscoverScreen } from './src/screens/DiscoverScreen';
 import { checkForUpdate, isBlocking, useUpdateState } from './src/update/updates';
 import { UpdateScreen } from './src/update/UpdateScreen';
 import { log } from './src/log';
@@ -54,6 +61,8 @@ type Route =
   | { name: 'profile' }
   | { name: 'diagnostic' }
   | { name: 'storage' }
+  | { name: 'servers' }
+  | { name: 'discover' }
   | { name: 'settings' }
   | { name: 'blocked' }
   | { name: 'requests' }
@@ -61,23 +70,20 @@ type Route =
   | { name: 'notifications'; publicKey: string }
   // name : le pseudo lu dans le QR code ou le lien, proposé comme nom du contact.
   | { name: 'contact'; publicKey: string; suggestedName?: string | null }
-  | { name: 'chat'; publicKey: string };
+  // jump : message à rejoindre à l'ouverture (résultat de recherche).
+  | { name: 'chat'; publicKey: string; jump?: string };
 
 // --- Navigation ---
 // Animations fixes, sans suivre le doigt. Chaque écran a deux valeurs : enter (0 → 1 à son arrivée)
 // et g (0 → 1 quand il part). La page qui part garde la sienne jusqu'à disparaître : rien n'est remis
-// en place au changement d'écran, donc pas d'image de l'ancien écran.
-const ENTER_MS = 180;
-const EXIT_MS = 160;
-// Démarre vite et se pose doucement, sans dépasser : jamais de rebond.
-const NAV_EASING = Easing.bezier(0.2, 0.8, 0.2, 1);
+// en place au changement d'écran, donc pas d'image de l'ancien écran. Durée et courbe : motion.screen
+// et motion.easing (src/theme.ts), 0 si Android a « Supprimer les animations ».
 // La page arrive de la droite et repart vers la droite ; l'écran d'en dessous se décale un peu.
 const PAGE_SHIFT = 36;
 const UNDER_SHIFT = 24;
 // Glissement entre onglets : la page et l'onglet voisin suivent le doigt ; au-delà du seuil (ou d'un
 // geste rapide), le voisin finit de prendre la place.
 const TAB_SWIPE_RATIO = 0.3;
-const TAB_SETTLE_MS = 180;
 // Les bords restent au retour par geste d'Android.
 const TAB_EDGE = 28;
 // Dans l'ordre de la barre du bas : le glissement horizontal passe de l'un à l'autre.
@@ -142,6 +148,11 @@ function App() {
   const blocked = isBlocking(update);
   // Le popup « Pear est à jour ! » attend l'accueil, et ne passe jamais devant l'écran de mise à jour.
   const [updatedInfo, setUpdatedInfo] = useState<UpdatedInfo | null>(null);
+  // Jamais deux fois pour la même version : fermer, passer ou revenir en arrière la marque comme vue.
+  const closeUpdated = () => {
+    markUpdateSeen();
+    setUpdatedInfo(null);
+  };
   const [onboarding, setOnboarding] = useState<{ mode: 'full' | 'permissions'; step: OnboardingStep } | null>(null);
   // Une autorisation retirée depuis la prise en main : un bandeau discret sur l'accueil.
   const [permissionMissing, setPermissionMissing] = useState(false);
@@ -150,10 +161,13 @@ function App() {
     // La base est ouverte et migrée avant tout : un échec affiche une erreur au lieu de planter en boucle.
     Promise.resolve()
       .then(openDatabase)
+      .then(() => setLocked(getSetting('app_lock') === '1'))
       .then(loadTheme)
       .then(() => {
         cleanupCache();
         runAutoCleanup();
+        // Lot 2.3 : les fichiers encore en clair sont chiffrés en tâche de fond, après le démarrage.
+        setTimeout(() => migrateStoredFiles(), 5000);
       })
       .then(() => {
         refreshRemoteConfig();
@@ -170,6 +184,7 @@ function App() {
       })
       .catch((e) => {
         log.error('démarrage', e);
+        setLocked(false);
         setError(String(e));
       });
   }, [attempt]);
@@ -186,6 +201,28 @@ function App() {
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => setActive(state === 'active'));
+    return () => subscription.remove();
+  }, []);
+
+  // Verrou : fermé au lancement, puis après 1 minute en arrière-plan. La fenêtre de demande d'empreinte
+  // ne met pas Pear en arrière-plan ; si elle le faisait, le délai d'une minute protège de toute façon.
+  // null : réglage pas encore lu (base en cours d'ouverture), l'écran reste couvert sans rien demander.
+  const [locked, setLocked] = useState<boolean | null>(null);
+  const backgroundedAt = useRef<number | null>(null);
+  useEffect(() => {
+    setSecureWindow(true).catch((e) => log.warn('fenêtre protégée', e));
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        let enabled = false;
+        try {
+          enabled = getSetting('app_lock') === '1';
+        } catch {}
+        if (shouldLock(enabled, backgroundedAt.current, Date.now())) setLocked(true);
+        backgroundedAt.current = null;
+      } else if (backgroundedAt.current === null) {
+        backgroundedAt.current = Date.now();
+      }
+    });
     return () => subscription.remove();
   }, []);
 
@@ -244,7 +281,7 @@ function App() {
   const parentOf = (current: Route): Route | null => {
     if (current.name === 'home') return null;
     if (current.name === 'scan') return { name: 'contacts' };
-    if (current.name === 'diagnostic' || current.name === 'blocked' || current.name === 'storage') return { name: 'settings' };
+    if (current.name === 'diagnostic' || current.name === 'blocked' || current.name === 'storage' || current.name === 'servers' || current.name === 'discover') return { name: 'settings' };
     if (current.name === 'settings') return { name: 'profile' };
     if (current.name === 'customize') return { name: 'chat', publicKey: current.publicKey };
     if (current.name === 'notifications') return { name: 'customize', publicKey: current.publicKey };
@@ -298,7 +335,7 @@ function App() {
     !isTabSwipeLocked() && x0 > TAB_EDGE && x0 < screenWidth - TAB_EDGE && Math.abs(dx) > 24 && Math.abs(dx) > Math.abs(dy) * 2;
 
   const settleTab = (toValue: number, then: () => void) =>
-    Animated.timing(tabDrag, { toValue, duration: TAB_SETTLE_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start(then);
+    Animated.timing(tabDrag, { toValue, duration: motion.screen, easing: motion.easing, useNativeDriver: true }).start(then);
 
   const tabSwipe = useRef(
     PanResponder.create({
@@ -333,7 +370,7 @@ function App() {
     if (!parent || exiting.current) return;
     exiting.current = true;
     const { g } = motionFor(routeKey(nav.current.route));
-    Animated.timing(g, { toValue: 1, duration: EXIT_MS, easing: NAV_EASING, useNativeDriver: true }).start(() => {
+    Animated.timing(g, { toValue: 1, duration: motion.screen, easing: motion.easing, useNativeDriver: true }).start(() => {
       exiting.current = false;
       setRouteState(parent);
     });
@@ -366,7 +403,7 @@ function App() {
   // et le parent sera monté dessous (prêt pour le retour) après un court délai.
   useEffect(() => {
     const { enter } = motionFor(currentKey);
-    Animated.timing(enter, { toValue: 1, duration: ENTER_MS, easing: NAV_EASING, useNativeDriver: true }).start();
+    Animated.timing(enter, { toValue: 1, duration: motion.screen, easing: motion.easing, useNativeDriver: true }).start();
     for (const key of [...motions.keys()]) if (!mountedKeys.current.has(key)) motions.delete(key);
     setParentReady(false);
     const timer = setTimeout(() => setParentReady(true), PARENT_MOUNT_DELAY_MS);
@@ -457,12 +494,20 @@ function App() {
           onDiagnostic={() => setRoute({ name: 'diagnostic' })}
           onBlocked={() => setRoute({ name: 'blocked' })}
           onStorage={() => setRoute({ name: 'storage' })}
+          onServers={() => setRoute({ name: 'servers' })}
+          onDiscover={() => setRoute({ name: 'discover' })}
           onReplayOnboarding={() => setOnboarding({ mode: 'full', step: 0 })}
         />
       );
     }
     if (current.name === 'storage') {
       return <StorageScreen contacts={contacts} onBack={() => setRoute({ name: 'settings' })} />;
+    }
+    if (current.name === 'discover') {
+      return <DiscoverScreen onBack={() => setRoute({ name: 'settings' })} />;
+    }
+    if (current.name === 'servers') {
+      return <ServersScreen onBack={() => setRoute({ name: 'settings' })} />;
     }
     if (current.name === 'diagnostic') {
       return <DiagnosticScreen onBack={() => setRoute({ name: 'settings' })} />;
@@ -512,12 +557,13 @@ function App() {
         <ChatScreen
           key={publicKey}
           contactKey={publicKey}
-          name={contacts.find((contact) => contact.publicKey === publicKey)?.name ?? t('app.contact')}
+          name={isSelf(publicKey) ? t('notes.titre') : contacts.find((contact) => contact.publicKey === publicKey)?.name ?? t('app.contact')}
           pending={contacts.find((contact) => contact.publicKey === publicKey)?.pending ?? false}
           onBack={() => setRoute({ name: 'home' })}
           onInfo={() => setRoute({ name: 'contact', publicKey })}
           onCustomize={() => setRoute({ name: 'customize', publicKey })}
           preview={preview}
+          jump={current.jump}
         />
       );
     }
@@ -536,11 +582,17 @@ function App() {
           onSave={(name) => {
             // Un nouveau contact attend que l'autre accepte la demande ; un contact connu reste tel quel.
             const pending = saved ? saved.pending : true;
-            updateContacts([...others, { publicKey, name, ...(pending ? { pending: true } : {}) }]);
+            updateContacts([...others, { publicKey, name, ...(pending ? { pending: true } : {}), ...(saved?.verified ? { verified: true } : {}) }]);
             if (!saved) chat.requestPairing(publicKey);
             setRoute({ name: 'chat', publicKey });
           }}
           contactKey={publicKey}
+          code={code}
+          verified={!!saved?.verified}
+          onVerify={() => {
+            setContactVerified(publicKey);
+            setContacts((list) => list.map((contact) => (contact.publicKey === publicKey ? { ...contact, verified: true } : contact)));
+          }}
           blocked={isBlocked(publicKey)}
           onToggleBlock={() => (isBlocked(publicKey) ? chat.unblockContact(publicKey) : chat.blockContact(publicKey))}
           onRemove={() => {
@@ -556,7 +608,7 @@ function App() {
       <HomeScreen
         contacts={contacts}
         onAdd={() => setRoute({ name: 'contacts' })}
-        onOpen={(contact) => setRoute({ name: 'chat', publicKey: contact.publicKey })}
+        onOpen={(contact, jump) => setRoute({ name: 'chat', publicKey: contact.publicKey, jump })}
         onRequests={() => setRoute({ name: 'requests' })}
         permissionMissing={permissionMissing}
         onFixPermissions={() => setOnboarding({ mode: 'permissions', step: 1 })}
@@ -729,17 +781,13 @@ function App() {
         <BottomBar active={route.name as Tab} onChange={(tab) => setRoute({ name: tab } as Route)} />
       )}
       {updatedInfo && identity && route.name === 'home' && (
-        <UpdatedPopup
-          info={updatedInfo}
-          onClose={() => {
-            markUpdateSeen();
-            setUpdatedInfo(null);
-          }}
-        />
+        // Des pages « Quoi de neuf » pour cette version : elles remplacent la popup courte.
+        updatedInfo.pages.length > 0 ? <WhatsNew pages={updatedInfo.pages} onClose={closeUpdated} /> : <UpdatedPopup info={updatedInfo} onClose={closeUpdated} />
       )}
       {identity && !error && <ShareReceiver contacts={contacts} ready={!blocked} onSent={(publicKey) => setRoute({ name: 'chat', publicKey })} />}
       <DialogHost />
       {themeFade}
+      {locked !== false && <LockScreen waiting={locked === null} onUnlock={() => setLocked(false)} />}
     </>
   );
 }
@@ -772,7 +820,7 @@ const useStyles = createStyles((colors) => ({
   },
   cameraPlaceholder: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: fixed.black,
   },
   hidden: {
     opacity: 0,

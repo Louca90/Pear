@@ -27,3 +27,20 @@ export function decryptFileKey(stored: string | null): string | null {
     return null;
   }
 }
+
+// Clé de chiffrement d'un fichier de pear-files/ (lot 2.3), gardée tant que le fichier existe.
+// Emballée elle aussi avec la clé locale : la copie en clair de la base (sauvegarde) ne la montre pas.
+const STORE_CONTEXT = 'pear-store-key-v1';
+
+export function sealStoreKey(key: string): string {
+  return sealLocal(key, STORE_CONTEXT);
+}
+
+export function openStoreKey(stored: string): string | null {
+  try {
+    return openLocal(stored, STORE_CONTEXT);
+  } catch (e) {
+    log.warn('clé de stockage illisible', e);
+    return null;
+  }
+}

@@ -1,6 +1,7 @@
 import { Event, EventType } from '@notifee/react-native';
 
 import { chat } from './manager';
+import { deleteCover } from './notifications';
 import { REQUESTS_TARGET, setNotificationTarget } from './notificationTarget';
 import { log } from '../log';
 
@@ -25,6 +26,7 @@ export async function handleNotificationEvent({ type, detail }: Event) {
   }
   const contact = detail.notification?.data?.contact;
   if (typeof contact !== 'string') return;
+  if (type === EventType.DISMISSED || type === EventType.PRESS) deleteCover(contact);
   if (type === EventType.PRESS) {
     setNotificationTarget(contact);
     return;

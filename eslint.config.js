@@ -8,6 +8,11 @@ module.exports = defineConfig([
     ignores: ['android/**', 'dist/**', 'server/node_modules/**', 'modules/*/android/**', '.expo/**'],
   },
   {
+    // Fonctions Vercel et leurs tests : du Node, avec ses globales (Buffer, __dirname).
+    files: ['server/**/*.js'],
+    languageOptions: { globals: { Buffer: 'readonly', __dirname: 'readonly', process: 'readonly', console: 'readonly' } },
+  },
+  {
     rules: {
       // Règles du React Compiler, que Pear n'utilise pas : elles signalent comme erreurs l'usage
       // normal des animations de React Native (useRef(new Animated.Value(0)).current lu au rendu).

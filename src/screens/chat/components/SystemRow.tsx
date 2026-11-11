@@ -3,6 +3,8 @@ import { Animated, Pressable, Text, View } from 'react-native';
 
 import { Message } from '../../../chat/database';
 import { chat } from '../../../chat/manager';
+import { parseEphemeralSystem } from '../../../chat/ephemeral';
+import { Pear } from '../../../components/Pear';
 import { createStyles, useColors } from '../../../theme';
 
 import { SESSION_BROKEN, SESSION_REPAIRED, UPDATE_REQUIRED } from '../../../chat/protocol';
@@ -19,8 +21,16 @@ export function SystemRow({ message, name, hasWallpaper }: { message: Message; n
   const standalone = message.text === UPDATE_REQUIRED || message.text === SESSION_REPAIRED;
   const author = message.mine === 1 ? t('chat.vousAvez') : t('chat.contactA', { nom: name });
   const text = message.text === SESSION_REPAIRED ? t('chat.sessionReparee') : systemAction(message);
+  // Messages éphémères activés ou coupés : la petite poire du geste devant la phrase, pleine si le
+  // mode est en marche, en contour pâle s'il est coupé.
+  const ephemeral = parseEphemeralSystem(message.text);
   return (
-    <View style={[styles.systemRow, hasWallpaper && styles.metaPill]}>
+    <View style={[styles.systemRow, hasWallpaper && styles.metaPill, ephemeral !== null && styles.withIcon]}>
+      {ephemeral !== null && (
+        <View style={ephemeral === 0 && styles.iconOff}>
+          <Pear height={13} color={hasWallpaper ? colors.onMedia : ephemeral ? colors.signatureStrong : colors.textMuted} />
+        </View>
+      )}
       <Text style={textStyle}>{standalone ? text : `${author} ${text}`}</Text>
     </View>
   );
@@ -69,6 +79,14 @@ const useLocalStyles = createStyles((colors) => ({
   systemText: {
     fontSize: 12,
     color: colors.textMuted,
+  },
+  withIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  iconOff: {
+    opacity: 0.5,
   },
   repairRow: {
     alignSelf: 'center',

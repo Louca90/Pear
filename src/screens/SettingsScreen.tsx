@@ -1,14 +1,22 @@
 import { useEffect, useState } from 'react';
 import { AppState, Linking, Pressable, ScrollView, Text, View } from 'react-native';
-import { Ban, Bell, ChevronRight, Download, HardDrive, Languages, RefreshCw, ShieldCheck, Stethoscope } from 'lucide-react-native';
+import { Ban, Bell, ChevronRight, Download, Eye, HardDrive, Languages, Link2, Lock, Sparkles, RefreshCw, Share2, ShieldCheck, Stethoscope, Volume2 } from 'lucide-react-native';
+import { linkPreviewsEnabled, setLinkPreviewsEnabled } from '../chat/linkPreview';
 
-import { appVersionCode, appVersionName } from '../../modules/pear-native';
+import { getSetting, setSetting } from '../chat/database';
+import { setSoundsEnabled, soundsEnabled } from './chat/sounds';
+import { appVersionCode, appVersionName, authenticate } from '../../modules/pear-native';
+import { showDialog } from '../components/dialog';
 
 import { SegmentedControl } from '../components/SegmentedControl';
 import { Header, Screen } from '../components/ui';
+import { Toggle } from '../components/Toggle';
+import { WhatsNew } from '../update/WhatsNew';
+import { pagesFor } from '../update/pages';
 import { currentLanguage, languageChoice, LANGUAGES, t } from '../i18n';
 import { LanguageSheet } from '../components/LanguageSheet';
-import { createStyles, radius, setThemePreference, spacing, ThemePreference, useColors, useThemePreference } from '../theme';
+import { createStyles, radius, setTextScaleIndex, setThemePreference, spacing, TEXT_SCALES, ThemePreference, useColors, useTextScaleIndex, useThemePreference } from '../theme';
+import { haptics } from '../haptics';
 import { checkForUpdate, getInstallPermission, previewUpdateScreen, requestInstallPermission, useUpdateState } from '../update/updates';
 
 const THEMES: { value: ThemePreference; label: string }[] = [
@@ -17,16 +25,34 @@ const THEMES: { value: ThemePreference; label: string }[] = [
   { value: 'dark', label: t('profil.themeSombre') },
 ];
 
-type Props = { onBack: () => void; onDiagnostic: () => void; onBlocked: () => void; onStorage: () => void; onReplayOnboarding: () => void };
+type Props = { onBack: () => void; onDiagnostic: () => void; onBlocked: () => void; onStorage: () => void; onServers: () => void; onDiscover: () => void; onReplayOnboarding: () => void };
 
 // Les réglages de l'app, ouverts depuis le bouton en haut à droite du Profil.
-export function SettingsScreen({ onBack, onDiagnostic, onBlocked, onStorage, onReplayOnboarding }: Props) {
+export function SettingsScreen({ onBack, onDiagnostic, onBlocked, onStorage, onServers, onDiscover, onReplayOnboarding }: Props) {
   const colors = useColors();
   const styles = useStyles();
+  const [whatsNewOpen, setWhatsNewOpen] = useState(false);
+  const currentPages = pagesFor(appVersionName() ?? '');
   const theme = useThemePreference();
+  const textSize = useTextScaleIndex();
   const update = useUpdateState();
   const [canInstall, setCanInstall] = useState(getInstallPermission);
   const [languageOpen, setLanguageOpen] = useState(false);
+  const [relay, setRelay] = useState(() => getSetting('relay_enabled') !== '0');
+  const [linkPreviews, setLinkPreviews] = useState(linkPreviewsEnabled);
+  const [sounds, setSounds] = useState(soundsEnabled);
+
+  const [lock, setLock] = useState(() => getSetting('app_lock') === '1');
+  // On vérifie que l'empreinte ou le code marche avant d'activer : sinon on s'enfermerait dehors.
+  const changeLock = async (value: boolean) => {
+    if (value) {
+      const result = await authenticate(t('reglages.verrouTitre'));
+      if (result === 'unavailable') return showDialog(t('reglages.verrou'), t('reglages.verrouIndisponible'));
+      if (result !== 'ok') return;
+    }
+    setLock(value);
+    setSetting('app_lock', value ? '1' : null);
+  };
 
   // L'autorisation se donne dans les réglages d'Android : on la relit au retour dans l'app.
   useEffect(() => {
@@ -62,6 +88,17 @@ export function SettingsScreen({ onBack, onDiagnostic, onBlocked, onStorage, onR
           <ChevronRight size={20} color={colors.textMuted} strokeWidth={1.75} />
         </Pressable>
 
+        <Text style={[styles.label, styles.section]}>{t('reglages.tailleTexte')}</Text>
+        <SegmentedControl
+          options={TEXT_SCALES.map((_, i) => ({ value: String(i), label: 'A'.repeat(1) + ['', '+', '++', '+++'][i] }))}
+          value={String(textSize)}
+          onChange={(value) => {
+            haptics.select();
+            setTextScaleIndex(Number(value));
+          }}
+        />
+        <Text style={[styles.settingDetail, styles.sizeSample]}>{t('reglages.tailleTexteAide')}</Text>
+
         <Text style={[styles.label, styles.section]}>{t('reglages.notifications')}</Text>
         <View style={styles.rows}>
           <Pressable onPress={() => Linking.openSettings()} style={({ pressed }) => [styles.setting, pressed && styles.pressed]}>
@@ -69,6 +106,21 @@ export function SettingsScreen({ onBack, onDiagnostic, onBlocked, onStorage, onR
             <Text style={styles.settingLabel}>{t('commun.notifications')}</Text>
             <ChevronRight size={20} color={colors.textMuted} strokeWidth={1.75} />
           </Pressable>
+          <View style={styles.setting}>
+            <Volume2 size={20} color={colors.text} strokeWidth={1.75} />
+            <View style={styles.settingText}>
+              <Text style={styles.settingLabel}>{t('reglages.sons')}</Text>
+              <Text style={styles.settingDetail}>{t('reglages.sonsAide')}</Text>
+            </View>
+            <Toggle
+              value={sounds}
+              label={t('reglages.sons')}
+              onChange={(value) => {
+                setSounds(value);
+                setSoundsEnabled(value);
+              }}
+            />
+          </View>
           <Pressable onPress={onStorage} style={({ pressed }) => [styles.setting, pressed && styles.pressed]}>
             <HardDrive size={20} color={colors.text} strokeWidth={1.75} />
             <Text style={styles.settingLabel}>{t('stockage.titre')}</Text>
@@ -82,6 +134,52 @@ export function SettingsScreen({ onBack, onDiagnostic, onBlocked, onStorage, onR
         </View>
 
         <Text style={[styles.label, styles.section]}>{t('reglages.confidentialite')}</Text>
+        <View style={[styles.setting, styles.relayRow]}>
+          <Share2 size={20} color={colors.text} strokeWidth={1.75} />
+          <View style={styles.settingText}>
+            <Text style={styles.settingLabel}>{t('reglages.relais')}</Text>
+            <Text style={styles.settingDetail}>{t('reglages.relaisAide')}</Text>
+          </View>
+          <Toggle
+            value={relay}
+            label={t('reglages.relais')}
+            onChange={(value) => {
+              setRelay(value);
+              setSetting('relay_enabled', value ? null : '0');
+            }}
+          />
+        </View>
+        <View style={[styles.setting, styles.relayRow]}>
+          <Link2 size={20} color={colors.text} strokeWidth={1.75} />
+          <View style={styles.settingText}>
+            <Text style={styles.settingLabel}>{t('reglages.apercuLiens')}</Text>
+            <Text style={styles.settingDetail}>{t('reglages.apercuLiensAide')}</Text>
+          </View>
+          <Toggle
+            value={linkPreviews}
+            label={t('reglages.apercuLiens')}
+            onChange={(value) => {
+              setLinkPreviews(value);
+              setLinkPreviewsEnabled(value);
+            }}
+          />
+        </View>
+        <View style={[styles.setting, styles.relayRow]}>
+          <Lock size={20} color={colors.text} strokeWidth={1.75} />
+          <View style={styles.settingText}>
+            <Text style={styles.settingLabel}>{t('reglages.verrou')}</Text>
+            <Text style={styles.settingDetail}>{t('reglages.verrouAide')}</Text>
+          </View>
+          <Toggle value={lock} onChange={changeLock} label={t('reglages.verrou')} />
+        </View>
+        <Pressable onPress={onServers} style={({ pressed }) => [styles.setting, styles.relayRow, pressed && styles.pressed]}>
+          <Eye size={20} color={colors.text} strokeWidth={1.75} />
+          <View style={styles.settingText}>
+            <Text style={styles.settingLabel}>{t('reglages.serveurs')}</Text>
+            <Text style={styles.settingDetail}>{t('reglages.serveursAide')}</Text>
+          </View>
+          <ChevronRight size={20} color={colors.textMuted} strokeWidth={1.75} />
+        </Pressable>
         <Pressable onPress={onBlocked} style={({ pressed }) => [styles.setting, pressed && styles.pressed]}>
           <Ban size={20} color={colors.text} strokeWidth={1.75} />
           <Text style={styles.settingLabel}>{t('reglages.bloques')}</Text>
@@ -113,6 +211,17 @@ export function SettingsScreen({ onBack, onDiagnostic, onBlocked, onStorage, onR
               <Text style={styles.settingLabel}>{t('profil.apercuMaj')}</Text>
             </Pressable>
           )}
+          {currentPages.length > 0 && (
+            <Pressable onPress={() => setWhatsNewOpen(true)} style={({ pressed }) => [styles.setting, pressed && styles.pressed]}>
+              <Sparkles size={20} color={colors.text} strokeWidth={1.75} />
+              <Text style={styles.settingLabel}>{t('nouveautes.version', { version: appVersionName() ?? '?' })}</Text>
+            </Pressable>
+          )}
+          <Pressable onPress={onDiscover} style={({ pressed }) => [styles.setting, pressed && styles.pressed]}>
+            <Sparkles size={20} color={colors.text} strokeWidth={1.75} />
+            <Text style={styles.settingLabel}>{t('nouveautes.decouvrir')}</Text>
+            <ChevronRight size={20} color={colors.textMuted} strokeWidth={1.75} />
+          </Pressable>
           {__DEV__ && (
             <Pressable onPress={onReplayOnboarding} style={({ pressed }) => [styles.setting, pressed && styles.pressed]}>
               <RefreshCw size={20} color={colors.text} strokeWidth={1.75} />
@@ -121,12 +230,19 @@ export function SettingsScreen({ onBack, onDiagnostic, onBlocked, onStorage, onR
           )}
         </View>
       </ScrollView>
+      {whatsNewOpen && <WhatsNew pages={currentPages} onClose={() => setWhatsNewOpen(false)} />}
       {languageOpen && <LanguageSheet onClose={() => setLanguageOpen(false)} />}
     </Screen>
   );
 }
 
 const useStyles = createStyles((colors) => ({
+  relayRow: {
+    marginBottom: spacing.sm,
+  },
+  sizeSample: {
+    marginTop: spacing.sm,
+  },
   languageRow: {
     marginTop: spacing.md,
   },

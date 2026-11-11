@@ -11,7 +11,7 @@ import { t } from '../i18n';
 import { log } from '../log';
 import { createStyles, radius, setThemePreference, spacing, ThemePreference, useColors, useThemePreference } from '../theme';
 import { checkAllPermissions, PermissionId, PermissionState, requestPermission } from './permissions';
-import { Pear, PEAR_RATIO } from './Pear';
+import { Pear, PEAR_RATIO } from '../components/Pear';
 import { BackupSheet } from '../components/BackupSheet';
 import { MediaPicker } from '../components/MediaPicker';
 import { ProfilePhotoCropper } from '../components/ProfilePhotoCropper';

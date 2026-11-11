@@ -182,7 +182,95 @@ const MIGRATIONS: Migration[] = [
     version: 11,
     up: (db) => addColumn(db, 'messages', 'scheduled_at', 'INTEGER'),
   },
+  {
+    // Lot 1.5 : contact « vérifié » (code comparé sur la fiche, ou scans croisés en face à face).
+    version: 12,
+    up: (db) => addColumn(db, 'contacts', 'verified', 'INTEGER NOT NULL DEFAULT 0'),
+  },
+  {
+    // Lot 2.3 : clé de chaque fichier de pear-files/ (chiffré sur le disque), par nom de fichier.
+    version: 13,
+    up: (db) => db.execSync('CREATE TABLE IF NOT EXISTS file_keys (id TEXT PRIMARY KEY NOT NULL, key TEXT NOT NULL)'),
+  },
+  {
+    // Lot 4.1 : recherche dans les messages. Index plein texte (FTS5) des messages de type texte, dans
+    // la base chiffrée, tenu à jour par des déclencheurs. Sans FTS5 (SQLite construit sans), la
+    // recherche se fait par LIKE : la migration ne bloque jamais le démarrage.
+    version: 14,
+    up: (db) => {
+      try {
+        createSearchIndex(db);
+      } catch {
+        db.execSync('DROP TABLE IF EXISTS messages_fts');
+      }
+    },
+  },
+  {
+    // Vague 4 : ce qu'un message transporte en plus (forme d'onde d'un vocal, miniature floue, aperçu
+    // de lien), en JSON. Voir src/chat/meta.ts.
+    version: 15,
+    up: (db) => addColumn(db, 'messages', 'meta', 'TEXT'),
+  },
+  {
+    // Lot 4.5 : album (plusieurs photos envoyées ensemble) : le même identifiant sur chaque média.
+    version: 16,
+    up: (db) => addColumn(db, 'messages', 'album', 'TEXT'),
+  },
+  {
+    // Lot 4.7 : messages éphémères (heure d'effacement de chaque message, minuteur de la conversation
+    // en secondes) et médias à vue unique (1 : à voir une fois, 2 : déjà ouvert).
+    version: 17,
+    up: (db) => {
+      addColumn(db, 'messages', 'expires_at', 'INTEGER');
+      addColumn(db, 'messages', 'view_once', 'INTEGER NOT NULL DEFAULT 0');
+      addColumn(db, 'conversation_settings', 'ephemeral', 'INTEGER');
+      db.execSync('CREATE INDEX IF NOT EXISTS messages_expires ON messages (expires_at) WHERE expires_at IS NOT NULL');
+    },
+  },
 ];
+
+// La ligne de l'index porte le rowid du message : une modification ou une suppression la retrouve
+// sans parcourir l'index.
+export function createSearchIndex(db: MigrationDb) {
+  db.execSync(`
+    CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(text, id UNINDEXED, contact UNINDEXED, tokenize = "unicode61 remove_diacritics 2");
+    CREATE TRIGGER IF NOT EXISTS messages_fts_insert AFTER INSERT ON messages WHEN new.kind = 'text' BEGIN
+      INSERT INTO messages_fts (rowid, text, id, contact) VALUES (new.rowid, new.text, new.id, new.contact);
+    END;
+    CREATE TRIGGER IF NOT EXISTS messages_fts_update AFTER UPDATE OF text ON messages WHEN new.kind = 'text' BEGIN
+      DELETE FROM messages_fts WHERE rowid = old.rowid;
+      INSERT INTO messages_fts (rowid, text, id, contact) VALUES (new.rowid, new.text, new.id, new.contact);
+    END;
+    CREATE TRIGGER IF NOT EXISTS messages_fts_delete AFTER DELETE ON messages WHEN old.kind = 'text' BEGIN
+      DELETE FROM messages_fts WHERE rowid = old.rowid;
+    END;
+  `);
+  rebuildSearchIndex(db);
+}
+
+export function rebuildSearchIndex(db: MigrationDb) {
+  db.execSync(`
+    DELETE FROM messages_fts;
+    INSERT INTO messages_fts (rowid, text, id, contact) SELECT rowid, text, id, contact FROM messages WHERE kind = 'text';
+  `);
+}
+
+export function hasSearchIndex(db: MigrationDb) {
+  return db.getFirstSync("SELECT 1 AS found FROM sqlite_master WHERE name = 'messages_fts'") !== null;
+}
+
+// Une copie de la base (sauvegarde, chiffrement) peut renuméroter les lignes de messages : l'index ne
+// désignerait plus les bons messages. Vérifié à l'ouverture sur le nombre de lignes et sur la dernière.
+export function searchIndexIsStale(db: MigrationDb) {
+  const texts = db.getFirstSync<{ n: number }>("SELECT count(*) AS n FROM messages WHERE kind = 'text'")?.n ?? 0;
+  const indexed = db.getFirstSync<{ n: number }>('SELECT count(*) AS n FROM messages_fts')?.n ?? 0;
+  if (texts !== indexed) return true;
+  if (texts === 0) return false;
+  const last = db.getFirstSync<{ same: number }>(
+    "SELECT (SELECT f.id FROM messages_fts f WHERE f.rowid = m.rowid) = m.id AS same FROM messages m WHERE m.kind = 'text' ORDER BY m.rowid DESC LIMIT 1",
+  );
+  return last?.same !== 1;
+}
 
 export const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
 

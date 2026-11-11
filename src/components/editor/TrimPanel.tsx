@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Image, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '../../haptics';
 import { getThumbnailAsync } from 'expo-video-thumbnails';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
 
@@ -82,7 +82,7 @@ export function TrimPanel({ uri, duration, trim, playhead, bottom, onChange, onS
       const fromEnd = Math.abs(x - toX(end));
       const handle = Math.min(fromStart, fromEnd) > HANDLE_REACH ? null : fromStart <= fromEnd ? 'start' : 'end';
       drag.current = { handle, origin: handle === 'start' ? trim.start : end };
-      if (handle) Haptics.selectionAsync().catch((e) => log.warn('vibration', e));
+      if (handle) haptics.select();
     },
     update: (dx: number) => {
       const { handle, origin } = drag.current;
@@ -156,10 +156,10 @@ export function TrimPanel({ uri, duration, trim, playhead, bottom, onChange, onS
       </GestureDetector>
 
       <View style={styles.actions}>
-        <Pressable onPress={() => onChange({ start: 0, end: null })} style={({ pressed }) => [styles.action, pressed && styles.pressed]}>
+        <Pressable accessibilityRole="button" accessibilityLabel={t('editeur.reinitialiser')} onPress={() => onChange({ start: 0, end: null })} style={({ pressed }) => [styles.action, pressed && styles.pressed]}>
           <Text style={styles.actionLabel}>{t('editeur.reinitialiser')}</Text>
         </Pressable>
-        <Pressable onPress={close} style={({ pressed }) => [styles.action, styles.done, pressed && styles.pressed]}>
+        <Pressable accessibilityRole="button" accessibilityLabel={t('editeur.termine')} onPress={close} style={({ pressed }) => [styles.action, styles.done, pressed && styles.pressed]}>
           <Text style={[styles.actionLabel, { color: colors.text }]}>{t('editeur.termine')}</Text>
         </Pressable>
       </View>

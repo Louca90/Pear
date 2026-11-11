@@ -1,12 +1,11 @@
 import { memo, useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import { haptics } from '../../haptics';
 import { Eraser, Redo2, Undo2 } from 'lucide-react-native';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
 import Svg, { Path } from 'react-native-svg';
 
 import { t } from '../../i18n';
-import { log } from '../../log';
 import { createMediaStyles, radius, spacing, useMediaColors } from '../../theme';
 import { IconButton, useInsets } from '../ui';
 import { addPoint, BRUSH_MAX, BRUSH_MIN, commit, History, historyOf, redo, Stroke, strokePath, touchesStroke, undo } from './drawing';
@@ -19,7 +18,7 @@ const SLIDER_HEIGHT = 200;
 const ERASER_RADIUS = 14;
 
 function vibrate() {
-  Haptics.selectionAsync().catch((e) => log.warn('vibration', e));
+  haptics.select();
 }
 
 // Les traits terminés, dans un SVG transparent de la taille de l'aperçu. Mémorisé : un nouveau trait
@@ -173,7 +172,7 @@ export function DrawPanel({ frame, strokes, color, width, bottom, onStrokes, onB
             >
               <Eraser size={22} color={erasing ? colors.text : colors.background} strokeWidth={1.75} />
             </IconButton>
-            <Pressable onPress={close} style={styles.done}>
+            <Pressable accessibilityRole="button" accessibilityLabel={t('editeur.termine')} onPress={close} style={styles.done}>
               <Text style={styles.doneLabel}>{t('editeur.termine')}</Text>
             </Pressable>
           </View>
@@ -195,7 +194,7 @@ export function DrawPanel({ frame, strokes, color, width, bottom, onStrokes, onB
                   setErasing(false);
                   onBrush({ color: value, width });
                 }}
-                accessibilityLabel={value}
+                accessibilityRole="button" accessibilityLabel={t('editeur.couleur', { n: TEXT_COLORS.indexOf(value) + 1 })}
                 accessibilityState={{ selected: !erasing && color === value }}
                 style={[styles.color, { backgroundColor: value }, !erasing && color === value && styles.colorOn]}
               />
