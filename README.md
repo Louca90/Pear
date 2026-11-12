@@ -71,7 +71,10 @@ Voir `RELEASE.md` : `node scripts/release.mjs bump X.Y.Z`, puis `draft`, `build`
 
 
 
-https://github.com/user-attachments/assets/b442004e-a0ed-4d75-bf23-9d9ecf3b740a
+https://github.com/user-attachments/assets/2dca6454-0534-4647-a62d-48b77e3a12b5
+
+
+
 
 
 
