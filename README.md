@@ -57,6 +57,9 @@ Plus de détails pour travailler dans le code : `CLAUDE.md`.
 
 Voir `RELEASE.md` : `node scripts/release.mjs bump X.Y.Z`, puis `draft`, `build` et `publish`.
 
+<img width="3200" height="1800" alt="pear-banner" src="https://github.com/user-attachments/assets/6add8e59-2e83-4656-99ce-1f715c02cdd9" />
+
+
 ## Licence
 
 MIT, voir `LICENSE`.
