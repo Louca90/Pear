@@ -57,7 +57,17 @@ Plus de détails pour travailler dans le code : `CLAUDE.md`.
 
 Voir `RELEASE.md` : `node scripts/release.mjs bump X.Y.Z`, puis `draft`, `build` et `publish`.
 
+## screen shots
 <img width="3200" height="1800" alt="pear-banner" src="https://github.com/user-attachments/assets/6add8e59-2e83-4656-99ce-1f715c02cdd9" />
+
+<img width="1120" height="2160" alt="pear-02-permissions" src="https://github.com/user-attachments/assets/b988b24b-276b-4153-a29e-98444f899792" />
+
+<img width="1120" height="2160" alt="pear-07-chat" src="https://github.com/user-attachments/assets/331ee050-e213-4c3f-b1c7-2138d1b4b984" />
+
+<img width="1120" height="2160" alt="pear-06-verification" src="https://github.com/user-attachments/assets/d20d1877-10ad-484f-b3da-555916a3a3f2" />
+
+
+
 
 
 ## Licence
