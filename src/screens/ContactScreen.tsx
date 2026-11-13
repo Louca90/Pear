@@ -1,15 +1,18 @@
-import { useRef, useState } from 'react';
-import { Animated, Easing, KeyboardAvoidingView, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { Ban, Check, Trash2 } from 'lucide-react-native';
+import { ComponentType, useEffect, useState, useSyncExternalStore } from 'react';
+import { KeyboardAvoidingView, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import Reanimated, { interpolateColor, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import { Ban, Bell, Check, MessageCircle, ShieldCheck, Timer, Trash2 } from 'lucide-react-native';
 
-import { ContactProfile } from '../chat/database';
-import { Pear } from '../components/Pear';
+import { ContactProfile, getMediaMessages, getMutedKinds, MessageKind } from '../chat/database';
+import { chat } from '../chat/manager';
 import { showDialog } from '../components/dialog';
-import { Avatar, Button, Header, Screen } from '../components/ui';
-import { SegmentedControl } from '../components/SegmentedControl';
+import { Avatar, Button, Header, Screen, usePressFeedback } from '../components/ui';
+import { enterUp, popIn, popOut, timing } from '../motion';
 import { ContactMedia } from './contact/ContactMedia';
+import { ROUTE } from './chat/constants';
+import { ephemeralLabel } from './chat/format';
 import { createStyles, radius, spacing, useColors } from '../theme';
-import { t } from '../i18n';
+import { t, TextKey } from '../i18n';
 
 type Props = {
   initialName: string;
@@ -22,33 +25,106 @@ type Props = {
   blocked: boolean;
   onToggleBlock: () => void;
   contactKey: string;
-  // 4 groupes de 4 chiffres, identiques sur les deux téléphones.
+  // Le code de vérification n'est plus affiché ici (demande de Louca, refonte du 13 nov.) : props gardées
+  // pour ne pas toucher à App.tsx.
   code: string[];
   verified: boolean;
   onVerify: () => void;
 };
 
-export function ContactScreen({ initialName, profile, isNew, onBack, onSave, onRemove, blocked, onToggleBlock, contactKey, code, verified, onVerify }: Props) {
+type Tab = 'profile' | 'media';
+
+const AVATAR = 104;
+const TAB_MS = 240;
+
+// Notifications de la conversation, dans l'ordre de l'écran des notifications.
+const NOTIF_KINDS: { kind: MessageKind; label: TextKey }[] = [
+  { kind: 'text', label: 'notifs.messages' },
+  { kind: 'image', label: 'notifs.photos' },
+  { kind: 'video', label: 'notifs.videos' },
+  { kind: 'audio', label: 'notifs.vocaux' },
+  { kind: 'file', label: 'notifs.fichiers' },
+];
+
+function notificationsLabel(contactKey: string) {
+  const muted = getMutedKinds(contactKey);
+  const muteds = NOTIF_KINDS.filter(({ kind }) => muted.includes(kind));
+  if (muteds.length === 0) return t('contact.notifToutes');
+  if (muteds.length === NOTIF_KINDS.length) return t('contact.notifAucune');
+  return t('contact.notifSauf', { liste: muteds.map(({ label }) => t(label).toLocaleLowerCase()).join(', ') });
+}
+
+// Une carte d'action sous l'avatar (Écrire…), avec l'effet d'appui commun.
+function ActionCard({ icon: Icon, label, onPress }: { icon: ComponentType<{ size: number; color: string; strokeWidth: number }>; label: string; onPress: () => void }) {
+  const colors = useColors();
+  const styles = useStyles();
+  const feedback = usePressFeedback();
+  return (
+    <Pressable style={styles.actionSlot} onPress={onPress} onPressIn={feedback.onPressIn} onPressOut={feedback.onPressOut} accessibilityRole="button" accessibilityLabel={label}>
+      <Reanimated.View style={[styles.action, feedback.style]}>
+        <Icon size={20} color={colors.text} strokeWidth={1.8} />
+        <Text style={styles.actionLabel}>{label}</Text>
+      </Reanimated.View>
+    </Pressable>
+  );
+}
+
+// Les deux onglets, soulignés en couleur signature : le trait glisse d'un onglet à l'autre.
+function Tabs({ tab, mediaCount, onChange }: { tab: Tab; mediaCount: number; onChange: (tab: Tab) => void }) {
+  const colors = useColors();
+  const styles = useStyles();
+  const [width, setWidth] = useState(0);
+  const progress = useSharedValue(tab === 'media' ? 1 : 0);
+  useEffect(() => {
+    progress.set(timing(tab === 'media' ? 1 : 0, TAB_MS));
+  }, [tab, progress]);
+  const text = colors.text;
+  const muted = colors.textMuted;
+  const underline = useAnimatedStyle(() => ({ transform: [{ translateX: (progress.get() * width) / 2 }] }));
+  const profileLabel = useAnimatedStyle(() => ({ color: interpolateColor(progress.get(), [0, 1], [text, muted]) }));
+  const mediaLabel = useAnimatedStyle(() => ({ color: interpolateColor(progress.get(), [0, 1], [muted, text]) }));
+
+  return (
+    <View style={styles.tabs} accessibilityRole="tablist" onLayout={({ nativeEvent }) => setWidth(nativeEvent.layout.width)}>
+      <Pressable style={styles.tab} onPress={() => onChange('profile')} accessibilityRole="tab" accessibilityState={{ selected: tab === 'profile' }}>
+        <Reanimated.Text style={[styles.tabLabel, profileLabel]}>{t('contact.ongletProfil')}</Reanimated.Text>
+      </Pressable>
+      <Pressable style={styles.tab} onPress={() => onChange('media')} accessibilityRole="tab" accessibilityState={{ selected: tab === 'media' }}>
+        <Reanimated.Text style={[styles.tabLabel, mediaLabel]}>{t('contact.ongletMediasNombre', { n: mediaCount })}</Reanimated.Text>
+      </Pressable>
+      {width > 0 && <Reanimated.View style={[styles.underline, { width: width / 2 }, underline]} />}
+    </View>
+  );
+}
+
+export function ContactScreen({ initialName, profile, isNew, onBack, onSave, onRemove, blocked, onToggleBlock, contactKey, verified }: Props) {
   const colors = useColors();
   const styles = useStyles();
   const [name, setName] = useState(initialName);
-  const [tab, setTab] = useState<'profile' | 'media'>('profile');
-  const fade = useRef(new Animated.Value(1)).current;
-  const tick = useRef(new Animated.Value(verified ? 1 : 0)).current;
+  const [tab, setTab] = useState<Tab>('profile');
+  const [messages] = useState(() => (isNew ? [] : getMediaMessages(contactKey)));
+  // Présence du contact : l'écran suit les changements de connexion.
+  useSyncExternalStore(chat.subscribe, chat.getVersion);
 
-  // Validation : la coche apparaît en fondu.
-  const confirmCode = () => {
-    onVerify();
-    Animated.timing(tick, { toValue: 1, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
-  };
+  // Le grand avatar apparaît en s'agrandissant doucement (0,9 → 1).
+  const appear = useSharedValue(0);
+  useEffect(() => {
+    appear.set(timing(1, 280));
+  }, [appear]);
+  const avatarStyle = useAnimatedStyle(() => ({ opacity: appear.get(), transform: [{ scale: 0.9 + 0.1 * appear.get() }] }));
 
-  // Changement d'onglet : le contenu s'efface puis revient, sans saut.
-  const chooseTab = (next: 'profile' | 'media') => {
-    if (next === tab) return;
-    fade.setValue(0);
-    setTab(next);
-    Animated.timing(fade, { toValue: 1, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
-  };
+  const online = chat.isContactOnline(contactKey);
+  const { route, status } = chat.getLink(contactKey);
+  const presence = !chat.isOnline()
+    ? t('chat.vousHorsLigne')
+    : online
+      ? route ? t('contact.enLigneVia', { route: ROUTE[route] }) : t('chat.connecte')
+      : status === 'connecting'
+        ? t('contact.connexion')
+        : t('chat.contactHorsLigne');
+
+  const ephemeral = isNew ? null : chat.getEphemeral(contactKey);
+  const renamed = name.trim() !== initialName && name.trim().length > 0;
 
   const confirmBlock = () => {
     showDialog(t('statut.bloquerQuestion'), t('statut.bloquerAide'), [
@@ -64,86 +140,119 @@ export function ContactScreen({ initialName, profile, isNew, onBack, onSave, onR
     ]);
   };
 
+  const nameField = (
+    <View style={styles.nameBox}>
+      <Text style={styles.label}>{t('contact.nom')}</Text>
+      <TextInput
+        style={styles.input}
+        value={name}
+        onChangeText={setName}
+        placeholder={t('contact.nomContact')}
+        placeholderTextColor={colors.textMuted}
+        maxLength={40}
+      />
+    </View>
+  );
+
+  if (isNew) {
+    return (
+      <Screen>
+        <Header title={t('contact.nouveau')} onBack={onBack} />
+        <KeyboardAvoidingView behavior="padding" style={styles.flex}>
+          <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+            {nameField}
+            <Button label={t('commun.enregistrer')} icon={Check} onPress={() => onSave(name.trim() || t('app.contact'))} />
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </Screen>
+    );
+  }
+
+  const rows = [
+    { icon: ShieldCheck, color: colors.signatureStrong, label: t('contact.chiffrement'), sub: verified ? t('contact.verifie') : t('contact.chiffrementAide') },
+    { icon: Timer, color: colors.text, label: t('contact.ephemeres'), sub: ephemeral ? ephemeralLabel(ephemeral) : t('contact.ephemeresCoupes') },
+    { icon: Bell, color: colors.text, label: t('contact.notifications'), sub: notificationsLabel(contactKey) },
+  ];
+
   return (
     <Screen>
-      <Header title={isNew ? t('contact.nouveau') : initialName} onBack={onBack} />
+      <Header title="" onBack={onBack} />
       <KeyboardAvoidingView behavior="padding" style={styles.flex}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          {!isNew && (
-            <View style={styles.profile}>
-              <Avatar uri={profile.photo_uri} size={96} />
-              {profile.name && <Text style={styles.profileName}>{profile.name}</Text>}
-              {verified && (
-                <Animated.View style={[styles.verified, { opacity: tick }]}>
-                  {/* Contact vérifié : la feuille de la poire pousse, en couleur signature. */}
-                  <Pear height={20} color={colors.text} state="leaf" leafColor={colors.signatureStrong} />
-                  <Text style={styles.verifiedLabel}>{t('contact.verifie')}</Text>
-                </Animated.View>
-              )}
-            </View>
-          )}
-          {!isNew && (
-            <View style={styles.tabs}>
-              <SegmentedControl
-                options={[
-                  { value: 'profile', label: t('contact.ongletProfil') },
-                  { value: 'media', label: t('contact.ongletMedias') },
-                ]}
-                value={tab}
-                onChange={chooseTab}
-              />
-            </View>
-          )}
-          <Animated.View style={{ opacity: fade }}>
-          {tab === 'media' ? (
-            <ContactMedia contactKey={contactKey} />
-          ) : (
-          <>
-          <Text style={styles.label}>{t('contact.codeVerification')}</Text>
-          <View style={styles.codeBox}>
-            <View style={styles.codeRow}>
-              {code.map((group, index) => (
-                <Text key={index} style={styles.codeGroup}>
-                  {group}
-                </Text>
-              ))}
-            </View>
-            <Text style={styles.codeHelp}>{verified ? t('contact.verifie') : t('contact.codeAide')}</Text>
-            {!isNew && !verified && <Button label={t('contact.codesIdentiques')} icon={Check} onPress={confirmCode} />}
+          <View style={styles.identity}>
+            <Reanimated.View style={avatarStyle}>
+              <Avatar uri={profile.photo_uri} size={AVATAR} />
+              {online && <Reanimated.View entering={popIn()} exiting={popOut()} style={styles.onlineDot} />}
+            </Reanimated.View>
+            <Text style={styles.name} numberOfLines={1}>{initialName}</Text>
+            {profile.name && profile.name !== initialName && <Text style={styles.chosenName} numberOfLines={1}>{profile.name}</Text>}
+            <Reanimated.Text key={presence} entering={enterUp(0)} style={[styles.presence, online && styles.presenceOnline]} numberOfLines={1}>
+              {presence}
+            </Reanimated.Text>
           </View>
 
-          <Text style={styles.label}>{t('contact.nom')}</Text>
-          <TextInput
-            style={styles.input}
-            value={name}
-            onChangeText={setName}
-            placeholder={t('contact.nomContact')}
-            placeholderTextColor={colors.textMuted}
-            maxLength={40}
-          />
+          {/* Seules les actions qui existent déjà depuis cet écran : revenir écrire dans la conversation. */}
+          <Reanimated.View entering={enterUp(10, 240, 80)} style={styles.actions}>
+            <ActionCard icon={MessageCircle} label={t('contact.ecrire')} onPress={onBack} />
+          </Reanimated.View>
 
-          <View style={styles.actions}>
-            <Button label={t('commun.enregistrer')} icon={Check} onPress={() => onSave(name.trim() || t('app.contact'))} />
-          </View>
+          <Tabs tab={tab} mediaCount={messages.length} onChange={setTab} />
 
-          {!isNew && (
-            <Pressable onPress={blocked ? onToggleBlock : confirmBlock} style={styles.remove} hitSlop={8}>
-              <Ban size={18} color={colors.textMuted} strokeWidth={1.75} />
-              <Text style={styles.removeLabel}>{blocked ? t('statut.debloquerContact') : t('statut.bloquerContact')}</Text>
-            </Pressable>
-          )}
-          {!isNew && (
-            <Pressable onPress={confirmRemove} style={styles.remove} hitSlop={8}>
-              <Trash2 size={18} color={colors.textMuted} strokeWidth={1.75} />
-              <Text style={styles.removeLabel}>{t('contact.supprimer')}</Text>
-            </Pressable>
-          )}
-          </>
-          )}
-          </Animated.View>
+          <Reanimated.View key={tab} entering={enterUp(10, TAB_MS)} style={styles.tabContent}>
+            {tab === 'media' ? (
+              <ContactMedia messages={messages} />
+            ) : (
+              <>
+                <View style={styles.card}>
+                  {rows.map(({ icon: Icon, color, label, sub }, index) => (
+                    <View key={label} style={[styles.row, index > 0 && styles.rowDivider]}>
+                      <Icon size={20} color={color} strokeWidth={1.8} />
+                      <View style={styles.rowText}>
+                        <Text style={styles.rowLabel}>{label}</Text>
+                        <Text style={styles.rowSub}>{sub}</Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+
+                <View style={styles.card}>
+                  {nameField}
+                  {renamed && (
+                    <Reanimated.View entering={enterUp(6)} exiting={popOut()} style={styles.save}>
+                      <Button label={t('commun.enregistrer')} icon={Check} onPress={() => onSave(name.trim())} />
+                    </Reanimated.View>
+                  )}
+                </View>
+
+                <BlockButton blocked={blocked} onPress={blocked ? onToggleBlock : confirmBlock} />
+
+                <Pressable onPress={confirmRemove} style={styles.remove} hitSlop={8} accessibilityRole="button">
+                  <Trash2 size={18} color={colors.textMuted} strokeWidth={1.75} />
+                  <Text style={styles.removeLabel}>{t('contact.supprimer')}</Text>
+                </Pressable>
+              </>
+            )}
+          </Reanimated.View>
         </ScrollView>
       </KeyboardAvoidingView>
     </Screen>
+  );
+}
+
+// Bloquer en rouge (danger) ; débloquer, une fois bloqué, en couleur normale.
+function BlockButton({ blocked, onPress }: { blocked: boolean; onPress: () => void }) {
+  const colors = useColors();
+  const styles = useStyles();
+  const feedback = usePressFeedback();
+  const color = blocked ? colors.text : colors.danger;
+  const label = blocked ? t('statut.debloquerContact') : t('statut.bloquerContact');
+  return (
+    <Pressable onPress={onPress} onPressIn={feedback.onPressIn} onPressOut={feedback.onPressOut} accessibilityRole="button" accessibilityLabel={label}>
+      <Reanimated.View style={[styles.block, feedback.style]}>
+        <Ban size={18} color={color} strokeWidth={1.8} />
+        <Text style={[styles.blockLabel, { color }]}>{label}</Text>
+      </Reanimated.View>
+    </Pressable>
   );
 }
 
@@ -152,77 +261,160 @@ const useStyles = createStyles((colors) => ({
     flex: 1,
   },
   content: {
-    padding: spacing.lg,
-    paddingTop: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.lg,
   },
-  profile: {
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
-  },
-  tabs: {
-    marginBottom: spacing.lg,
-  },
-  profileName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: colors.text,
-  },
-  verified: {
-    flexDirection: 'row',
+  identity: {
     alignItems: 'center',
     gap: 6,
   },
-  verifiedLabel: {
+  onlineDot: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 4,
+    borderColor: colors.background,
+    backgroundColor: colors.signatureStrong,
+  },
+  name: {
+    marginTop: spacing.sm,
+    fontSize: 24,
+    fontWeight: '700',
+    letterSpacing: -0.4,
+    color: colors.text,
+  },
+  chosenName: {
+    fontSize: 14,
+    color: colors.textMuted,
+  },
+  presence: {
     fontSize: 13,
     color: colors.textMuted,
   },
-  codeBox: {
+  presenceOnline: {
+    color: colors.signatureStrong,
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: 18,
+  },
+  actionSlot: {
+    flex: 1,
+  },
+  action: {
+    height: 64,
     borderRadius: radius.md,
     backgroundColor: colors.surface,
-    padding: spacing.md,
-    gap: spacing.md,
-    marginBottom: spacing.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
   },
-  codeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  codeGroup: {
-    fontSize: 22,
-    fontWeight: '600',
+  actionLabel: {
+    fontSize: 11,
     color: colors.text,
-    fontVariant: ['tabular-nums'],
   },
-  codeHelp: {
-    fontSize: 13,
+  tabs: {
+    flexDirection: 'row',
+    marginTop: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  tab: {
+    flex: 1,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  underline: {
+    position: 'absolute',
+    left: 0,
+    bottom: -1,
+    height: 2,
+    backgroundColor: colors.signatureStrong,
+  },
+  tabContent: {
+    paddingTop: spacing.md,
+    gap: 10,
+  },
+  card: {
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    overflow: 'hidden',
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  rowDivider: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  rowText: {
+    flex: 1,
+  },
+  rowLabel: {
+    fontSize: 15,
+    color: colors.text,
+  },
+  rowSub: {
+    fontSize: 12,
     color: colors.textMuted,
+    marginTop: 2,
+  },
+  nameBox: {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    gap: spacing.sm,
   },
   label: {
     fontSize: 14,
     fontWeight: '500',
     color: colors.textMuted,
-    marginBottom: spacing.sm,
   },
   input: {
-    height: 52,
-    borderRadius: radius.md,
+    height: 48,
+    borderRadius: radius.sm,
     borderWidth: 1,
     borderColor: colors.border,
     paddingHorizontal: spacing.md,
     fontSize: 16,
     color: colors.text,
-    marginBottom: spacing.lg,
+    backgroundColor: colors.background,
   },
-  actions: {
+  save: {
+    paddingHorizontal: 14,
+    paddingBottom: 12,
+  },
+  block: {
+    height: 52,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: spacing.sm,
+  },
+  blockLabel: {
+    fontSize: 15,
+    fontWeight: '600',
   },
   remove: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    marginTop: spacing.lg,
+    marginTop: spacing.sm,
     padding: spacing.sm,
   },
   removeLabel: {
