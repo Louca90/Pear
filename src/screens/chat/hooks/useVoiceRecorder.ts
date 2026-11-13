@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Keyboard, Linking, PanResponder } from 'react-native';
+import { Easing, useSharedValue, withTiming } from 'react-native-reanimated';
 import { RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder } from 'expo-audio';
 import { haptics } from '../../../haptics';
 import { encodeWave } from '../../../chat/meta';
@@ -24,6 +25,7 @@ export function useVoiceRecorder(onRecorded: (uri: string, seconds: number, wave
   const dragY = useRef(new Animated.Value(0)).current;
   const lockProgress = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(1)).current;
+  const liveLevel = useSharedValue(0);
   const phaseRef = useRef<'idle' | 'holding' | 'locked'>('idle');
   const startedAt = useRef(0);
   const fingerDown = useRef(false);
@@ -45,7 +47,11 @@ export function useVoiceRecorder(onRecorded: (uri: string, seconds: number, wave
     const meter = setInterval(() => {
       try {
         const level = recorder.getStatus().metering;
-        if (typeof level === 'number') levels.current.push(level);
+        if (typeof level === 'number') {
+          levels.current.push(level);
+          // Niveau affiché par l'onde « en direct » (RecordingRow) : -50 dB ou moins = silence, 0 dB = plein.
+          liveLevel.set(withTiming(Math.max(0, Math.min(1, (level + 50) / 50)), { duration: LEVEL_EVERY_MS, easing: Easing.linear }));
+        }
       } catch {
         // Enregistreur arrêté entre-temps : rien à relever.
       }
@@ -53,6 +59,7 @@ export function useVoiceRecorder(onRecorded: (uri: string, seconds: number, wave
     return () => {
       clearInterval(timer);
       clearInterval(meter);
+      liveLevel.set(0);
     };
   }, [phase === 'idle']);
 
@@ -165,5 +172,5 @@ export function useVoiceRecorder(onRecorded: (uri: string, seconds: number, wave
     }),
   ).current.panHandlers;
 
-  return { phase, seconds, dragX, dragY, lockProgress, scale, panHandlers, discard: () => stop(false) };
+  return { phase, seconds, dragX, dragY, lockProgress, scale, liveLevel, panHandlers, discard: () => stop(false) };
 }

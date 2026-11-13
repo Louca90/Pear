@@ -100,7 +100,7 @@ export function Composer({
       <ComposerModeCard mode={mode} name={name} onCancel={onCancelMode} onJump={onJump} />
       <View style={[styles.composer, { paddingBottom: keyboardOpen ? spacing.sm : bottom + spacing.sm }]}>
         {voice.phase !== 'idle' ? (
-          <RecordingRow seconds={voice.seconds} locked={voice.phase === 'locked'} dragX={voice.dragX} onDiscard={voice.discard} />
+          <RecordingRow seconds={voice.seconds} locked={voice.phase === 'locked'} dragX={voice.dragX} level={voice.liveLevel} onDiscard={voice.discard} />
         ) : (
           <View style={styles.field} onLayout={(event) => setFieldWidth(event.nativeEvent.layout.width)}>
             {/* La place du trombone : c'est la pilule (plus bas) qui le dessine. */}

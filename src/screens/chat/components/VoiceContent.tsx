@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AudioPlayer, setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
-import { Pause, Play } from 'lucide-react-native';
+import Reanimated, { interpolate, useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 
 import { getSetting, Message, setSetting } from '../../../chat/database';
 import { chat } from '../../../chat/manager';
 import { useMediaUri } from '../../../chat/media';
 import { decodeWave, parseMeta } from '../../../chat/meta';
+import { PauseIcon, PlayIcon } from '../../../components/PlayIcon';
 import { IconButton } from '../../../components/ui';
 import { haptics } from '../../../haptics';
+import { timing } from '../../../motion';
 import { BubblePalette, radius, spacing } from '../../../theme';
 
 import { SeekBar } from './SeekBar';
@@ -153,6 +155,16 @@ export function VoiceContent({ message, palette, next }: { message: Message; pal
     if (status.duration > 0) player.seekTo(ratio * status.duration).catch((e) => log.warn('vocal', e));
   };
 
+  // Nouvelle vitesse : l'étiquette se pose en fondu et passe de 0,8 à 1 (pas au premier affichage).
+  const rateIn = useSharedValue(1);
+  const shownRate = useRef(rate);
+  useEffect(() => {
+    if (shownRate.current === rate) return;
+    shownRate.current = rate;
+    rateIn.set(withSequence(withTiming(0, { duration: 0 }), timing(1)));
+  }, [rate, rateIn]);
+  const rateStyle = useAnimatedStyle(() => ({ opacity: rateIn.get(), transform: [{ scale: interpolate(rateIn.get(), [0, 1], [0.8, 1]) }] }));
+
   const changeRate = () => {
     haptics.select();
     nextRate();
@@ -160,12 +172,8 @@ export function VoiceContent({ message, palette, next }: { message: Message; pal
 
   return (
     <View style={styles.voice}>
-      <IconButton onPress={toggle} label={status.playing ? t('chat.pause') : t('chat.ecouterVocal')} hitSlop={2} style={[styles.voiceButton, { backgroundColor: palette.track }]}>
-        {status.playing ? (
-          <Pause size={18} color={palette.text} fill={palette.text} strokeWidth={1.75} />
-        ) : (
-          <Play size={18} color={palette.text} fill={palette.text} strokeWidth={1.75} />
-        )}
+      <IconButton onPress={toggle} label={status.playing ? t('chat.pause') : t('chat.ecouterVocal')} hitSlop={2} style={[styles.voiceButton, { backgroundColor: palette.text }]}>
+        <PlayPause playing={status.playing} color={palette.background} />
       </IconButton>
       <View style={styles.voiceBody}>
         {bars ? (
@@ -174,9 +182,11 @@ export function VoiceContent({ message, palette, next }: { message: Message; pal
           <SeekBar position={progress ?? position} speed={speed} color={palette.text} trackColor={palette.track} label={t('chat.deplacerVocal')} onSeek={seek} />
         )}
         <View style={styles.voiceFooter}>
-          <Text style={[styles.time, { color: palette.muted }]}>{formatClock(status.playing || status.currentTime > 0 ? status.currentTime : status.duration)}</Text>
+          <Text style={[styles.time, styles.clock, { color: palette.muted }]}>{formatClock(status.playing || status.currentTime > 0 ? status.currentTime : status.duration)}</Text>
           <Pressable onPress={changeRate} hitSlop={10} accessibilityRole="button" accessibilityLabel={t('vocal.vitesse', { vitesse: rateLabel(rate) })} style={[styles.rate, { backgroundColor: palette.track }]}>
-            <Text style={[styles.rateLabel, { color: palette.text }]}>{rateLabel(rate)}</Text>
+            <Reanimated.Text style={[styles.rateLabel, { color: palette.text }, rateStyle]}>
+              {rateLabel(rate)}
+            </Reanimated.Text>
           </Pressable>
         </View>
       </View>
@@ -184,38 +194,88 @@ export function VoiceContent({ message, palette, next }: { message: Message; pal
   );
 }
 
+// Lecture ↔ pause : fondu croisé avec un quart de tour et une légère échelle, sur le fil natif.
+// Les deux icônes (arrondies) restent montées l'une sur l'autre ; seule la valeur `shown` bouge.
+const ICON_MS = 220;
+
+function PlayPause({ playing, color }: { playing: boolean; color: string }) {
+  const shown = useSharedValue(playing ? 1 : 0);
+  useEffect(() => {
+    shown.set(timing(playing ? 1 : 0, ICON_MS));
+  }, [playing, shown]);
+  const playStyle = useAnimatedStyle(() => {
+    const p = shown.get();
+    return {
+      opacity: 1 - p,
+      transform: [{ rotate: `${-90 * p}deg` }, { scale: interpolate(p, [0, 1], [1, 0.6]) }],
+    };
+  });
+  const pauseStyle = useAnimatedStyle(() => {
+    const p = shown.get();
+    return {
+      opacity: p,
+      transform: [{ rotate: `${90 * (1 - p)}deg` }, { scale: interpolate(p, [0, 1], [0.6, 1]) }],
+    };
+  });
+  return (
+    <>
+      <Reanimated.View style={[localStyles.icon, playStyle]}>
+        <PlayIcon size={18} color={color} />
+      </Reanimated.View>
+      <Reanimated.View style={[localStyles.icon, pauseStyle]}>
+        <PauseIcon size={18} color={color} />
+      </Reanimated.View>
+    </>
+  );
+}
+
 const localStyles = StyleSheet.create({
   voice: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: 10,
     width: MEDIA_WIDTH,
   },
   voiceButton: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  icon: {
+    position: 'absolute',
+    left: 13,
+    top: 13,
+    width: 18,
+    height: 18,
+  },
   voiceBody: {
     flex: 1,
+    minWidth: 0,
+    gap: 4,
   },
   voiceFooter: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  clock: {
+    flex: 1,
+    fontVariant: ['tabular-nums'],
   },
   rate: {
-    minWidth: 38,
+    height: 22,
+    minWidth: 36,
     paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: radius.full,
+    borderRadius: 11,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   rateLabel: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
   },
 });
 
