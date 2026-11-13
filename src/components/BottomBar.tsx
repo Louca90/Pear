@@ -1,5 +1,6 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react';
-import { Animated, Easing, Image, Pressable, StyleSheet, View } from 'react-native';
+import { Image, Pressable, StyleSheet, View } from 'react-native';
+import Reanimated, { Easing, ReduceMotion, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
 import { haptics } from '../haptics';
 import { Camera, LucideIcon, MessageCircle, User, Users } from 'lucide-react-native';
 
@@ -9,6 +10,7 @@ import { createStyles, radius, spacing, useColors } from '../theme';
 import { useNavigationBarHeight } from './ui';
 import { CameraFilled, ContactsFilled, MessagesFilled, ProfileRing } from './TabIcons';
 import { t } from '../i18n';
+import { DURATION, timing } from '../motion';
 
 export type Tab = 'home' | 'camera' | 'contacts' | 'profile';
 
@@ -28,8 +30,7 @@ const BAR_PADDING = 6;
 const ICON_SIZE = 26;
 const KICK_MS = 650;
 const SLIDE_MS = 300;
-// Glisse vite puis se pose doucement, sans dépasser l'onglet.
-const SLIDE_EASING = Easing.bezier(0.2, 0.8, 0.2, 1);
+const SLIDE_STEP = SLOT_WIDTH;
 const PHOTO_SIZE = 30;
 
 // La place que les écrans laissent libre sous leur contenu, pour que la barre flottante ne le cache pas.
@@ -38,7 +39,7 @@ export function useBottomBarSpace() {
 }
 
 // L'onglet Profil montre ma photo (ou une silhouette), cerclée quand l'onglet est choisi.
-function ProfileIcon({ draw }: { draw: Animated.Value }) {
+function ProfileIcon({ draw }: { draw: SharedValue<number> }) {
   const colors = useColors();
   const styles = useStyles();
   useSyncExternalStore(chat.subscribe, chat.getVersion);
@@ -59,23 +60,26 @@ function ProfileIcon({ draw }: { draw: Animated.Value }) {
 function TabButton({ tab, icon: Icon, filled: Filled, label, active, onPress }: { tab: Tab; icon: LucideIcon; filled: FilledIcon | null; label: string; active: boolean; onPress: () => void }) {
   const colors = useColors();
   const styles = useStyles();
-  const fill = useRef(new Animated.Value(active ? 1 : 0)).current;
-  // Pilotées en JS : elles animent des attributs SVG (rayon, position, tracé).
-  const kick = useRef(new Animated.Value(0)).current;
-  const draw = useRef(new Animated.Value(active ? 1 : 0)).current;
+  // Tout sur le fil natif : le fondu contour → plein, le cercle du profil et l'animation interne.
+  const fill = useSharedValue(active ? 1 : 0);
+  const kick = useSharedValue(0);
+  const draw = useSharedValue(active ? 1 : 0);
   const mounted = useRef(false);
 
   const playKick = () => {
-    kick.setValue(0);
-    Animated.timing(kick, { toValue: 1, duration: KICK_MS, easing: Easing.inOut(Easing.quad), useNativeDriver: false }).start();
+    kick.set(0);
+    kick.set(withTiming(1, { duration: KICK_MS, easing: Easing.inOut(Easing.quad), reduceMotion: ReduceMotion.System }));
   };
 
   useEffect(() => {
-    Animated.timing(fill, { toValue: active ? 1 : 0, duration: 180, useNativeDriver: true }).start();
-    Animated.timing(draw, { toValue: active ? 1 : 0, duration: active ? 420 : 180, easing: SLIDE_EASING, useNativeDriver: false }).start();
+    fill.set(timing(active ? 1 : 0, DURATION.small));
+    draw.set(timing(active ? 1 : 0, active ? DURATION.mascot : DURATION.small));
     if (mounted.current && active) playKick();
     mounted.current = true;
   }, [active]);
+
+  const outline = useAnimatedStyle(() => ({ opacity: 1 - fill.get() }));
+  const solid = useAnimatedStyle(() => ({ opacity: fill.get() }));
 
   const press = () => {
     haptics.select();
@@ -90,43 +94,35 @@ function TabButton({ tab, icon: Icon, filled: Filled, label, active, onPress }: 
           <ProfileIcon draw={draw} />
         ) : (
           <>
-            <Animated.View style={[StyleSheet.absoluteFill, { opacity: fill.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }]}>
+            <Reanimated.View style={[StyleSheet.absoluteFill, outline]}>
               <Icon size={ICON_SIZE} color={colors.onDarkTrack} strokeWidth={1.75} />
-            </Animated.View>
-            <Animated.View style={[StyleSheet.absoluteFill, styles.filled, { opacity: fill }]}>
+            </Reanimated.View>
+            <Reanimated.View style={[StyleSheet.absoluteFill, styles.filled, solid]}>
               <Filled size={ICON_SIZE} kick={kick} />
-            </Animated.View>
+            </Reanimated.View>
           </>
         )}
       </View>
     </Pressable>
   );
 }
-
 // Une pilule flottante : un cercle pâle glisse sous l'onglet choisi, et elle reste au-dessus de la barre d'Android.
 export function BottomBar({ active, onChange }: { active: Tab; onChange: (tab: Tab) => void }) {
   const styles = useStyles();
   const bottom = useNavigationBarHeight();
   const activeIndex = TABS.findIndex(({ tab }) => tab === active);
-  const position = useRef(new Animated.Value(activeIndex)).current;
+  const position = useSharedValue(activeIndex);
 
   useEffect(() => {
-    Animated.timing(position, { toValue: activeIndex, duration: SLIDE_MS, easing: SLIDE_EASING, useNativeDriver: true }).start();
+    position.set(timing(activeIndex, SLIDE_MS));
   }, [activeIndex, position]);
+
+  const slide = useAnimatedStyle(() => ({ transform: [{ translateX: position.get() * SLIDE_STEP }] }));
 
   return (
     <View pointerEvents="box-none" style={[styles.wrapper, { bottom: bottom + spacing.md }]}>
       <View style={styles.bar} accessibilityRole="tablist">
-        <Animated.View
-          style={[
-            styles.indicator,
-            {
-              transform: [
-                { translateX: position.interpolate({ inputRange: [0, TABS.length - 1], outputRange: [0, SLOT_WIDTH * (TABS.length - 1)] }) },
-              ],
-            },
-          ]}
-        />
+        <Reanimated.View style={[styles.indicator, slide]} />
         {TABS.map(({ tab, icon, filled, label }) => (
           <TabButton key={tab} tab={tab} icon={icon} filled={filled} label={label} active={tab === active} onPress={() => onChange(tab)} />
         ))}

@@ -210,7 +210,8 @@ function App() {
   const [locked, setLocked] = useState<boolean | null>(null);
   const backgroundedAt = useRef<number | null>(null);
   useEffect(() => {
-    setSecureWindow(true).catch((e) => log.warn('fenêtre protégée', e));
+    // En debug, captures permises pour tester l'interface ; la release reste toujours protégée.
+    setSecureWindow(!__DEV__).catch((e) => log.warn('fenêtre protégée', e));
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
         let enabled = false;

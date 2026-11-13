@@ -2,7 +2,10 @@ import { ReactNode, useEffect, useRef, useSyncExternalStore } from 'react';
 import { Animated, Image, Pressable, StyleProp, Text, View, ViewStyle } from 'react-native';
 import { ArrowLeft, LucideIcon, NotebookPen, User } from 'lucide-react-native';
 
+import Reanimated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+
 import { getInsets, subscribeInsets } from '../../modules/pear-native';
+import { DURATION, timing } from '../motion';
 import { useMediaUri } from '../chat/media';
 import { createStyles, motion, radius, spacing, useColors } from '../theme';
 import { t } from '../i18n';
@@ -47,15 +50,14 @@ type IconButtonProps = {
 
 // L'effet d'appui de tous les boutons, défini une seule fois : sous le doigt, échelle 0,97 et
 // opacité 0,85 en motion.press, retour à l'identique avec la même courbe, sans rebond.
-export function usePressFeedback() {
-  const pressed = useRef(new Animated.Value(0)).current;
-  const animate = (toValue: number) =>
-    Animated.timing(pressed, { toValue, duration: motion.press, easing: motion.easing, useNativeDriver: true }).start();
-  const style = {
-    opacity: pressed.interpolate({ inputRange: [0, 1], outputRange: [1, motion.pressOpacity] }),
-    transform: [{ scale: pressed.interpolate({ inputRange: [0, 1], outputRange: [1, motion.pressScale] }) }],
-  };
-  return { onPressIn: () => animate(1), onPressOut: () => animate(0), style };
+// Sur le fil natif (Reanimated) : l'effet ne saccade pas même si l'app est occupée.
+export function usePressFeedback(scale: number = motion.pressScale, opacity: number = motion.pressOpacity) {
+  const pressed = useSharedValue(0);
+  const style = useAnimatedStyle(() => ({
+    opacity: 1 - (1 - opacity) * pressed.get(),
+    transform: [{ scale: 1 - (1 - scale) * pressed.get() }],
+  }));
+  return { onPressIn: () => pressed.set(timing(1, DURATION.press)), onPressOut: () => pressed.set(timing(0, DURATION.press)), style };
 }
 
 // Bouton à icône, avec l'effet d'appui commun.
@@ -72,7 +74,7 @@ export function IconButton({ onPress, onLongPress, label, disabled, hitSlop = 12
       accessibilityRole="button"
       accessibilityLabel={label}
     >
-      <Animated.View style={[style, feedback.style]}>{children}</Animated.View>
+      <Reanimated.View style={[style, feedback.style]}>{children}</Reanimated.View>
     </Pressable>
   );
 }
@@ -149,16 +151,22 @@ type RowPressableProps = {
 // en rectangle sur les bords du conteneur.
 export function RowPressable({ onPress, onLongPress, style, label, children }: RowPressableProps) {
   const styles = useStyles();
+  // Une ligne se touche souvent : l'effet reste presque imperceptible (0,99), le fond fait le reste.
+  const feedback = usePressFeedback(0.99, 1);
   return (
-    <Pressable
-      onPress={onPress}
-      onLongPress={onLongPress}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      style={({ pressed }) => [styles.rowPressable, style, pressed && styles.rowPressed]}
-    >
-      {children}
-    </Pressable>
+    <Reanimated.View style={feedback.style}>
+      <Pressable
+        onPress={onPress}
+        onLongPress={onLongPress}
+        onPressIn={feedback.onPressIn}
+        onPressOut={feedback.onPressOut}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        style={({ pressed }) => [styles.rowPressable, style, pressed && styles.rowPressed]}
+      >
+        {children}
+      </Pressable>
+    </Reanimated.View>
   );
 }
 
@@ -177,10 +185,10 @@ export function Button({ label, icon: Icon, onPress, variant = 'primary' }: Butt
   const feedback = usePressFeedback();
   return (
     <Pressable onPress={onPress} onPressIn={feedback.onPressIn} onPressOut={feedback.onPressOut} accessibilityRole="button" accessibilityLabel={label}>
-      <Animated.View style={[styles.button, primary ? styles.primary : styles.secondary, feedback.style]}>
+      <Reanimated.View style={[styles.button, primary ? styles.primary : styles.secondary, feedback.style]}>
         <Icon size={20} color={foreground} strokeWidth={1.75} />
         <Text style={[styles.buttonLabel, { color: foreground }]}>{label}</Text>
-      </Animated.View>
+      </Reanimated.View>
     </Pressable>
   );
 }
