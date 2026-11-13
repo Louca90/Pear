@@ -29,7 +29,7 @@ import { PermissionBanner } from '../components/PermissionBanner';
 import { OnlineRing, useRingArrival } from '../components/OnlineRing';
 import { RequestsBell } from '../components/RequestsBell';
 import { SearchField } from '../components/SearchField';
-import { Avatar, Button, Header, RowPressable, Screen } from '../components/ui';
+import { Avatar, Button, Header, IconButton, RowPressable, Screen } from '../components/ui';
 import { t } from '../i18n';
 import { Contact } from '../storage';
 import { createStyles, radius, spacing, useColors } from '../theme';
@@ -277,12 +277,25 @@ export function HomeScreen({ contacts, onAdd, onOpen, onRequests, permissionMiss
       { label: t('commun.annuler'), style: 'cancel' },
     ]);
 
-  const profileButton = <RequestsBell count={getPendingRequests().length} onPress={onRequests} />;
+  // En-tête : la poire, « Messages », les demandes et un bouton pour ajouter quelqu'un.
+  const logo = <Pear height={30} color={colors.text} />;
+  const profileButton = (
+    <View style={styles.headerActions}>
+      <RequestsBell count={getPendingRequests().length} onPress={onRequests} />
+      <IconButton onPress={onAdd} label={t('liste.nouvelleConversation')} style={styles.newButton}>
+        <Plus size={20} color={colors.onSignature} strokeWidth={2} />
+      </IconButton>
+    </View>
+  );
+  const title = t('onglets.messages');
+  // Sections, seulement sur « Toutes » sans recherche : les épinglées, puis les récentes.
+  const sectioned = filter === 'all' && !query.trim() && visible.some((item) => item.pinned);
+  const firstRecent = visible.find((item) => !item.pinned)?.contact.publicKey;
 
   if (contacts.length === 0) {
     return (
       <Screen>
-        <Header title="Pear" action={profileButton} />
+        <Header title={title} avatar={logo} action={profileButton} />
         <PermissionBanner visible={permissionMissing} onPress={onFixPermissions} />
         <View style={styles.empty}>
           <View style={styles.emptyPear}>
@@ -298,7 +311,7 @@ export function HomeScreen({ contacts, onAdd, onOpen, onRequests, permissionMiss
 
   return (
     <Screen>
-      <Header title="Pear" action={profileButton} />
+      <Header title={title} avatar={logo} action={profileButton} />
       <PermissionBanner visible={permissionMissing} onPress={onFixPermissions} />
       <SearchField value={query} onChange={setQuery} placeholder={t('liste.rechercher')} />
       <View>
@@ -363,6 +376,8 @@ export function HomeScreen({ contacts, onAdd, onOpen, onRequests, permissionMiss
             }}
             collapsable={false}
           >
+            {sectioned && index === 0 && <Text style={styles.section}>{t('liste.sectionEpinglees')}</Text>}
+            {sectioned && item.contact.publicKey === firstRecent && <Text style={styles.section}>{t('liste.sectionRecentes')}</Text>}
             {isSelf(item.contact.publicKey) ? (
               // Mes notes : ni épingle ni « lu » à glisser, seulement ouvrir (et vider, par appui long).
               <RowPressable onPress={() => onOpen(item.contact)} onLongPress={item.last ? () => select(item) : undefined} style={styles.row}>
@@ -434,32 +449,52 @@ const useStyles = createStyles((colors) => ({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },
+  // Les catégories sont des onglets en texte ; un trait de la couleur signature glisse sous l'actif.
   chip: {
-    paddingHorizontal: spacing.md,
     height: 32,
-    borderRadius: radius.full,
-    backgroundColor: colors.surface,
+    marginRight: spacing.md,
     justifyContent: 'center',
   },
-  // Transparente : c'est la pastille, qui glisse dessous, qui la colore.
-  chipActive: {
-    backgroundColor: 'transparent',
-  },
+  chipActive: {},
   chipPill: {
     position: 'absolute',
     left: 0,
-    top: spacing.md,
-    height: 32,
+    top: spacing.md + 30,
+    height: 2,
     borderRadius: radius.full,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.signatureStrong,
   },
   chipLabel: {
     fontSize: 14,
-    color: colors.text,
+    fontWeight: '500',
+    color: colors.textMuted,
   },
   chipLabelActive: {
-    color: colors.onAccent,
+    color: colors.text,
     fontWeight: '600',
+  },
+  section: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: 4,
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    color: colors.textMuted,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  newButton: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.full,
+    backgroundColor: colors.signature,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   hitsTitle: {
     marginTop: spacing.lg,
