@@ -18,7 +18,7 @@ import Reanimated, {
   type EntryExitAnimationFunction,
   type SharedValue,
 } from 'react-native-reanimated';
-import Svg, { Circle, ClipPath, Defs, Mask, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
+import Svg, { Circle, ClipPath, Defs, Mask, Path, Rect } from 'react-native-svg';
 
 import { EASE } from '../motion';
 import { fixed } from '../theme';
@@ -64,12 +64,12 @@ type Props = {
   color: string;
   // `idle` : fixe. `bitten` : tirer pour actualiser, bouchées selon `progress`. `ripening` :
   // transfert, la poire se remplit comme un liquide selon `progress`. `searching` : pointillés qui
-  // tournent et halo qui respire. `resting` : écrans vides, respiration et feuilles qui se balancent.
-  // `leaf` : la feuille droite pousse, avec un halo bref.
+  // tournent et les feuilles respirent. `resting` : écrans vides, respiration et feuilles qui se balancent.
+  // `leaf` : la feuille droite pousse.
   state?: PearState;
   // 0 à 1, pour `bitten` et `ripening`.
   progress?: number;
-  // Couleur de la feuille qui pousse et du halo de `leaf`, `signatureStrong` en pratique.
+  // Couleur de la feuille qui pousse (`leaf`), `signatureStrong` en pratique.
   leafColor?: string;
 };
 
@@ -117,30 +117,6 @@ export function Pear({ height, color, state = 'idle', progress = 0, leafColor }:
         </Reanimated.View>
       </LayoutAnimationConfig>
     </View>
-  );
-}
-
-// Un halo flou (dégradé radial) derrière la poire, plus large qu'elle. `glow` de 0 à 1.
-function Glow({ size, color, glow, strength = 0.5 }: { size: Size; color: string; glow: SharedValue<number>; strength?: number }) {
-  const style = useAnimatedStyle(() => ({ opacity: glow.get() * strength }));
-  const gradient = `glow${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
-  const side = Math.max(size.width, size.height) * 1.6;
-  return (
-    <Reanimated.View
-      pointerEvents="none"
-      style={[{ position: 'absolute', width: side, height: side, left: (size.width - side) / 2, top: (size.height - side) / 2 + size.height * 0.08 }, style]}
-    >
-      <Svg width={side} height={side} viewBox="0 0 100 100">
-        <Defs>
-          <RadialGradient id={gradient} cx="50" cy="50" r="50" gradientUnits="userSpaceOnUse">
-            <Stop offset="0" stopColor={color} stopOpacity={1} />
-            <Stop offset="0.45" stopColor={color} stopOpacity={0.35} />
-            <Stop offset="1" stopColor={color} stopOpacity={0} />
-          </RadialGradient>
-        </Defs>
-        <Circle cx={50} cy={50} r={50} fill={`url(#${gradient})`} />
-      </Svg>
-    </Reanimated.View>
   );
 }
 
@@ -214,7 +190,7 @@ function BaseLayer({ size, color, state, progress, id }: { size: Size; color: st
   );
 }
 
-// Connexion en cours : le contour en pointillés tourne, les feuilles et un halo respirent.
+// Connexion en cours : le contour en pointillés tourne, les feuilles respirent.
 function SearchingLayer({ size, color }: { size: Size; color: string }) {
   const reduced = useReducedMotion();
   const dash = useSharedValue(0);
@@ -233,7 +209,6 @@ function SearchingLayer({ size, color }: { size: Size; color: string }) {
   const leaves = useAnimatedStyle(() => ({ opacity: 0.45 + pulse.get() * 0.55 }));
   return (
     <View style={size}>
-      <Glow size={size} color={color} glow={pulse} strength={0.22} />
       <Svg width={size.width} height={size.height} viewBox={VIEW_BOX}>
         <AnimatedPath d={BODY} fill="none" stroke={color} strokeWidth={2.5} strokeDasharray="6 5" strokeLinecap="round" animatedProps={outline} />
       </Svg>
@@ -259,15 +234,14 @@ function wavePath(progress: number, phase: number, shift: number) {
 }
 
 // Transfert : la poire se remplit comme un liquide (deux vagues décalées), les feuilles se colorent
-// à la fin et un halo s'allume une fois pleine.
+// à la fin.
 function RipeningLayer({ size, color, progress, id }: { size: Size; color: string; progress: number; id: string }) {
   const reduced = useReducedMotion();
   const level = useSharedValue(progress);
   const phase = useSharedValue(0);
-  const glow = useSharedValue(0);
   useEffect(() => {
-    level.set(withTiming(progress, config(320)));
-    if (progress >= 1) glow.set(withSequence(withTiming(1, config(240)), withDelay(200, withTiming(0, config(700)))));
+    // Le pourcentage arrive par paliers : le niveau glisse de l'un à l'autre sans à-coup.
+    level.set(withTiming(progress, { duration: 600, easing: Easing.out(Easing.quad), reduceMotion: ReduceMotion.System }));
   }, [progress]);
   useEffect(() => {
     if (reduced) return;
@@ -281,7 +255,6 @@ function RipeningLayer({ size, color, progress, id }: { size: Size; color: strin
   const backClip = `back${id}`;
   return (
     <View style={size}>
-      <Glow size={size} color={color} glow={glow} strength={0.45} />
       <Svg width={size.width} height={size.height} viewBox={VIEW_BOX}>
         <Defs>
           <ClipPath id={backClip}>
@@ -291,7 +264,7 @@ function RipeningLayer({ size, color, progress, id }: { size: Size; color: strin
             <AnimatedPath d={wavePath(progress, 0, 0)} animatedProps={front} />
           </ClipPath>
         </Defs>
-        <Path d={WHOLE} fill={color} opacity={0.22} />
+        <Path d={WHOLE} fill={color} opacity={0.3} />
         <Path d={BODY} fill={color} opacity={0.45} clipPath={`url(#${backClip})`} />
         <Path d={BODY} fill={color} clipPath={`url(#${frontClip})`} />
       </Svg>
@@ -300,13 +273,11 @@ function RipeningLayer({ size, color, progress, id }: { size: Size; color: strin
   );
 }
 
-// Vérifié : la feuille droite pousse en se dépliant, un halo de sa couleur s'allume puis s'éteint.
+// Vérifié : la feuille droite pousse en se dépliant.
 function LeafLayer({ size, color, leafColor }: { size: Size; color: string; leafColor: string }) {
   const grow = useSharedValue(0);
-  const glow = useSharedValue(0);
   useEffect(() => {
     grow.set(withDelay(80, withTiming(1, config(520))));
-    glow.set(withDelay(240, withSequence(withTiming(1, config(260)), withTiming(0, config(800)))));
   }, []);
   const origin = toPx(size, 52, 22);
   const leafStyle = useAnimatedStyle(() => ({
@@ -315,7 +286,6 @@ function LeafLayer({ size, color, leafColor }: { size: Size; color: string; leaf
   }));
   return (
     <View style={size}>
-      <Glow size={size} color={leafColor} glow={glow} strength={0.5} />
       <Svg width={size.width} height={size.height} viewBox={VIEW_BOX} style={styles.layer}>
         <Path d={`${BODY} ${LEFT_LEAF}`} fill={color} />
       </Svg>
