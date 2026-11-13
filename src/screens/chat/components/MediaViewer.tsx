@@ -59,6 +59,7 @@ function VideoControls({ player }: { player: VideoPlayer }) {
         <View style={styles.flex}>
           <SeekBar
             position={position}
+            speed={isPlaying && duration > 0 ? player.playbackRate / duration : 0}
             color={colors.background}
             trackColor={colors.onDarkTrack}
             label={t('chat.deplacerVideo')}

@@ -75,6 +75,8 @@ export function VoiceContent({ message, palette, next }: { message: Message; pal
   const rate = useVoiceRate();
   const bars = decodeWave(parseMeta(message.meta).wave);
   const position = status.duration > 0 ? Math.min(1, status.currentTime / status.duration) : 0;
+  // Pendant la lecture, la barre avance d'elle-même entre deux nouvelles du lecteur (vitesse comprise).
+  const speed = progress === undefined && status.playing && status.duration > 0 ? rate / status.duration : 0;
 
   // La vitesse choisie s'applique à ce lecteur, tout de suite s'il est en train de lire.
   useEffect(() => {
@@ -167,9 +169,9 @@ export function VoiceContent({ message, palette, next }: { message: Message; pal
       </IconButton>
       <View style={styles.voiceBody}>
         {bars ? (
-          <Waveform bars={bars} position={progress ?? position} color={palette.text} restColor={palette.track} label={t('chat.deplacerVocal')} onSeek={seek} />
+          <Waveform bars={bars} position={progress ?? position} speed={speed} color={palette.text} restColor={palette.track} label={t('chat.deplacerVocal')} onSeek={seek} />
         ) : (
-          <SeekBar position={progress ?? position} color={palette.text} trackColor={palette.track} label={t('chat.deplacerVocal')} onSeek={seek} />
+          <SeekBar position={progress ?? position} speed={speed} color={palette.text} trackColor={palette.track} label={t('chat.deplacerVocal')} onSeek={seek} />
         )}
         <View style={styles.voiceFooter}>
           <Text style={[styles.time, { color: palette.muted }]}>{formatClock(status.playing || status.currentTime > 0 ? status.currentTime : status.duration)}</Text>

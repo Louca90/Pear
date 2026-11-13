@@ -1,13 +1,18 @@
 import { useRef, useState } from 'react';
-import { Animated, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import Reanimated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 
+import { timing } from '../../../motion';
 import { radius } from '../../../theme';
 
 import { SEEK_THUMB_SIZE } from '../constants';
+import { useSmoothProgress } from '../hooks/useSmoothProgress';
 import { ViewRef } from '../types';
 
 type SeekBarProps = {
   position: number;
+  // Part de la durée parcourue par seconde pendant la lecture (0 en pause) : la barre avance en continu.
+  speed?: number;
   color: string;
   trackColor: string;
   label: string;
@@ -16,16 +21,18 @@ type SeekBarProps = {
 
 // Une fois la barre attrapée, le doigt peut aller n'importe où : la position suit seulement sa place à l'horizontale.
 // Bloquer le geste natif empêche aussi la liste de défiler, jusqu'à ce qu'on lâche.
-export function SeekBar({ position, color, trackColor, label, onSeek }: SeekBarProps) {
+// Le remplissage et le curseur bougent sur le fil natif.
+export function SeekBar({ position, speed = 0, color, trackColor, label, onSeek }: SeekBarProps) {
   const area = useRef<ViewRef>(null);
   const origin = useRef(0);
   const [width, setWidth] = useState(0);
   const [dragging, setDragging] = useState<number | null>(null);
-  const thumb = useRef(new Animated.Value(1)).current;
+  const thumb = useSharedValue(1);
   const trackWidth = Math.max(0, width - SEEK_THUMB_SIZE);
-  const shown = dragging ?? position;
+  const shown = useSmoothProgress(position, dragging === null ? speed : 0, dragging);
 
-  const growThumb = (toValue: number) => Animated.spring(thumb, { toValue, useNativeDriver: true, overshootClamping: true, damping: 12, stiffness: 320 }).start();
+  const fillStyle = useAnimatedStyle(() => ({ width: shown.get() * trackWidth }));
+  const thumbStyle = useAnimatedStyle(() => ({ transform: [{ translateX: shown.get() * trackWidth }, { scale: thumb.get() }] }));
 
   const seekTo = (pageX: number) => {
     if (trackWidth <= 0) return;
@@ -36,7 +43,7 @@ export function SeekBar({ position, color, trackColor, label, onSeek }: SeekBarP
 
   const end = () => {
     setDragging(null);
-    growThumb(1);
+    thumb.set(timing(1, 160));
   };
 
   return (
@@ -50,7 +57,7 @@ export function SeekBar({ position, color, trackColor, label, onSeek }: SeekBarP
       onResponderGrant={(event) => {
         const { pageX, locationX } = event.nativeEvent;
         origin.current = pageX - locationX;
-        growThumb(1.4);
+        thumb.set(timing(1.4, 160));
         seekTo(pageX);
         return true;
       }}
@@ -60,12 +67,9 @@ export function SeekBar({ position, color, trackColor, label, onSeek }: SeekBarP
       accessibilityLabel={label}
     >
       <View pointerEvents="none" style={[styles.seekTrack, { backgroundColor: trackColor }]}>
-        <View style={[styles.seekBar, { width: `${shown * 100}%`, backgroundColor: color }]} />
+        <Reanimated.View style={[styles.seekBar, { backgroundColor: color }, fillStyle]} />
       </View>
-      <Animated.View
-        pointerEvents="none"
-        style={[styles.seekThumb, { left: shown * trackWidth, backgroundColor: color, transform: [{ scale: thumb }] }]}
-      />
+      <Reanimated.View pointerEvents="none" style={[styles.seekThumb, { backgroundColor: color }, thumbStyle]} />
     </View>
   );
 }
@@ -82,10 +86,14 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   seekBar: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
     height: 4,
   },
   seekThumb: {
     position: 'absolute',
+    left: 0,
     top: (44 - SEEK_THUMB_SIZE) / 2,
     width: SEEK_THUMB_SIZE,
     height: SEEK_THUMB_SIZE,
