@@ -1,5 +1,4 @@
-import { StyleSheet, View } from 'react-native';
-import Reanimated, { Extrapolation, interpolate, useAnimatedProps, useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
+import Reanimated, { Extrapolation, interpolate, useAnimatedProps, type SharedValue } from 'react-native-reanimated';
 import Svg, { Circle, G, Path } from 'react-native-svg';
 
 import { useColors } from '../theme';
@@ -68,49 +67,53 @@ export function CameraFilled({ size, kick }: IconProps) {
   );
 }
 
-// Deux personnes pleines. Celle de derrière est un vrai aplat (plus de traits dont les bouts
-// dépassaient) ; celle de devant est détourée par un liseré de la couleur du rond, pour que les deux
-// silhouettes ne se mélangent pas. À la sélection, celle de derrière sort de derrière l'autre
-// et celle de devant hoche la tête.
-const FRONT_HEAD = { cx: 9, cy: 7.5, r: 4 };
+// Le tracé exact de l'icône au repos (Users de Lucide), dans le même style : la personne de devant
+// se remplit, celle de derrière garde ses deux traits, identiques au contour. À la sélection, ces
+// deux traits se redessinent l'un après l'autre et la personne de devant hoche la tête.
+const FRONT_HEAD = { cx: 9, cy: 7, r: 4 };
 const FRONT_BODY = 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2Z';
-const BEHIND_HEAD = { cx: 16.5, cy: 8, r: 3.3 };
-const BEHIND_BODY = 'M14 21v-2.6a3.9 3.9 0 0 1 3.9-3.9h.2a3.9 3.9 0 0 1 3.9 3.9V21Z';
+const BEHIND_HEAD = 'M16 3.13a4 4 0 0 1 0 7.75';
+const BEHIND_BODY = 'M22 21v-2a4 4 0 0 0-3-3.87';
+// Longueurs un peu au-dessus des vraies (≈ 10,5 et ≈ 6,3).
+const BEHIND_HEAD_LENGTH = 11;
+const BEHIND_BODY_LENGTH = 7;
+
+const AnimatedPath = Reanimated.createAnimatedComponent(Path);
+
+// Un trait qui se redessine entre `start` et `end`. Le trou du pointillé est plus long que le trait :
+// effacé, il ne laisse aucun bout arrondi visible (c'étaient les petits points qui dépassaient).
+function RedrawnStroke({ d, length, start, end, kick, color }: { d: string; length: number; start: number; end: number; kick: SharedValue<number>; color: string }) {
+  const hidden = length + 1;
+  const props = useAnimatedProps(() => ({
+    strokeDashoffset: interpolate(kick.get(), [0, 0.01, start, end, 1], [0, hidden, hidden, 0, 0], Extrapolation.CLAMP),
+  }));
+  return (
+    <AnimatedPath
+      d={d}
+      fill="none"
+      stroke={color}
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeDasharray={`${length} ${length + 2}`}
+      strokeDashoffset={0}
+      animatedProps={props}
+    />
+  );
+}
 
 export function ContactsFilled({ size, kick }: IconProps) {
   const colors = useColors();
-  const unit = size / 24;
-  // Glisse de 3 unités vers la droite et apparaît, dans la première moitié de l'animation.
-  const behind = useAnimatedStyle(() => {
-    const k = kick.get();
-    return {
-      opacity: interpolate(k, [0, 0.01, 0.1, 0.5], [1, 0, 0, 1], Extrapolation.CLAMP),
-      transform: [{ translateX: interpolate(k, [0, 0.01, 0.1, 0.55], [0, -3 * unit, -3 * unit, 0], Extrapolation.CLAMP) }],
-    };
-  });
-  const nod = useAnimatedProps(() => ({ cy: bump(kick.get(), 0.4, 0.9, FRONT_HEAD.cy, FRONT_HEAD.cy - 1.2) }));
-  const halo = useAnimatedProps(() => ({ cy: bump(kick.get(), 0.4, 0.9, FRONT_HEAD.cy, FRONT_HEAD.cy - 1.2) }));
+  const nod = useAnimatedProps(() => ({ cy: bump(kick.get(), 0.35, 0.85, FRONT_HEAD.cy, FRONT_HEAD.cy - 1.2) }));
   return (
-    <View style={{ width: size, height: size }}>
-      <Reanimated.View style={[StyleSheet.absoluteFill, behind]}>
-        <Svg width={size} height={size} viewBox="0 0 24 24">
-          <G fill={colors.text}>
-            <Circle {...BEHIND_HEAD} />
-            <Path d={BEHIND_BODY} />
-          </G>
-        </Svg>
-      </Reanimated.View>
-      <Svg width={size} height={size} viewBox="0 0 24 24" style={StyleSheet.absoluteFill}>
-        <G fill={colors.elevatedActive} stroke={colors.elevatedActive} strokeWidth={3} strokeLinejoin="round">
-          <AnimatedCircle cx={FRONT_HEAD.cx} cy={FRONT_HEAD.cy} r={FRONT_HEAD.r} animatedProps={halo} />
-          <Path d={FRONT_BODY} />
-        </G>
-        <G fill={colors.text} stroke={colors.text} strokeWidth={1} strokeLinejoin="round">
-          <AnimatedCircle cx={FRONT_HEAD.cx} cy={FRONT_HEAD.cy} r={FRONT_HEAD.r} animatedProps={nod} />
-          <Path d={FRONT_BODY} />
-        </G>
-      </Svg>
-    </View>
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <RedrawnStroke d={BEHIND_HEAD} length={BEHIND_HEAD_LENGTH} start={0.05} end={0.5} kick={kick} color={colors.text} />
+      <RedrawnStroke d={BEHIND_BODY} length={BEHIND_BODY_LENGTH} start={0.3} end={0.75} kick={kick} color={colors.text} />
+      <G fill={colors.text} stroke={colors.text} strokeWidth={1.75} strokeLinejoin="round">
+        <AnimatedCircle cx={FRONT_HEAD.cx} cy={FRONT_HEAD.cy} r={FRONT_HEAD.r} animatedProps={nod} />
+        <Path d={FRONT_BODY} />
+      </G>
+    </Svg>
   );
 }
 
