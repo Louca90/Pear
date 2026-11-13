@@ -1,6 +1,7 @@
 import { ComponentRef, useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, AppState, BackHandler, Easing, KeyboardAvoidingView, Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
-import { BatteryCharging, Bell, Camera, Check, ChevronRight, Download, LucideIcon, FileUp } from 'lucide-react-native';
+import { BatteryCharging, Bell, Camera, ChevronRight, Download, ImageIcon, LucideIcon, FileUp, MapPin } from 'lucide-react-native';
+import Reanimated from 'react-native-reanimated';
 
 import { chat } from '../chat/manager';
 import { LINK_NAME_LENGTH } from '../crypto/pairing';
@@ -10,7 +11,9 @@ import { Avatar, Button, IconButton, useInsets, useNavigationBarHeight } from '.
 import { t } from '../i18n';
 import { log } from '../log';
 import { createStyles, radius, setThemePreference, spacing, ThemePreference, useColors, useThemePreference } from '../theme';
-import { checkAllPermissions, PermissionId, PermissionState, requestPermission } from './permissions';
+import { checkPermissions, ONBOARDING_PERMISSIONS, PermissionId, PermissionState, requestPermission } from './permissions';
+import { PermissionCard } from './PermissionCard';
+import { enterUp } from '../motion';
 import { Pear, PEAR_RATIO } from '../components/Pear';
 import { BackupSheet } from '../components/BackupSheet';
 import { MediaPicker } from '../components/MediaPicker';
@@ -21,7 +24,6 @@ export type OnboardingStep = 0 | 1 | 2 | 3;
 
 const MOVE_MS = 560;
 const FADE_MS = 260;
-const CHECK_MS = 320;
 const INTRO_MS = 700;
 // Hauteur de la poire sur les étapes suivantes (en haut), et à la fin (au centre).
 const SMALL_PEAR = 104;
@@ -36,12 +38,16 @@ const THEMES: { value: ThemePreference; label: string }[] = [
   { value: 'dark', label: t('profil.themeSombre') },
 ];
 
-const ROWS: { id: PermissionId; icon: LucideIcon }[] = [
-  { id: 'notifications', icon: Bell },
-  { id: 'camera', icon: Camera },
-  { id: 'battery', icon: BatteryCharging },
-  { id: 'install', icon: Download },
-];
+const ICONS: Record<PermissionId, LucideIcon> = {
+  notifications: Bell,
+  battery: BatteryCharging,
+  camera: Camera,
+  media: ImageIcon,
+  location: MapPin,
+  install: Download,
+};
+// Les apps inconnues (mises à jour de Pear) : carte en plus, seulement s'il manque l'autorisation.
+const CHECKED: PermissionId[] = [...ONBOARDING_PERMISSIONS, 'install'];
 
 type Props = {
   // full : nouveau téléphone ; permissions : utilisateur existant à qui il manque une autorisation.
@@ -49,38 +55,6 @@ type Props = {
   initialStep: OnboardingStep;
   onDone: () => void;
 };
-
-function PermissionRow({ id, icon: Icon, state, onPress }: { id: PermissionId; icon: LucideIcon; state: PermissionState; onPress: () => void }) {
-  const colors = useColors();
-  const styles = useStyles();
-  const granted = state === 'granted';
-  const check = useRef(new Animated.Value(granted ? 1 : 0)).current;
-
-  useEffect(() => {
-    Animated.timing(check, { toValue: granted ? 1 : 0, duration: CHECK_MS, easing: EASING, useNativeDriver: true }).start();
-  }, [granted, check]);
-
-  return (
-    <View style={styles.row}>
-      <Icon size={22} color={colors.text} strokeWidth={1.75} />
-      <View style={styles.flex}>
-        <Text style={styles.rowTitle}>{t(`priseEnMain.${id}`)}</Text>
-        <Text style={styles.rowText}>{t(`priseEnMain.${id}Aide`)}</Text>
-      </View>
-      <View style={styles.rowAction}>
-        <Animated.View style={[styles.okBadge, { opacity: check, transform: [{ scale: check.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) }] }]}>
-          <Check size={16} color={colors.onAccent} strokeWidth={2.5} />
-          <Text style={styles.okLabel}>OK</Text>
-        </Animated.View>
-        <Animated.View style={{ opacity: check.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }} pointerEvents={granted ? 'none' : 'auto'}>
-          <Pressable onPress={onPress} style={({ pressed }) => [styles.allow, pressed && styles.pressed]}>
-            <Text style={styles.allowLabel}>{state === 'blocked' ? t('priseEnMain.reglages') : t('priseEnMain.autoriser')}</Text>
-          </Pressable>
-        </Animated.View>
-      </View>
-    </View>
-  );
-}
 
 // Prise en main : bienvenue, autorisations, profil, fin. Une seule poire traverse toutes les étapes :
 // grande et rognée en haut à l'accueil, petite en haut ensuite, puis au centre pour ouvrir l'app.
@@ -103,7 +77,9 @@ export function OnboardingScreen({ mode, initialStep, onDone }: Props) {
   useEffect(() => {
     Animated.timing(intro, { toValue: 1, duration: INTRO_MS, easing: EASING, useNativeDriver: true }).start();
   }, [intro]);
-  const [states, setStates] = useState<Record<PermissionId, PermissionState> | null>(null);
+  const [states, setStates] = useState<Partial<Record<PermissionId, PermissionState>> | null>(null);
+  // La carte « apps inconnues » reste affichée une fois apparue, même accordée (sa coche se dessine).
+  const [showInstall, setShowInstall] = useState(false);
   const [manufacturerAdvice, setManufacturerAdvice] = useState<{ brand: string; settings: boolean } | null>(null);
   const saved = chat.getMyProfile();
   const [name, setName] = useState(saved.name ?? '');
@@ -111,8 +87,11 @@ export function OnboardingScreen({ mode, initialStep, onDone }: Props) {
   const [photo, setPhoto] = useState(saved.photo);
 
   const refresh = useCallback(() => {
-    checkAllPermissions()
-      .then(setStates)
+    checkPermissions(CHECKED)
+      .then((next) => {
+        setStates(next);
+        if (next.install !== 'granted') setShowInstall(true);
+      })
       .catch((e) => log.warn('autorisations', e));
   }, []);
 
@@ -121,7 +100,8 @@ export function OnboardingScreen({ mode, initialStep, onDone }: Props) {
     collectDiagnostics()
       .then((data) => (data.powerManager || needsManufacturerAdvice(data.manufacturer) ? setManufacturerAdvice({ brand: data.manufacturer, settings: data.powerManager }) : null))
       .catch((e) => log.warn('diagnostic', e));
-    // Batterie et apps inconnues s'accordent dans les réglages d'Android : on relit au retour.
+    // Batterie, apps inconnues et accès refusés pour de bon passent par les réglages d'Android : on
+    // relit l'état réel de chaque autorisation au retour dans l'app.
     const subscription = AppState.addEventListener('change', (state) => state === 'active' && refresh());
     return () => subscription.remove();
   }, [refresh]);
@@ -157,12 +137,18 @@ export function OnboardingScreen({ mode, initialStep, onDone }: Props) {
     return () => subscription.remove();
   }, [step, first, goTo]);
 
-  const allGranted = states !== null && ROWS.every(({ id }) => states[id] === 'granted');
+  const cards = showInstall ? CHECKED : ONBOARDING_PERMISSIONS;
+  // Rien n'est obligatoire : le bouton du bas dit seulement « Plus tard » tant qu'il en manque.
+  const allGranted = states !== null && cards.every((id) => states[id] === 'granted');
 
   const ask = async (id: PermissionId) => {
     if (!states) return;
-    const next = await requestPermission(id, states[id]);
-    setStates({ ...states, [id]: next });
+    try {
+      const next = await requestPermission(id, states[id] ?? 'missing');
+      setStates((current) => ({ ...current, [id]: next }));
+    } catch (e) {
+      log.warn('autorisation', e);
+    }
   };
 
   // La galerie de Pear, une seule photo : elle est réduite à l'enregistrement (saveProfile).
@@ -265,9 +251,18 @@ export function OnboardingScreen({ mode, initialStep, onDone }: Props) {
                 <Text style={styles.title}>{t('priseEnMain.autorisations')}</Text>
                 <Text style={styles.text}>{t('priseEnMain.autorisationsAide')}</Text>
                 <View style={styles.rows}>
-                  {ROWS.map(({ id, icon }) => (
-                    <PermissionRow key={id} id={id} icon={icon} state={states?.[id] ?? 'missing'} onPress={() => ask(id)} />
-                  ))}
+                  {states &&
+                    cards.map((id, index) => (
+                      <PermissionCard
+                        key={id}
+                        index={index}
+                        icon={ICONS[id]}
+                        title={t(`priseEnMain.${id}`)}
+                        why={t(`priseEnMain.${id}Aide`)}
+                        state={states[id] ?? 'missing'}
+                        onPress={() => ask(id)}
+                      />
+                    ))}
                 </View>
                 {manufacturerAdvice && (
                   <Pressable
@@ -279,9 +274,15 @@ export function OnboardingScreen({ mode, initialStep, onDone }: Props) {
                   </Pressable>
                 )}
                 <View style={styles.spacer} />
-                <View style={!allGranted && styles.disabled} pointerEvents={allGranted ? 'auto' : 'none'}>
-                  <Button label={t('priseEnMain.suivant')} icon={ChevronRight} onPress={afterPermissions} />
-                </View>
+                {/* Le libellé change en fondu quand la dernière autorisation est accordée. */}
+                <Reanimated.View key={allGranted ? 'continuer' : 'plusTard'} entering={enterUp(0)}>
+                  <Button
+                    label={allGranted ? t('priseEnMain.continuer') : t('priseEnMain.plusTard')}
+                    icon={ChevronRight}
+                    variant={allGranted ? 'primary' : 'secondary'}
+                    onPress={afterPermissions}
+                  />
+                </Reanimated.View>
               </View>
             )}
             {step === 2 && (
@@ -380,57 +381,11 @@ const useStyles = createStyles((colors) => ({
     minHeight: spacing.lg,
   },
   rows: {
-    gap: spacing.sm,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.md,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-  },
-  rowTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
+    gap: 10,
   },
   rowText: {
     fontSize: 13,
     color: colors.textMuted,
-  },
-  rowAction: {
-    minWidth: 92,
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-  },
-  allow: {
-    paddingHorizontal: spacing.md,
-    height: 36,
-    borderRadius: radius.full,
-    backgroundColor: colors.accent,
-    justifyContent: 'center',
-  },
-  allowLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.onAccent,
-  },
-  okBadge: {
-    position: 'absolute',
-    right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: spacing.md,
-    height: 36,
-    borderRadius: radius.full,
-    backgroundColor: colors.accent,
-  },
-  okLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.onAccent,
   },
   advice: {
     padding: spacing.md,
