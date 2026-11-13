@@ -139,6 +139,7 @@ function App() {
   const mountedKeys = useRef(new Set<string>([currentKey]));
   const [parentReady, setParentReady] = useState(false);
   const exiting = useRef(false);
+  const [leavingKey, setLeavingKey] = useState<string | null>(null);
   // Les valeurs à jour pour les fonctions créées une seule fois (écouteurs, navigation).
   const nav = useRef<{ route: Route; parent: Route | null }>({ route, parent: null });
   const tabDrag = useRef(new Animated.Value(0)).current;
@@ -371,9 +372,16 @@ function App() {
     if (!parent || exiting.current) return;
     exiting.current = true;
     const { g } = motionFor(routeKey(nav.current.route));
+    const leaving = routeKey(nav.current.route);
     Animated.timing(g, { toValue: 1, duration: motion.screen, easing: motion.easing, useNativeDriver: true }).start(() => {
-      exiting.current = false;
-      setRouteState(parent);
+      // La page partie est d'abord cachée par un style fixe, puis démontée à l'image suivante : quand
+      // son animation native est détachée, Android remet son opacité à 1 le temps d'une image, ce qui
+      // faisait réapparaître la page (Réglages au retour vers Profil).
+      setLeavingKey(leaving);
+      requestAnimationFrame(() => {
+        exiting.current = false;
+        setRouteState(parent);
+      });
     });
   }).current;
 
@@ -403,6 +411,7 @@ function App() {
   // Nouvel écran : l'écran qui arrive fait son entrée, les mouvements des pages parties sont oubliés,
   // et le parent sera monté dessous (prêt pour le retour) après un court délai.
   useEffect(() => {
+    setLeavingKey(null);
     const { enter } = motionFor(currentKey);
     Animated.timing(enter, { toValue: 1, duration: motion.screen, easing: motion.easing, useNativeDriver: true }).start();
     for (const key of [...motions.keys()]) if (!mountedKeys.current.has(key)) motions.delete(key);
@@ -718,7 +727,7 @@ function App() {
         if (warmCamera && position === 0) {
           return (
             <Animated.View key={key} pointerEvents="none" style={[StyleSheet.absoluteFill, styles.hidden]}>
-              {renderPage(layer, false)}
+              <View style={StyleSheet.absoluteFill}>{renderPage(layer, false)}</View>
             </Animated.View>
           );
         }
@@ -740,7 +749,8 @@ function App() {
                   : styles.hidden,
               ]}
             >
-              {renderPage(layer, false)}
+              {/* Même enveloppe que la page du dessus : en devenant la page du dessus, elle n'est pas remontée. */}
+              <View style={StyleSheet.absoluteFill}>{renderPage(layer, false)}</View>
               {!TAB_ROUTES.includes(route.name) && TAB_ROUTES.includes(layer.name) && <BottomBar active={layer.name as Tab} onChange={() => {}} />}
             </Animated.View>
           );
@@ -765,7 +775,7 @@ function App() {
               },
             ]}
           >
-            {renderPage(layer, true)}
+            <View style={[StyleSheet.absoluteFill, leavingKey === key && styles.hidden]}>{renderPage(layer, true)}</View>
           </Animated.View>
         );
       })}
