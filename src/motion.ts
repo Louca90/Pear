@@ -20,7 +20,11 @@ export const DURATION = {
   mascot: 420,
 } as const;
 
-const config = (duration: number) => ({ duration, easing: EASE, reduceMotion: ReduceMotion.System });
+// Appelée depuis le fil natif (animations d'entrée et de sortie) : c'est un worklet.
+function config(duration: number) {
+  'worklet';
+  return { duration, easing: EASE, reduceMotion: ReduceMotion.System };
+}
 
 // Une valeur qui va vers `toValue` avec la courbe de Pear.
 export function timing(toValue: number, duration: number = DURATION.small) {
