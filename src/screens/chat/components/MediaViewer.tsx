@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Dimensions, Image, Modal, Pressable, StyleSheet, View } from 'react-native';
+import { Animated, Dimensions, Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import Reanimated, { FadeOut, useAnimatedStyle, useSharedValue, withTiming, type EntryExitAnimationFunction } from 'react-native-reanimated';
 import { GestureDetector, GestureHandlerRootView, usePanGesture, usePinchGesture, useSimultaneousGestures, useTapGesture } from 'react-native-gesture-handler';
 import { useEvent, useEventListener } from 'expo';
 import { useVideoPlayer, VideoPlayer, VideoView } from 'expo-video';
-import { Pause, Play, X } from 'lucide-react-native';
+import { Volume2, VolumeX, X } from 'lucide-react-native';
 
 import { Message } from '../../../chat/database';
 import { openMedia } from '../../../chat/media';
@@ -12,12 +13,46 @@ import { IconButton, useNavigationBarHeight } from '../../../components/ui';
 import { createMediaStyles, radius, spacing, useMediaColors } from '../../../theme';
 
 import { SeekBar } from './SeekBar';
+import { formatClock } from '../format';
+import { PauseIcon, PlayIcon } from '../../../components/PlayIcon';
+import { haptics } from '../../../haptics';
+import { enterUp, timing } from '../../../motion';
 import { VIEWER_CANCEL_MS, VIEWER_CLOSE_DISTANCE, VIEWER_CLOSE_MS, VIEWER_CLOSE_SPEED, VIEWER_DRAG_START, VIEWER_EASING, VIEWER_MIN_SCALE, VIEWER_OPEN_MS } from '../constants';
 import { useChatStyles } from '../styles';
 import { Rect } from '../types';
 import { t } from '../../../i18n';
 
-// Plein écran : juste lecture ou pause et une barre pour se déplacer.
+// Plein écran. Toucher la vidéo affiche ou masque les commandes (elles se masquent seules après 2,5 s de
+// lecture) ; double-toucher à gauche ou à droite recule ou avance de 10 s, avec une onde à l'endroit
+// touché. Au centre, lecture/pause en fondu croisé ; en bas, la barre (qui avance en continu), le temps,
+// la vitesse et le son. Tout bouge sur le fil natif.
+const SEEK_STEP = 10;
+const RATES = [1, 1.5, 2, 0.5];
+const DOUBLE_TAP_MS = 280;
+const AUTO_HIDE_MS = 2500;
+
+function rippleIn(): EntryExitAnimationFunction {
+  return () => {
+    'worklet';
+    return {
+      initialValues: { opacity: 0.45, transform: [{ scale: 0.4 }] },
+      animations: { opacity: withTiming(0, { duration: 520 }), transform: [{ scale: withTiming(1.6, { duration: 520 }) }] },
+    };
+  };
+}
+
+function SeekRipple({ side }: { side: 'back' | 'forward' }) {
+  const styles = useStyles();
+  return (
+    <View pointerEvents="none" style={[styles.rippleZone, side === 'back' ? styles.rippleBack : styles.rippleForward]}>
+      <Reanimated.View entering={rippleIn()} style={styles.ripple} />
+      <Reanimated.Text entering={enterUp(6, 180)} exiting={FadeOut.duration(220)} style={styles.rippleLabel}>
+        {side === 'back' ? `« ${SEEK_STEP} s` : `${SEEK_STEP} s »`}
+      </Reanimated.Text>
+    </View>
+  );
+}
+
 function VideoControls({ player }: { player: VideoPlayer }) {
   const styles = useStyles();
   const colors = useMediaColors();
@@ -30,36 +65,102 @@ function VideoControls({ player }: { player: VideoPlayer }) {
   useEventListener(player, 'timeUpdate', () => setIsPlaying(player.playing));
   useEventListener(player, 'statusChange', () => setIsPlaying(player.playing));
   useEffect(() => setIsPlaying(player.playing), [player]);
+  const [rate, setRate] = useState(player.playbackRate || 1);
+  const [muted, setMuted] = useState(player.muted);
+  const [chromeOn, setChromeOn] = useState(true);
+  const [ripple, setRipple] = useState<{ side: 'back' | 'forward'; n: number } | null>(null);
+  const lastTap = useRef<{ at: number; side: 'back' | 'center' | 'forward' } | null>(null);
   const duration = player.duration;
   const position = duration > 0 ? Math.min(1, currentTime / duration) : 0;
-  const toggle = () => (isPlaying ? player.pause() : player.play());
 
   useEventListener(player, 'playToEnd', () => {
     player.pause();
     player.currentTime = 0;
+    setChromeOn(true);
   });
+
+  // Les commandes et l'icône centrale, sur le fil natif.
+  const chrome = useSharedValue(1);
+  const playing = useSharedValue(isPlaying ? 1 : 0);
+  useEffect(() => chrome.set(timing(chromeOn ? 1 : 0, 220)), [chromeOn]);
+  useEffect(() => playing.set(timing(isPlaying ? 1 : 0, 220)), [isPlaying]);
+  const chromeStyle = useAnimatedStyle(() => ({ opacity: chrome.get() }));
+  const playStyle = useAnimatedStyle(() => ({ opacity: 1 - playing.get(), transform: [{ scale: 1 - 0.4 * playing.get() }, { rotate: `${-90 * playing.get()}deg` }] }));
+  const pauseStyle = useAnimatedStyle(() => ({ opacity: playing.get(), transform: [{ scale: 0.6 + 0.4 * playing.get() }, { rotate: `${90 * (1 - playing.get())}deg` }] }));
+
+  // Pendant la lecture, les commandes se masquent seules.
+  useEffect(() => {
+    if (!chromeOn || !isPlaying) return;
+    const timer = setTimeout(() => setChromeOn(false), AUTO_HIDE_MS);
+    return () => clearTimeout(timer);
+  }, [chromeOn, isPlaying]);
+
+  const toggle = () => (isPlaying ? player.pause() : player.play());
+
+  const seekBy = (seconds: number) => {
+    if (!(duration > 0)) return;
+    player.currentTime = Math.max(0, Math.min(duration, player.currentTime + seconds));
+  };
+
+  // Un toucher affiche ou masque ; un second toucher rapide du même côté recule ou avance.
+  const tapZone = (side: 'back' | 'center' | 'forward') => {
+    const now = Date.now();
+    const previous = lastTap.current;
+    if (side !== 'center' && previous && previous.side === side && now - previous.at < DOUBLE_TAP_MS) {
+      lastTap.current = null;
+      setChromeOn((on) => !on);
+      seekBy(side === 'back' ? -SEEK_STEP : SEEK_STEP);
+      haptics.select();
+      setRipple((r) => ({ side, n: (r?.n ?? 0) + 1 }));
+      return;
+    }
+    lastTap.current = { at: now, side };
+    setChromeOn((on) => !on);
+  };
+
+  useEffect(() => {
+    if (!ripple) return;
+    const timer = setTimeout(() => setRipple(null), 620);
+    return () => clearTimeout(timer);
+  }, [ripple]);
+
+  const changeRate = () => {
+    const next = RATES[(RATES.indexOf(rate) + 1) % RATES.length] ?? 1;
+    player.playbackRate = next;
+    setRate(next);
+    haptics.select();
+  };
+  const toggleMute = () => {
+    player.muted = !muted;
+    setMuted(!muted);
+  };
+  const rateText = `${String(rate).replace('.', ',')}×`;
 
   return (
     <>
-      <Pressable onPress={toggle} accessibilityLabel={isPlaying ? t('chat.pause') : t('chat.lire')} style={styles.videoTap}>
-        {!isPlaying && (
-          <View style={styles.playButton}>
-            <Play size={24} color={colors.background} fill={colors.background} strokeWidth={1.75} />
-          </View>
-        )}
-      </Pressable>
-      <View style={[styles.videoControls, { bottom: bottom + spacing.md }]}>
-        <IconButton onPress={toggle} label={isPlaying ? t('chat.pause') : t('chat.lire')}>
-          {isPlaying ? (
-            <Pause size={24} color={colors.background} fill={colors.background} strokeWidth={1.75} />
-          ) : (
-            <Play size={24} color={colors.background} fill={colors.background} strokeWidth={1.75} />
-          )}
-        </IconButton>
-        <View style={styles.flex}>
+      <View style={styles.tapRow}>
+        <Pressable style={styles.flex} onPress={() => tapZone('back')} accessibilityLabel={t('chat.reculer10')} />
+        <Pressable style={styles.flex} onPress={() => tapZone('center')} accessibilityLabel={isPlaying ? t('chat.pause') : t('chat.lire')} />
+        <Pressable style={styles.flex} onPress={() => tapZone('forward')} accessibilityLabel={t('chat.avancer10')} />
+      </View>
+      {ripple && <SeekRipple key={ripple.n} side={ripple.side} />}
+      <Reanimated.View pointerEvents={chromeOn ? 'box-none' : 'none'} style={[StyleSheet.absoluteFill, chromeStyle]}>
+        <View pointerEvents="box-none" style={styles.centerSlot}>
+          <IconButton onPress={toggle} label={isPlaying ? t('chat.pause') : t('chat.lire')} style={styles.bigPlay}>
+            <View style={styles.bigPlayIcon}>
+              <Reanimated.View style={[StyleSheet.absoluteFill, styles.iconCenter, playStyle]}>
+                <PlayIcon size={30} color={colors.background} />
+              </Reanimated.View>
+              <Reanimated.View style={[StyleSheet.absoluteFill, styles.iconCenter, pauseStyle]}>
+                <PauseIcon size={30} color={colors.background} />
+              </Reanimated.View>
+            </View>
+          </IconButton>
+        </View>
+        <View style={[styles.videoControls, { bottom: bottom + spacing.md }]}>
           <SeekBar
             position={position}
-            speed={isPlaying && duration > 0 ? player.playbackRate / duration : 0}
+            speed={isPlaying && duration > 0 ? rate / duration : 0}
             color={colors.background}
             trackColor={colors.onDarkTrack}
             label={t('chat.deplacerVideo')}
@@ -67,12 +168,22 @@ function VideoControls({ player }: { player: VideoPlayer }) {
               if (duration > 0) player.currentTime = ratio * duration;
             }}
           />
+          <View style={styles.videoFooter}>
+            <Text style={styles.videoTime}>
+              {formatClock(currentTime)} / {formatClock(duration > 0 ? duration : 0)}
+            </Text>
+            <Pressable onPress={changeRate} hitSlop={8} accessibilityRole="button" accessibilityLabel={t('chat.vitesseVideo', { vitesse: rateText })} style={styles.videoChip}>
+              <Text style={styles.videoChipText}>{rateText}</Text>
+            </Pressable>
+            <IconButton onPress={toggleMute} label={muted ? t('chat.activerSon') : t('chat.couperSon')} style={styles.videoRound}>
+              {muted ? <VolumeX size={18} color={colors.background} strokeWidth={1.9} /> : <Volume2 size={18} color={colors.background} strokeWidth={1.9} />}
+            </IconButton>
+          </View>
         </View>
-      </View>
+      </Reanimated.View>
     </>
   );
 }
-
 // Zoom : pincer de 1× à 5×, double appui (photo) pour 2,5× puis retour, déplacement limité aux bords.
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 5;
@@ -237,9 +348,11 @@ export function MediaViewer({ viewing: { message, rect, poster, size }, onClose 
     },
   });
 
+  // Sur une vidéo, le double appui sert à reculer ou avancer (commandes vidéo) : pas de zoom.
   const doubleTapGesture = useTapGesture({
     runOnJS: true,
     disableReanimated: true,
+    enabled: !isVideo,
     numberOfTaps: 2,
     onActivate: (event) => {
       if (zoomed()) animateZoom(1, { x: 0, y: 0 });
@@ -328,20 +441,96 @@ export function MediaViewer({ viewing: { message, rect, poster, size }, onClose 
 }
 
 const useLocalStyles = createMediaStyles((colors) => ({
-  videoTap: {
+  tapRow: {
+    ...StyleSheet.absoluteFill,
+    flexDirection: 'row',
+  },
+  centerSlot: {
     ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  bigPlay: {
+    width: 72,
+    height: 72,
+    borderRadius: radius.full,
+    backgroundColor: colors.onDarkTrack,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bigPlayIcon: {
+    width: 30,
+    height: 30,
+  },
+  iconCenter: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rippleZone: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: '34%',
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rippleBack: {
+    left: 0,
+  },
+  rippleForward: {
+    right: 0,
+  },
+  ripple: {
+    position: 'absolute',
+    width: 220,
+    height: 220,
+    borderRadius: radius.full,
+    backgroundColor: colors.background,
+  },
+  rippleLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.background,
   },
   videoControls: {
     position: 'absolute',
     left: 0,
     right: 0,
+    gap: spacing.sm / 2,
+    paddingHorizontal: spacing.lg,
+  },
+  videoFooter: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.lg,
-    height: 56,
+    gap: spacing.sm,
+  },
+  videoTime: {
+    flex: 1,
+    fontSize: 13,
+    color: colors.background,
+    fontVariant: ['tabular-nums'],
+  },
+  videoChip: {
+    height: 30,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.full,
+    backgroundColor: colors.onDarkTrack,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  videoChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.background,
+  },
+  videoRound: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.full,
+    backgroundColor: colors.onDarkTrack,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   viewerBackground: {
     backgroundColor: colors.text,
