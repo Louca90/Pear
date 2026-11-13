@@ -6,18 +6,19 @@ import { getMutedKinds, MessageKind, setMutedKinds } from '../chat/database';
 import { Header, Screen } from '../components/ui';
 import { Toggle } from '../components/Toggle';
 import { t } from '../i18n';
-import { createStyles, radius, spacing, useColors } from '../theme';
+import { createStyles, spacing, useColors } from '../theme';
 
-const KINDS: { kind: MessageKind; icon: LucideIcon; label: string }[] = [
-  { kind: 'text', icon: MessageSquare, label: t('notifs.messages') },
-  { kind: 'image', icon: Image, label: t('notifs.photos') },
-  { kind: 'video', icon: Video, label: t('notifs.videos') },
-  { kind: 'audio', icon: Mic, label: t('notifs.vocaux') },
-  { kind: 'file', icon: File, label: t('notifs.fichiers') },
+const KINDS: { kind: MessageKind; icon: LucideIcon; label: () => string }[] = [
+  { kind: 'text', icon: MessageSquare, label: () => t('notifs.messages') },
+  { kind: 'image', icon: Image, label: () => t('notifs.photos') },
+  { kind: 'video', icon: Video, label: () => t('notifs.videos') },
+  { kind: 'audio', icon: Mic, label: () => t('notifs.vocaux') },
+  { kind: 'file', icon: File, label: () => t('notifs.fichiers') },
 ];
 
-// Par conversation : de quoi être prévenu. Les autorisations du téléphone restent accessibles en bas.
-export function NotificationSettingsScreen({ contactKey, name, onBack }: { contactKey: string; name: string; onBack: () => void }) {
+// Par conversation : de quoi être prévenu (un interrupteur par type, toute la ligne se touche), puis
+// les autorisations du téléphone. Utilisé dans l'onglet « Notifications » des réglages de la conversation.
+export function NotificationsPanel({ contactKey }: { contactKey: string }) {
   const colors = useColors();
   const styles = useStyles();
   const [muted, setMuted] = useState(() => getMutedKinds(contactKey));
@@ -29,29 +30,53 @@ export function NotificationSettingsScreen({ contactKey, name, onBack }: { conta
   };
 
   return (
+    <View>
+      <Text style={styles.sectionTitle}>{t('notifs.parType')}</Text>
+      <View style={styles.card}>
+        {KINDS.map(({ kind, icon: Icon, label }, index) => {
+          const on = !muted.includes(kind);
+          return (
+            <Pressable
+              key={kind}
+              onPress={() => toggle(kind, !on)}
+              accessibilityRole="switch"
+              accessibilityLabel={label()}
+              accessibilityState={{ checked: on }}
+              style={({ pressed }) => [styles.row, index > 0 && styles.separator, pressed && styles.pressed]}
+            >
+              <Icon size={20} color={colors.text} strokeWidth={1.75} />
+              <Text style={styles.rowLabel}>{label()}</Text>
+              {/* L'interrupteur ne fait que montrer l'état : c'est la ligne entière qui se touche. */}
+              <View pointerEvents="none" importantForAccessibility="no-hide-descendants">
+                <Toggle value={on} onChange={(notify) => toggle(kind, notify)} label={label()} />
+              </View>
+            </Pressable>
+          );
+        })}
+      </View>
+      <Text style={styles.hint}>{t('notifs.parTypeAide')}</Text>
+      <Text style={styles.hint}>{t('notifs.dechiffrement')}</Text>
+
+      <Text style={[styles.sectionTitle, styles.spaced]}>{t('notifs.telephone')}</Text>
+      <View style={styles.card}>
+        <Pressable onPress={() => Linking.openSettings()} style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
+          <Settings size={20} color={colors.text} strokeWidth={1.75} />
+          <Text style={styles.rowLabel}>{t('notifs.reglagesTelephone')}</Text>
+          <ChevronRight size={20} color={colors.textMuted} strokeWidth={1.75} />
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+// L'ancien écran séparé, gardé pour la route « notifications » : le même panneau en pleine page.
+export function NotificationSettingsScreen({ contactKey, name, onBack }: { contactKey: string; name: string; onBack: () => void }) {
+  const styles = useStyles();
+  return (
     <Screen>
       <Header title={t('notifs.titre')} subtitle={name} onBack={onBack} />
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.sectionTitle}>{t('notifs.parType')}</Text>
-        <View style={styles.card}>
-          {KINDS.map(({ kind, icon: Icon, label }) => (
-            <View key={kind} style={styles.row}>
-              <Icon size={20} color={colors.text} strokeWidth={1.75} />
-              <Text style={styles.rowLabel}>{label}</Text>
-              <Toggle value={!muted.includes(kind)} onChange={(notify) => toggle(kind, notify)} label={label} />
-            </View>
-          ))}
-        </View>
-        <Text style={styles.hint}>{t('notifs.parTypeAide')}</Text>
-
-        <Text style={styles.sectionTitle}>{t('notifs.telephone')}</Text>
-        <View style={styles.card}>
-          <Pressable onPress={() => Linking.openSettings()} style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
-            <Settings size={20} color={colors.text} strokeWidth={1.75} />
-            <Text style={styles.rowLabel}>{t('notifs.reglagesTelephone')}</Text>
-            <ChevronRight size={20} color={colors.textMuted} strokeWidth={1.75} />
-          </Pressable>
-        </View>
+        <NotificationsPanel contactKey={contactKey} />
       </ScrollView>
     </Screen>
   );
@@ -63,35 +88,46 @@ const useStyles = createStyles((colors) => ({
     paddingTop: spacing.sm,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 12,
     fontWeight: '600',
-    color: colors.text,
+    letterSpacing: 0.7,
+    textTransform: 'uppercase',
+    color: colors.textMuted,
     marginBottom: spacing.sm,
+    marginLeft: 4,
+  },
+  spaced: {
+    marginTop: spacing.lg,
   },
   card: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 4,
-    borderRadius: radius.md,
+    borderRadius: 18,
     backgroundColor: colors.surface,
+    overflow: 'hidden',
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    height: 52,
+    gap: 12,
+    minHeight: 56,
+    paddingHorizontal: 14,
+  },
+  separator: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
   },
   rowLabel: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 15,
     color: colors.text,
   },
   hint: {
-    fontSize: 14,
+    fontSize: 12,
+    lineHeight: 18,
     color: colors.textMuted,
     marginTop: spacing.sm,
-    marginBottom: spacing.lg,
+    marginHorizontal: 4,
   },
   pressed: {
-    opacity: 0.6,
+    backgroundColor: colors.elevatedActive,
   },
 }));

@@ -547,7 +547,6 @@ function App() {
           name={contacts.find((contact) => contact.publicKey === publicKey)?.name ?? t('app.contact')}
           onBack={() => setRoute({ name: 'chat', publicKey })}
           onInfo={() => setRoute({ name: 'contact', publicKey })}
-          onNotifications={() => setRoute({ name: 'notifications', publicKey })}
         />
       );
     }
