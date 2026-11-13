@@ -2,9 +2,8 @@ import { useEffect, useRef } from 'react';
 import { Animated, Pressable, Text, View } from 'react-native';
 import { EllipsisVertical, Search, Timer } from 'lucide-react-native';
 
-import { getContactProfile, getStreakState } from '../../../chat/database';
+import { getContactProfile } from '../../../chat/database';
 import { Pear } from '../../../components/Pear';
-import { StreakFlame } from '../../../components/StreakFlame';
 import { chat } from '../../../chat/manager';
 import { isSelf } from '../../../chat/self';
 import { Avatar, Header, IconButton } from '../../../components/ui';
@@ -29,7 +28,6 @@ type Props = {
 export function ChatHeader({ contactKey, name, onBack, onInfo, onCustomize, onSearch, ephemeral, onEphemeral }: Props) {
   const colors = useColors();
   const styles = useStyles();
-  const streak = getStreakState(contactKey);
   const photo = getContactProfile(contactKey).photo_uri;
   const { route, status } = chat.getLink(contactKey);
   const notes = isSelf(contactKey);
@@ -61,7 +59,6 @@ export function ChatHeader({ contactKey, name, onBack, onInfo, onCustomize, onSe
         titleAccessory={
           notes ? undefined : (
             <>
-              <StreakFlame id={contactKey} count={streak.count} lit={streak.today} size={17} />
               {connecting && (
                 <View accessible accessibilityLabel={t('chat.connexionEnCours')}>
                   <Pear height={16} color={colors.textMuted} state="searching" />
@@ -124,16 +121,6 @@ const useStyles = createStyles((colors) => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-  },
-  streak: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
-  streakCount: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.text,
   },
 
 }));

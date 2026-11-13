@@ -55,7 +55,7 @@ export type Message = {
   their_reaction: string | null;
   // Épinglé : l'heure de l'épinglage (0 sinon).
   pinned?: number;
-  // Photo ou vidéo prise avec la caméra de Pear (compte pour les séries).
+  // Photo ou vidéo prise avec la caméra de Pear.
   from_camera?: number;
   // Transféré depuis une autre conversation.
   forwarded?: number;
@@ -98,7 +98,7 @@ export function openDatabase(): SQLiteDatabase {
 }
 
 // --- Cache de lecture ---
-// Les écrans relisent la base à chaque rendu (dernier message, profil, série, réglages de chaque
+// Les écrans relisent la base à chaque rendu (dernier message, profil, réglages de chaque
 // conversation). Tant que rien n'a été écrit, une même requête rend le même résultat : il est gardé
 // en mémoire, et tout est oublié à la moindre écriture. Toutes les lectures et écritures de ce fichier
 // passent par db() ; un accès direct à la base (migration, sauvegarde) doit appeler forgetReads().
@@ -726,42 +726,6 @@ export function deleteOldAvatars(contact: string, mine: number, keepId: string |
     .forEach((row) => deleteMessage(row.id, contact));
 }
 
-// Jours d'affilée où les deux personnes ont écrit, comme sur Snapchat. La série tient encore si le dernier jour est hier.
-export function getStreak(contact: string): number {
-  return getStreakState(contact).count;
-}
-
-// La série et si la journée d'aujourd'hui est déjà validée (la flamme est alors allumée).
-export function getStreakState(contact: string): { count: number; today: boolean } {
-  // Seules les photos et vidéos prises avec la caméra de Pear comptent ; avant cette règle, tous les
-  // messages comptaient (les séries déjà en cours sont gardées).
-  const since = Number(getSetting('camera_streak_since') ?? 0);
-  const days = db().getAllSync<{ day: string; both: number }>(
-    `SELECT date(created_at / 1000, 'unixepoch', 'localtime') AS day, (SUM(mine = 1) > 0 AND SUM(mine = 0) > 0) AS both
-     FROM messages WHERE contact = ? AND (
-       (kind IN ('image', 'video') AND from_camera = 1)
-       OR (created_at < ? AND kind IN ('text', 'image', 'video', 'audio', 'file'))
-     )
-     GROUP BY day ORDER BY day DESC`,
-    contact,
-    since,
-  );
-  const dayKey = (offset: number) => {
-    const date = new Date();
-    date.setDate(date.getDate() - offset);
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-  };
-  const byDay = new Map(days.map((row) => [row.day, row.both === 1]));
-  // Aujourd'hui peut ne pas être encore complet : on compte à partir d'hier si besoin.
-  const today = byDay.get(dayKey(0)) === true;
-  let offset = today ? 0 : 1;
-  let streak = 0;
-  while (byDay.get(dayKey(offset))) {
-    streak += 1;
-    offset += 1;
-  }
-  return { count: streak, today };
-}
 
 // Le texte montré sur l'accueil et dans les notifications.
 const KIND_LABELS: Partial<Record<MessageKind, string>> = { image: t('apercu.photo'), video: t('apercu.video'), audio: t('apercu.vocal'), file: t('apercu.fichier') };

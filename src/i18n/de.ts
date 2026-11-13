@@ -10,7 +10,6 @@ export const de: Dictionary = {
     enLigne: 'Online',
     aucunMessage: 'Keine Nachrichten',
     dernierDeVous: 'Du: {message}',
-    serie: '{n}-Tage-Serie',
   },
   app: {
     codeNonValide: 'Ungültiger Code',
@@ -295,9 +294,7 @@ export const de: Dictionary = {
     filtreDate: 'Datum',
     filtreJour: 'Tag',
     filtreLieu: 'Ort',
-    filtreSerie: 'Serie',
     filtreBatterie: 'Akku',
-    serieJours: '{count} Tage in Folge',
     decouper: 'Kürzen',
     dureeGardee: '{secondes} s behalten',
     son: 'Ton',

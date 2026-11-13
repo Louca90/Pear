@@ -9,7 +9,6 @@ export const fr = {
     enLigne: 'En ligne',
     aucunMessage: 'Aucun message',
     dernierDeVous: 'Vous : {message}',
-    serie: 'Série de {n} jours',
   },
   app: {
     codeNonValide: 'Code non valide',
@@ -297,9 +296,7 @@ export const fr = {
     filtreDate: 'Date',
     filtreJour: 'Jour',
     filtreLieu: 'Lieu',
-    filtreSerie: 'Série',
     filtreBatterie: 'Batterie',
-    serieJours: '{count} jours d’affilée',
     decouper: 'Découper',
     dureeGardee: '{secondes} s gardées',
     son: 'Son',

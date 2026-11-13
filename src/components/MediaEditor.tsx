@@ -234,7 +234,7 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
   const left = (screen.width - width) / 2;
   const top = (screen.height - height) / 2;
   const textMaxWidth = width * TEXT_MAX_WIDTH;
-  // Lieu, Série et Batterie se lisent sur le téléphone quand le filtre est choisi (jamais avant).
+  // Lieu et Batterie se lisent sur le téléphone quand le filtre est choisi (jamais avant).
   const [ambient, setAmbient] = useState<Ambient>(NO_AMBIENT);
   const stamp = useMemo(() => formatStamp(takenAt, ambient), [takenAt, ambient]);
   const stampKind = presetOf(filter).stamp;

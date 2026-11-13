@@ -16,11 +16,11 @@ export type Step =
   | { op: 'warmth'; value: number } // -1 (froid) à 1 (chaud)
   | { op: 'fade'; value: number }; // 0 à 1
 
-export type FilterId = 'none' | 'time' | 'date' | 'weekday' | 'place' | 'streak' | 'battery' | 'film' | 'bw' | 'sepia' | 'warm' | 'cool' | 'vivid' | 'faded' | 'vintage' | 'punch' | 'dark';
+export type FilterId = 'none' | 'time' | 'date' | 'weekday' | 'place' | 'battery' | 'film' | 'bw' | 'sepia' | 'warm' | 'cool' | 'vivid' | 'faded' | 'vintage' | 'punch' | 'dark';
 
 export type FilterPreset = { id: FilterId; label: TextKey; steps: Step[]; stamp?: StampKind };
 
-// Original, puis les marques (heure, date, jour, lieu, série, batterie, pellicule), puis les couleurs. Dans chaque filtre, le voile
+// Original, puis les marques (heure, date, jour, lieu, batterie, pellicule), puis les couleurs. Dans chaque filtre, le voile
 // et la température en dernier : sur une vidéo, ils se posent par-dessus les autres étapes.
 export const FILTERS: FilterPreset[] = [
   { id: 'none', label: 'editeur.filtreOriginal', steps: [] },
@@ -28,7 +28,6 @@ export const FILTERS: FilterPreset[] = [
   { id: 'date', label: 'editeur.filtreDate', steps: [], stamp: 'date' },
   { id: 'weekday', label: 'editeur.filtreJour', steps: [], stamp: 'weekday' },
   { id: 'place', label: 'editeur.filtreLieu', steps: [], stamp: 'place' },
-  { id: 'streak', label: 'editeur.filtreSerie', steps: [], stamp: 'streak' },
   { id: 'battery', label: 'editeur.filtreBatterie', steps: [], stamp: 'battery' },
   { id: 'film', label: 'editeur.filtrePellicule', steps: [{ op: 'warmth', value: 0.35 }], stamp: 'film' },
   { id: 'bw', label: 'editeur.filtreNoirBlanc', steps: [{ op: 'saturate', value: 0 }, { op: 'contrast', value: 1.12 }] },

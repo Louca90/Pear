@@ -3,8 +3,7 @@ import { Animated, Easing, FlatList, Modal, PanResponder, Pressable, Text, View,
 import { ArrowUp } from 'lucide-react-native';
 import Svg, { Path } from 'react-native-svg';
 
-import { getContactProfile, getStreakState } from '../chat/database';
-import { StreakFlame } from './StreakFlame';
+import { getContactProfile } from '../chat/database';
 import { SearchField } from './SearchField';
 import { Avatar, useNavigationBarHeight } from './ui';
 import { dateLocale, t } from '../i18n';
@@ -141,9 +140,7 @@ export function ContactPickerSheet({ title, contacts, onSend, onClose }: Props) 
             <Pressable onPress={() => toggle(item.publicKey)} style={({ pressed }) => [styles.row, pressed && styles.pressed]} accessibilityState={{ checked: selected.includes(item.publicKey) }}>
               <Avatar uri={getContactProfile(item.publicKey).photo_uri} size={40} />
               <View style={styles.nameLine}>
-                <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
-                <StreakFlame id={item.publicKey} count={getStreakState(item.publicKey).count} lit={getStreakState(item.publicKey).today} size={15} />
-              </View>
+                <Text style={styles.name} numberOfLines={1}>{item.name}</Text>              </View>
               <CheckBox checked={selected.includes(item.publicKey)} />
             </Pressable>
           )}

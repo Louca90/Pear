@@ -30,7 +30,7 @@ export function Screen({ children, edgeToEdgeBottom }: { children: ReactNode; ed
 type HeaderProps = {
   title: string;
   subtitle?: string;
-  // À côté du titre (la flamme de la série dans une conversation).
+  // À côté du titre (indicateurs de la conversation : connexion, éphémère).
   titleAccessory?: ReactNode;
   onBack?: () => void;
   action?: ReactNode;

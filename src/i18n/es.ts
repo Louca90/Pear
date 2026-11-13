@@ -10,7 +10,6 @@ export const es: Dictionary = {
     enLigne: 'En línea',
     aucunMessage: 'Sin mensajes',
     dernierDeVous: 'Tú: {message}',
-    serie: 'Racha de {n} días',
   },
   app: {
     codeNonValide: 'Código no válido',
@@ -295,9 +294,7 @@ export const es: Dictionary = {
     filtreDate: 'Fecha',
     filtreJour: 'Día',
     filtreLieu: 'Lugar',
-    filtreSerie: 'Racha',
     filtreBatterie: 'Batería',
-    serieJours: '{count} días seguidos',
     decouper: 'Cortar',
     dureeGardee: '{secondes} s conservados',
     son: 'Sonido',

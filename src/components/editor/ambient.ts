@@ -1,8 +1,7 @@
 import { PermissionsAndroid, Platform } from 'react-native';
 
 import { batteryStatus, lastKnownLocation } from '../../../modules/pear-native';
-import { getSetting, getStreakState, setSetting } from '../../chat/database';
-import { loadContacts } from '../../storage';
+import { getSetting, setSetting } from '../../chat/database';
 import { nearestCity } from './cities';
 import { Ambient, STAMP_VARIANTS, StampKind } from './stamps';
 
@@ -20,15 +19,6 @@ export async function askPlacePermission(): Promise<boolean> {
   return (await PermissionsAndroid.request(permission)) === PermissionsAndroid.RESULTS.GRANTED;
 }
 
-// La plus longue série en cours parmi les conversations : l'éditeur ne sait pas pour quel contact on prend la photo.
-async function bestStreak(): Promise<number> {
-  try {
-    const contacts = await loadContacts();
-    return contacts.reduce((best, contact) => Math.max(best, getStreakState(contact.publicKey).count), 0);
-  } catch {
-    return 0;
-  }
-}
 
 // Ce que le filtre choisi a besoin de savoir, et rien d'autre (la position n'est lue que pour Lieu).
 export async function readAmbient(kind: StampKind | undefined): Promise<Partial<Ambient>> {
@@ -38,7 +28,6 @@ export async function readAmbient(kind: StampKind | undefined): Promise<Partial<
       return { place: position ? nearestCity(position) : null };
     }
     if (kind === 'battery') return { battery: batteryStatus() };
-    if (kind === 'streak') return { streak: await bestStreak() };
   } catch {
     // Une lecture qui échoue donne une marque vide, jamais une erreur.
   }

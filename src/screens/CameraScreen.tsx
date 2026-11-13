@@ -238,7 +238,7 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
   // Heure, Date, Pellicule : la marque se voit sur l'aperçu, mise à jour à chaque minute.
   const liveStamp = presetOf(liveFilter).stamp;
   const [now, setNow] = useState(Date.now());
-  // Lieu, Série et Batterie : lus sur le téléphone quand le filtre est choisi ; la batterie est relue à chaque tic.
+  // Lieu et Batterie : lus sur le téléphone quand le filtre est choisi ; la batterie est relue à chaque tic.
   const [ambient, setAmbient] = useState<Ambient>(NO_AMBIENT);
   const [, setStyleTick] = useState(0);
   useEffect(() => {

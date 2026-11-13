@@ -3,19 +3,19 @@ import { G, Path, Rect, Text as SvgText } from 'react-native-svg';
 import { dateLocale, t } from '../../i18n';
 import { fixed } from '../../theme';
 
-// Les marques des filtres d'ambiance (Heure, Date, Pellicule, Lieu, Jour, Série, Batterie), dessinées
+// Les marques des filtres d'ambiance (Heure, Date, Pellicule, Lieu, Jour, Batterie), dessinées
 // en SVG : pareilles dans l'appareil photo, dans l'éditeur et dans le fichier envoyé. Polices du système
 // Android (fines, à empattements, chasse fixe), sans dépendance. Chaque marque a 2 ou 3 styles.
-export type StampKind = 'time' | 'date' | 'film' | 'place' | 'weekday' | 'streak' | 'battery';
+export type StampKind = 'time' | 'date' | 'film' | 'place' | 'weekday' | 'battery';
 
 // Combien de styles typographiques a chaque marque.
-export const STAMP_VARIANTS: Record<StampKind, number> = { time: 3, date: 3, film: 3, place: 3, weekday: 3, streak: 3, battery: 3 };
+export const STAMP_VARIANTS: Record<StampKind, number> = { time: 3, date: 3, film: 3, place: 3, weekday: 3, battery: 3 };
 
 // Ce que le téléphone sait au moment de la photo. Lu sur l'appareil, jamais envoyé : voir ambient.ts.
-export type Ambient = { place: string | null; battery: { level: number; charging: boolean } | null; streak: number };
-export const NO_AMBIENT: Ambient = { place: null, battery: null, streak: 0 };
+export type Ambient = { place: string | null; battery: { level: number; charging: boolean } | null };
+export const NO_AMBIENT: Ambient = { place: null, battery: null };
 
-export type Stamp = { time: string; weekday: string; day: string; dayNumber: string; month: string; long: string; film: string; filmTime: string; place: string | null; battery: Ambient['battery']; streak: number };
+export type Stamp = { time: string; weekday: string; day: string; dayNumber: string; month: string; long: string; film: string; filmTime: string; place: string | null; battery: Ambient['battery'] };
 
 export function formatStamp(timestamp: number, ambient: Ambient = NO_AMBIENT): Stamp {
   const date = new Date(timestamp);
@@ -34,7 +34,6 @@ export function formatStamp(timestamp: number, ambient: Ambient = NO_AMBIENT): S
     filmTime: `${film}  ${time}`,
     place: ambient.place,
     battery: ambient.battery,
-    streak: ambient.streak,
   };
 }
 
@@ -165,27 +164,6 @@ export function StampMarks({ kind, stamp, width, height, variant = 0 }: { kind: 
     );
   }
 
-  if (kind === 'streak') {
-    // Pas de série en cours : rien n'est dessiné.
-    if (stamp.streak < 1) return null;
-    const count = String(stamp.streak);
-    const label = t('editeur.serieJours', { count });
-    if (style === 0) {
-      return (
-        <G>
-          <Soft x={cx} y={height * 0.4} size={unit * 0.3} family="sans-serif-thin">{count}</Soft>
-          <Soft x={cx} y={height * 0.4 + unit * 0.07} size={unit * 0.045} family="sans-serif-medium" spacing={unit * 0.01}>{label.toUpperCase()}</Soft>
-        </G>
-      );
-    }
-    if (style === 1) return <Soft x={cx} y={height * 0.38} size={unit * 0.14} family="sans-serif-medium" weight="700">{label}</Soft>;
-    return (
-      <G>
-        <Soft x={left} y={bottom} size={unit * 0.2} family="serif" italic anchor="start">{count}</Soft>
-        <Soft x={left + unit * (0.09 + 0.08 * count.length)} y={bottom} size={unit * 0.06} family="serif" anchor="start">{label}</Soft>
-      </G>
-    );
-  }
 
   // Batterie
   const battery = stamp.battery;

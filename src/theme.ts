@@ -105,10 +105,8 @@ export const fixed = {
   batteryLow: '#FF5A4F',
   // Couleurs proposées pour le texte et le pinceau de l'éditeur.
   editorTextColors: ['#FFFFFF', '#000000', '#FF3B30', '#FF9500', '#FFCC00', '#34C759', '#00C7BE', '#007AFF', '#AF52DE', '#FF2D92'],
-  // Cœur du double appui, flamme de la série.
+  // Cœur du double appui.
   heart: '#FF3B5C',
-  flame: '#FF7A1A',
-  flameCore: '#FFC94D',
   // Petit paysage qui montre l'effet des filtres, et son fond.
   scene: { sky: '#7FBDF0', sun: '#FFC93C', cloud: '#FFFFFF', hill: '#7CC36A', hillDark: '#2E8B4A', house: '#E5483B' },
   filterStripBackground: '#1C1C1E',

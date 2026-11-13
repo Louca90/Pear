@@ -12,7 +12,6 @@ import {
   getLastMessage,
   getPendingRequests,
   getPinnedOrder,
-  getStreakState,
   getUnreadCounts,
   markConversationRead,
   Message,
@@ -30,7 +29,6 @@ import { PermissionBanner } from '../components/PermissionBanner';
 import { OnlineRing, useRingArrival } from '../components/OnlineRing';
 import { RequestsBell } from '../components/RequestsBell';
 import { SearchField } from '../components/SearchField';
-import { StreakFlame } from '../components/StreakFlame';
 import { Avatar, Button, Header, RowPressable, Screen } from '../components/ui';
 import { t } from '../i18n';
 import { Contact } from '../storage';
@@ -67,8 +65,6 @@ type Item = {
   typing: boolean;
   draft: string;
   photo: string | null;
-  streakCount: number;
-  streakToday: boolean;
 };
 type RowProps = { item: Item; now: number; index: number; arriving: boolean };
 
@@ -92,9 +88,7 @@ function sameRow(previous: RowProps, next: RowProps) {
     a.online === b.online &&
     a.typing === b.typing &&
     a.draft === b.draft &&
-    a.photo === b.photo &&
-    a.streakCount === b.streakCount &&
-    a.streakToday === b.streakToday
+    a.photo === b.photo
   );
 }
 
@@ -130,9 +124,7 @@ const ConversationRow = memo(function ConversationRow({ item, now, index, arrivi
           <Text style={[styles.name, bold && styles.bold]} numberOfLines={1}>
             {contact.name}
           </Text>
-          {contact.verified && <ShieldCheck size={14} color={colors.signatureStrong} strokeWidth={2} accessibilityLabel={t('contact.verifie')} />}
-          <StreakFlame id={contact.publicKey} count={item.streakCount} lit={item.streakToday} size={15} />
-        </View>
+          {contact.verified && <ShieldCheck size={14} color={colors.signatureStrong} strokeWidth={2} accessibilityLabel={t('contact.verifie')} />}        </View>
         <Text style={[styles.preview, bold && styles.previewUnread] } numberOfLines={1}>
           {line}
         </Text>
@@ -213,12 +205,9 @@ export function HomeScreen({ contacts, onAdd, onOpen, onRequests, permissionMiss
   const pinnedOrder = getPinnedOrder();
   // Notes à moi-même (lot 4.6) : une conversation comme les autres dans la liste, sans réseau.
   const items: Item[] = [...contacts, { publicKey: SELF, name: t('notes.titre') }].map((contact) => {
-    const streak = getStreakState(contact.publicKey);
     return {
     contact,
     photo: getContactProfile(contact.publicKey).photo_uri,
-    streakCount: streak.count,
-    streakToday: streak.today,
     last: getLastMessage(contact.publicKey),
     unread: unreadCounts.get(contact.publicKey) ?? 0,
     pinned: pinnedOrder.includes(contact.publicKey),
@@ -531,16 +520,6 @@ const useStyles = createStyles((colors) => ({
     alignItems: 'center',
     gap: spacing.sm,
     minHeight: 20,
-  },
-  streak: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
-  streakCount: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.text,
   },
   dot: {
     minWidth: 20,

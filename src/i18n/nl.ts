@@ -10,7 +10,6 @@ export const nl: Dictionary = {
     enLigne: 'Online',
     aucunMessage: 'Geen berichten',
     dernierDeVous: 'Jij: {message}',
-    serie: 'Reeks van {n} dagen',
   },
   app: {
     codeNonValide: 'Ongeldige code',
@@ -295,9 +294,7 @@ export const nl: Dictionary = {
     filtreDate: 'Datum',
     filtreJour: 'Dag',
     filtreLieu: 'Plaats',
-    filtreSerie: 'Reeks',
     filtreBatterie: 'Batterij',
-    serieJours: '{count} dagen op rij',
     decouper: 'Inkorten',
     dureeGardee: '{secondes} s bewaard',
     son: 'Geluid',

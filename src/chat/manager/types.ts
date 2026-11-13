@@ -50,7 +50,7 @@ export type PickedFile = {
   size: number;
   mime: string | null;
   kind: MessageKind;
-  // Pris avec la caméra de Pear : compte pour les séries.
+  // Pris avec la caméra de Pear.
   fromCamera?: boolean;
   // Transféré depuis une autre conversation.
   forwarded?: boolean;
