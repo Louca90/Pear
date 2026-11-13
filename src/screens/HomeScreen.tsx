@@ -1,5 +1,6 @@
 import { ComponentRef, memo, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { Animated, Easing, Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
+import Reanimated, { LayoutAnimationConfig, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { haptics } from '../haptics';
 import { CheckCheck, Pin, PinOff, Plus, ShieldCheck, Trash2 } from 'lucide-react-native';
 
@@ -40,6 +41,7 @@ import { SwipeRow } from './home/SwipeRow';
 import { usePullRefresh } from './home/usePullRefresh';
 import { PullPear, PullView } from '../components/pull';
 import { matchesSearch, previewFor, relativeTime, ringDelay } from './home/listFormat';
+import { popIn, popOut, reflow, timing } from '../motion';
 
 type Props = {
   contacts: Contact[];
@@ -56,7 +58,6 @@ type Filter = 'all' | 'unread' | 'pinned' | 'pending' | 'online';
 // Changement de catégorie : la pastille glisse jusqu'à la nouvelle, la liste entre en fondu du même côté.
 const CHIP_MS = 260;
 const LIST_SHIFT = 24;
-const CHIP_EASING = Easing.bezier(0.2, 0.8, 0.2, 1);
 type Item = {
   contact: Contact;
   last: Message | null;
@@ -138,15 +139,18 @@ const ConversationRow = memo(function ConversationRow({ item, now, index, arrivi
       </View>
       <View style={styles.side}>
         {last && <Text style={[styles.time, bold && styles.bold]}>{relativeTime(last.created_at, now)}</Text>}
-        <View style={styles.badges}>
-          {/* 1 à 4 non lus : le nombre exact ; 5 ou plus : un point plein sans chiffre. */}
-          {preview.kind === 'unread' && (
-            <View style={styles.dot}>
-              <Text style={styles.dotText}>{preview.count}</Text>
-            </View>
-          )}
-          {preview.kind === 'many' && <View style={styles.dotPlain} />}
-        </View>
+        {/* Les pastilles apparaissent et disparaissent en fondu (pas à l'ouverture de l'écran). */}
+        <LayoutAnimationConfig skipEntering>
+          <View style={styles.badges}>
+            {/* 1 à 4 non lus : le nombre exact ; 5 ou plus : un point plein sans chiffre. */}
+            {preview.kind === 'unread' && (
+              <Reanimated.View key="count" entering={popIn()} exiting={popOut()} style={styles.dot}>
+                <Text style={styles.dotText}>{preview.count}</Text>
+              </Reanimated.View>
+            )}
+            {preview.kind === 'many' && <Reanimated.View key="many" entering={popIn()} exiting={popOut()} style={styles.dotPlain} />}
+          </View>
+        </LayoutAnimationConfig>
       </View>
     </View>
   );
@@ -161,10 +165,15 @@ export function HomeScreen({ contacts, onAdd, onOpen, onRequests, permissionMiss
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const chipLayouts = useRef(new Map<Filter, { x: number; width: number }>()).current;
-  const pillX = useRef(new Animated.Value(0)).current;
-  const pillWidth = useRef(new Animated.Value(0)).current;
-  const listIn = useRef(new Animated.Value(1)).current;
-  const listFrom = useRef(new Animated.Value(0)).current;
+  const chipScroll = useRef<ComponentRef<typeof ScrollView>>(null);
+  const chipRowWidth = useRef(0);
+  // Sur le fil natif : la pastille (absolue, sans enfant : sa largeur peut s'animer) et le fondu de la liste.
+  const pillX = useSharedValue(0);
+  const pillWidth = useSharedValue(0);
+  const listIn = useSharedValue(1);
+  const listFrom = useSharedValue(0);
+  const pillStyle = useAnimatedStyle(() => ({ width: pillWidth.get(), transform: [{ translateX: pillX.get() }] }));
+  const listStyle = useAnimatedStyle(() => ({ opacity: listIn.get(), transform: [{ translateX: listFrom.get() }] }));
 
   const choose = (next: Filter) => {
     if (next === filter) return;
@@ -172,17 +181,16 @@ export function HomeScreen({ contacts, onAdd, onOpen, onRequests, permissionMiss
     const side = order.indexOf(next) > order.indexOf(filter) ? 1 : -1;
     const target = chipLayouts.get(next);
     if (target) {
-      Animated.parallel([
-        Animated.timing(pillX, { toValue: target.x, duration: CHIP_MS, easing: CHIP_EASING, useNativeDriver: false }),
-        Animated.timing(pillWidth, { toValue: target.width, duration: CHIP_MS, easing: CHIP_EASING, useNativeDriver: false }),
-      ]).start();
+      pillX.set(timing(target.x, CHIP_MS));
+      pillWidth.set(timing(target.width, CHIP_MS));
+      // La catégorie choisie reste entièrement visible : la rangée défile pour la centrer.
+      chipScroll.current?.scrollTo({ x: Math.max(0, target.x + target.width / 2 - chipRowWidth.current / 2), animated: true });
     }
-    listIn.setValue(0);
-    listFrom.setValue(side * LIST_SHIFT);
-    Animated.parallel([
-      Animated.timing(listIn, { toValue: 1, duration: CHIP_MS, easing: CHIP_EASING, useNativeDriver: true }),
-      Animated.timing(listFrom, { toValue: 0, duration: CHIP_MS, easing: CHIP_EASING, useNativeDriver: true }),
-    ]).start();
+    haptics.select();
+    listIn.set(0);
+    listFrom.set(side * LIST_SHIFT);
+    listIn.set(timing(1, CHIP_MS));
+    listFrom.set(timing(0, CHIP_MS));
     setFilter(next);
   };
   const [now, setNow] = useState(parisNow);
@@ -305,8 +313,16 @@ export function HomeScreen({ contacts, onAdd, onOpen, onRequests, permissionMiss
       <PermissionBanner visible={permissionMissing} onPress={onFixPermissions} />
       <SearchField value={query} onChange={setQuery} placeholder={t('liste.rechercher')} />
       <View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-          <Animated.View style={[styles.chipPill, { left: pillX, width: pillWidth }]} />
+        <ScrollView
+          ref={chipScroll}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chips}
+          onLayout={({ nativeEvent: { layout } }) => {
+            chipRowWidth.current = layout.width;
+          }}
+        >
+          <Reanimated.View style={[styles.chipPill, pillStyle]} />
           {filters.map((option) => {
             const active = option.value === filter;
             return (
@@ -316,8 +332,8 @@ export function HomeScreen({ contacts, onAdd, onOpen, onRequests, permissionMiss
                 onLayout={({ nativeEvent: { layout } }) => {
                   chipLayouts.set(option.value, { x: layout.x, width: layout.width });
                   if (active) {
-                    pillX.setValue(layout.x);
-                    pillWidth.setValue(layout.width);
+                    pillX.set(layout.x);
+                    pillWidth.set(layout.width);
                   }
                 }}
                 style={[styles.chip, active && styles.chipActive]}
@@ -329,9 +345,11 @@ export function HomeScreen({ contacts, onAdd, onOpen, onRequests, permissionMiss
         </ScrollView>
       </View>
       <PullView gesture={pull.gesture} offset={pull.offset} indicator={<PullPear offset={pull.offset} dir={1} kind="bitten" busy={pull.busy} />}>
-      <Animated.FlatList
-        style={{ opacity: listIn, transform: [{ translateX: listFrom }] }}
+      <Reanimated.FlatList
+        style={listStyle}
         data={visible}
+        // Une conversation qui remonte ou qu'on épingle glisse jusqu'à sa nouvelle place.
+        itemLayoutAnimation={reflow}
         {...pull.listProps}
         contentContainerStyle={{ paddingBottom: barSpace }}
         keyExtractor={(item) => item.contact.publicKey}
@@ -440,6 +458,7 @@ const useStyles = createStyles((colors) => ({
   },
   chipPill: {
     position: 'absolute',
+    left: 0,
     top: spacing.md,
     height: 32,
     borderRadius: radius.full,
