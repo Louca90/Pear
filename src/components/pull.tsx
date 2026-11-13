@@ -1,6 +1,6 @@
 import { ReactNode, useEffect, useRef, useState } from 'react';
 import { Animated, StyleSheet, Text } from 'react-native';
-import { GestureDetector, GestureHandlerRootView, usePanGesture } from 'react-native-gesture-handler';
+import { GestureDetector, GestureHandlerRootView, GestureStateManager, usePanGesture } from 'react-native-gesture-handler';
 
 import { PULL_MAX, PULL_THRESHOLD } from '../chat/ephemeral';
 import { haptics } from '../haptics';
@@ -50,6 +50,13 @@ export function usePullGesture({ dir, canPull, onTrigger, hold }: Options) {
     maxPointers: 1,
     activeOffsetY: dir === 1 ? [-10000, 8] : [-8, 10000],
     failOffsetX: [-24, 24],
+    // Pas permis au moment où le doigt se pose (pas en bas de la conversation, clavier ouvert…) : le
+    // geste échoue tout de suite. Sinon il s'activait quand même au bout de 8 points et coupait le
+    // défilement de la liste (reprendre le défilement après s'être arrêté devenait difficile).
+    onTouchesDown: (event) => {
+      allowed.current = !busyRef.current && latest.current.canPull();
+      if (!allowed.current) GestureStateManager.fail(event.handlerTag);
+    },
     onBegin: () => {
       allowed.current = !busyRef.current && latest.current.canPull();
     },

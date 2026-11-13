@@ -213,7 +213,7 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
   const ephemeral = settings.ephemeral;
   const canWrite = !pending && !blockedByMe && peerState === null && !isSelf(contactKey);
   const pull = useEphemeralPull(
-    () => canWrite && !preview && !keyboardOpen && chat.atBottom && !selection && !viewing,
+    () => canWrite && !preview && !keyboardOpen && scroll.isAtEdge() && !selection && !viewing,
     () => chat.toggleEphemeral(contactKey),
   );
   const chooseEphemeral = () =>

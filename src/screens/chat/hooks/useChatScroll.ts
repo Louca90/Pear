@@ -6,6 +6,8 @@ import { chat } from '../../../chat/manager';
 
 import { AT_BOTTOM_PX, MEDIA_SETTLE_MS } from '../constants';
 
+const EDGE_PX = 2;
+
 // La liste est inversée : le bas de la conversation est l'offset 0.
 // preview : la page affichée sous le geste de retour ne doit rien marquer comme lu.
 export function useChatScroll(list: RefObject<FlatList<Message> | null>, messages: Message[], preview?: boolean) {
@@ -23,7 +25,11 @@ export function useChatScroll(list: RefObject<FlatList<Message> | null>, message
     if (arrived.length > 0) setNewCount((count) => count + arrived.length);
   }, [messages]);
 
+  // Tout en bas, au point près : seul endroit où le geste des éphémères peut partir.
+  const atEdge = useRef(true);
+
   const onScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    atEdge.current = event.nativeEvent.contentOffset.y <= EDGE_PX;
     atBottom.current = event.nativeEvent.contentOffset.y < AT_BOTTOM_PX;
     if (atBottom.current) setNewCount(0);
     if (!preview) chat.setAtBottom(atBottom.current);
@@ -43,6 +49,7 @@ export function useChatScroll(list: RefObject<FlatList<Message> | null>, message
 
   return {
     newCount,
+    isAtEdge: () => atEdge.current,
     scrollToBottom,
     followSent,
     listProps: {
