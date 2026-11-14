@@ -504,6 +504,12 @@ export function replaceContactRows(contacts: ContactRow[]) {
 // Ce que montre la notification d'une conversation : à partir du plus ancien message reçu non lu,
 // les messages des deux côtés (nos réponses depuis la notification y apparaissent), au plus 8.
 // Photos, vidéos et fichiers échangés avec un contact (pas les vocaux), du plus récent au plus ancien.
+// Les partages de position, tous contacts confondus, du plus récent au plus ancien (carte des contacts).
+// Le texte de chacun est la dernière position reçue ; le tri « en cours ou terminé » se fait à l'affichage.
+export function getLocationMessages(): Message[] {
+  return db().getAllSync<Message>("SELECT * FROM messages WHERE kind = 'location' ORDER BY created_at DESC LIMIT 200");
+}
+
 export function getMediaMessages(contact: string): Message[] {
   return db().getAllSync<Message>(
     "SELECT * FROM messages WHERE contact = ? AND kind IN ('image', 'video', 'file') AND file_uri IS NOT NULL AND view_once = 0 ORDER BY created_at DESC",

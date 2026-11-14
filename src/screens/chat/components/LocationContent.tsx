@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react';
-import { Linking, PermissionsAndroid, Pressable, Text, View } from 'react-native';
+import { PermissionsAndroid, Pressable, Text, View } from 'react-native';
 import { ArrowUp, MapPin } from 'lucide-react-native';
 
 import { lastKnownLocation } from '../../../../modules/pear-native';
 import { Message } from '../../../chat/database';
-import { bearing, compassPoint, distanceKm, formatDistance, geoLink, isSharing, parseLocationText } from '../../../chat/location';
+import { bearing, compassPoint, distanceKm, formatDistance, isSharing, parseLocationText } from '../../../chat/location';
+import { MiniMap } from '../../../map/MiniMap';
+import { savedRegion } from '../../../map/offlineMap';
+import { openMap } from '../../../map/openMap';
+import { insideRegion } from '../../../map/region';
 import { chat } from '../../../chat/manager';
 import { nearestCity } from '../../../components/editor/cities';
 import { t } from '../../../i18n';
@@ -48,9 +52,9 @@ function remaining(ms: number) {
   return t('position.encoreH', { n: Math.ceil(ms / 3600_000) });
 }
 
-// Position en direct dans une bulle (lot 4.8). Aucun fond de carte : la ville la plus proche (liste
-// embarquée), la distance et la direction depuis ma position, et un bouton qui ouvre l'app de cartes
-// du téléphone si on le veut.
+// Position en direct dans une bulle (lot 4.8). Une mini-carte hors ligne si la zone est gardée sur le
+// téléphone, la ville la plus proche (liste embarquée), la distance et la direction depuis ma position,
+// et un bouton qui ouvre la carte de Pear (jamais une app de cartes extérieure).
 export function LocationContent({ message, palette }: { message: Message; palette: BubblePalette }) {
   const styles = useStyles();
   const now = useNow();
@@ -65,8 +69,16 @@ export function LocationContent({ message, palette }: { message: Message; palett
   const direction = !mine && me && away !== null && away >= 0.3 ? bearing(me, location) : null;
   const place = [city ? t('position.presDe', { ville: city }) : null, away !== null ? t('position.aDistance', { distance: formatDistance(away, t('position.virgule')) }) : null].filter(Boolean).join(' · ');
 
+  const region = savedRegion();
+  const mapped = !!region && insideRegion(region.bounds, location);
+
   return (
     <View style={styles.box}>
+      {mapped && (
+        <Pressable onPress={() => openMap(message.contact)} accessibilityRole="button" accessibilityLabel={t('carte.voir')}>
+          <MiniMap latitude={location.latitude} longitude={location.longitude} width={232} height={130} live={live} />
+        </Pressable>
+      )}
       <View style={styles.top}>
         <View style={[styles.badge, { backgroundColor: palette.track }]}>
           {direction !== null ? (
@@ -98,8 +110,8 @@ export function LocationContent({ message, palette }: { message: Message; palett
           </Pressable>
         )
       ) : (
-        <Pressable onPress={() => Linking.openURL(geoLink(location)).catch((e) => log.warn('position', e))} accessibilityRole="button" style={[styles.button, { backgroundColor: palette.track }]}>
-          <Text style={[styles.buttonLabel, { color: palette.text }]}>{t('position.ouvrirCartes')}</Text>
+        <Pressable onPress={() => openMap(message.contact)} accessibilityRole="button" style={[styles.button, { backgroundColor: palette.track }]}>
+          <Text style={[styles.buttonLabel, { color: palette.text }]}>{t('carte.voir')}</Text>
         </Pressable>
       )}
     </View>

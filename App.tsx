@@ -38,6 +38,8 @@ import { ServersScreen } from './src/screens/ServersScreen';
 import { runAutoCleanup, StorageScreen } from './src/screens/StorageScreen';
 import type { ChatIntent } from './src/screens/chat/ChatScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
+import { MapScreen } from './src/screens/MapScreen';
+import { onOpenMap } from './src/map/openMap';
 import { AppearancePage, BackupPage, NotificationsPage, PrivacyPage, SettingsPage, UpdatesPage } from './src/screens/settings/SettingsPages';
 import { ScannerScreen } from './src/screens/ScannerScreen';
 import { Contact, hasIdentity, loadContacts, loadOrCreateIdentity, saveContacts } from './src/storage';
@@ -66,6 +68,8 @@ type Route =
   | { name: 'servers' }
   | { name: 'discover' }
   | { name: 'settings' }
+  // La carte des contacts ; focus : le contact à montrer d'abord.
+  | { name: 'map'; focus: string | null }
   // Une catégorie des réglages, ouverte depuis le Profil.
   | { name: 'settingsPage'; page: SettingsPage }
   | { name: 'blocked' }
@@ -299,6 +303,9 @@ function App() {
 
   nav.current = { route, parent: identity ? parentOf(route) : null };
 
+  // Une bulle de position (ou autre) demande la carte.
+  useEffect(() => onOpenMap((focus) => setRoute({ name: 'map', focus })), []);
+
   // Le bouton retour d'Android revient à l'écran précédent au lieu de quitter l'app.
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -515,6 +522,9 @@ function App() {
           onReplayOnboarding={() => setOnboarding({ mode: 'full', step: 0 })}
         />
       );
+    }
+    if (current.name === 'map') {
+      return <MapScreen contacts={contacts} focus={current.focus} onBack={() => setRoute(parentOf(current) ?? { name: 'home' })} onOpenChat={(publicKey) => setRoute({ name: 'chat', publicKey })} />;
     }
     if (current.name === 'settingsPage') {
       const back = () => setRoute({ name: 'profile' });

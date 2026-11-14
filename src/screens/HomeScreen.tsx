@@ -1,3 +1,5 @@
+import { Map as MapIcon } from 'lucide-react-native';
+import { openMap } from '../map/openMap';
 import { ComponentRef, memo, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import Reanimated, { LayoutAnimationConfig, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
@@ -282,6 +284,9 @@ export function HomeScreen({ contacts, onAdd, onOpen, onRequests, permissionMiss
   const logo = <Pear height={30} color={colors.text} />;
   const profileButton = (
     <View style={styles.headerActions}>
+      <IconButton onPress={() => openMap(null)} label={t('carte.titre')} style={styles.mapButton}>
+        <MapIcon size={20} color={colors.text} strokeWidth={1.75} />
+      </IconButton>
       <RequestsBell count={getPendingRequests().length} onPress={onRequests} />
       <IconButton onPress={onAdd} label={t('liste.nouvelleConversation')} style={styles.newButton}>
         <Plus size={20} color={colors.onSignature} strokeWidth={2} />
@@ -488,6 +493,14 @@ const useStyles = createStyles((colors) => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+  },
+  mapButton: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.full,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   newButton: {
     width: 40,

@@ -401,6 +401,11 @@ class ChatManager extends ChatCore {
     stopLocation(this, contact);
   }
 
+  // Je partage ma position avec ce contact en ce moment.
+  isSharingLocation(contact: string) {
+    return sharedLocationId(contact) !== null;
+  }
+
   deleteForEveryone(contact: string, id: string) {
     // Supprimer le message de ma position arrête aussi le partage.
     if (sharedLocationId(contact) === id) stopLocation(this, contact);
