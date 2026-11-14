@@ -1,0 +1,90 @@
+import type { StyleSpecification } from '@maplibre/maplibre-react-native';
+
+// Le style de carte de Pear, aux couleurs de la planche « Carte » : un fond vert très sombre, des routes
+// à peine plus claires, l'eau en bleu nuit, les parcs en vert profond, et des noms discrets. Il réutilise
+// la source et la police des styles d'OpenFreeMap téléchargés avec la zone : tout vient du téléphone,
+// rien n'est demandé au réseau.
+
+export const MAP_COLORS = {
+  background: '#121613',
+  park: '#18241A',
+  wood: '#162117',
+  residential: '#141A15',
+  water: '#22303A',
+  waterway: '#22303A',
+  building: '#171D18',
+  minor: '#1C221D',
+  major: '#20261F',
+  motorway: '#1F2720',
+  rail: '#1A201B',
+  label: '#6E7A70',
+  labelStrong: '#8E998F',
+  halo: '#121613',
+};
+
+const ROAD_WIDTH = (base: number) => ['interpolate', ['exponential', 1.5], ['zoom'], 10, base * 0.4, 14, base, 18, base * 4] as unknown as number;
+
+export const PEAR_MAP_STYLE: StyleSpecification = {
+  version: 8,
+  name: 'Pear',
+  glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
+  sources: {
+    openmaptiles: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' },
+  },
+  layers: [
+    { id: 'background', type: 'background', paint: { 'background-color': MAP_COLORS.background } },
+    { id: 'residential', type: 'fill', source: 'openmaptiles', 'source-layer': 'landuse', filter: ['==', ['get', 'class'], 'residential'], paint: { 'fill-color': MAP_COLORS.residential } },
+    { id: 'wood', type: 'fill', source: 'openmaptiles', 'source-layer': 'landcover', filter: ['in', ['get', 'class'], ['literal', ['wood', 'grass', 'farmland']]], paint: { 'fill-color': MAP_COLORS.wood } },
+    { id: 'park', type: 'fill', source: 'openmaptiles', 'source-layer': 'park', paint: { 'fill-color': MAP_COLORS.park } },
+    { id: 'landuse-park', type: 'fill', source: 'openmaptiles', 'source-layer': 'landuse', filter: ['in', ['get', 'class'], ['literal', ['park', 'cemetery', 'pitch', 'garden']]], paint: { 'fill-color': MAP_COLORS.park } },
+    { id: 'water', type: 'fill', source: 'openmaptiles', 'source-layer': 'water', paint: { 'fill-color': MAP_COLORS.water } },
+    { id: 'waterway', type: 'line', source: 'openmaptiles', 'source-layer': 'waterway', paint: { 'line-color': MAP_COLORS.waterway, 'line-width': ROAD_WIDTH(2) } },
+    { id: 'building', type: 'fill', source: 'openmaptiles', 'source-layer': 'building', minzoom: 14, paint: { 'fill-color': MAP_COLORS.building } },
+    { id: 'rail', type: 'line', source: 'openmaptiles', 'source-layer': 'transportation', filter: ['==', ['get', 'class'], 'rail'], paint: { 'line-color': MAP_COLORS.rail, 'line-width': ROAD_WIDTH(1.5) } },
+    {
+      id: 'road-minor',
+      type: 'line',
+      source: 'openmaptiles',
+      'source-layer': 'transportation',
+      filter: ['in', ['get', 'class'], ['literal', ['minor', 'service', 'track', 'path']]],
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: { 'line-color': MAP_COLORS.minor, 'line-width': ROAD_WIDTH(4) },
+    },
+    {
+      id: 'road-major',
+      type: 'line',
+      source: 'openmaptiles',
+      'source-layer': 'transportation',
+      filter: ['in', ['get', 'class'], ['literal', ['primary', 'secondary', 'tertiary', 'trunk']]],
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: { 'line-color': MAP_COLORS.major, 'line-width': ROAD_WIDTH(8) },
+    },
+    {
+      id: 'road-motorway',
+      type: 'line',
+      source: 'openmaptiles',
+      'source-layer': 'transportation',
+      filter: ['==', ['get', 'class'], 'motorway'],
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: { 'line-color': MAP_COLORS.motorway, 'line-width': ROAD_WIDTH(11) },
+    },
+    {
+      id: 'road-name',
+      type: 'symbol',
+      source: 'openmaptiles',
+      'source-layer': 'transportation_name',
+      minzoom: 14,
+      layout: { 'symbol-placement': 'line', 'text-field': ['get', 'name'], 'text-font': ['Noto Sans Regular'], 'text-size': 11 },
+      paint: { 'text-color': MAP_COLORS.label, 'text-halo-color': MAP_COLORS.halo, 'text-halo-width': 1.2 },
+    },
+    {
+      id: 'place',
+      type: 'symbol',
+      source: 'openmaptiles',
+      'source-layer': 'place',
+      filter: ['in', ['get', 'class'], ['literal', ['city', 'town', 'village', 'suburb', 'neighbourhood']]],
+      layout: { 'text-field': ['get', 'name'], 'text-font': ['Noto Sans Regular'], 'text-size': ['match', ['get', 'class'], 'city', 15, 'town', 13, 12] },
+      paint: { 'text-color': MAP_COLORS.labelStrong, 'text-halo-color': MAP_COLORS.halo, 'text-halo-width': 1.4 },
+    },
+  ],
+};

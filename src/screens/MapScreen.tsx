@@ -1,22 +1,33 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { PermissionsAndroid, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, PermissionsAndroid, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Camera, Map, Marker, type CameraRef } from '@maplibre/maplibre-react-native';
-import Reanimated, { cancelAnimation, Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withRepeat, withTiming } from 'react-native-reanimated';
+import Reanimated, { cancelAnimation, Easing, ReduceMotion, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withRepeat, withTiming, type EntryExitAnimationFunction } from 'react-native-reanimated';
 import { ArrowLeft, Download, Eye, EyeOff, Lock, MessageCircle } from 'lucide-react-native';
 
 import { lastKnownLocation } from '../../modules/pear-native';
 import { getContactProfile, getLocationMessages } from '../chat/database';
 import { distanceKm, formatDistance, isSharing, parseLocationText, SharedLocation } from '../chat/location';
 import { chat } from '../chat/manager';
+import { useMediaUri } from '../chat/media';
 import { showDialog } from '../components/dialog';
-import { Avatar, useInsets, useNavigationBarHeight, usePressFeedback } from '../components/ui';
+import { useInsets, useNavigationBarHeight, usePressFeedback } from '../components/ui';
 import { haptics } from '../haptics';
 import { t } from '../i18n';
 import { log } from '../log';
-import { downloadRegion, keepMapOffline, mapStyleFor, MapRegion, REGION_RADIUS_KM, savedRegion } from '../map/offlineMap';
-import { enterUp, timing } from '../motion';
+import { downloadRegion, keepMapOffline, MapRegion, REGION_RADIUS_KM, savedRegion } from '../map/offlineMap';
+import { MAP_COLORS, PEAR_MAP_STYLE } from '../map/pearStyle';
+import { EASE, enterUp, timing } from '../motion';
 import { Contact } from '../storage';
-import { createStyles, radius, spacing, useColors, useIsDark } from '../theme';
+import { createStyles, radius, spacing } from '../theme';
+
+// La carte garde l'allure de la planche « Carte » quel que soit le thème : sombre, verte, calme.
+const INK = '#F2F2F0';
+const MUTED = '#8E8E93';
+const SIGNATURE = '#B4CC68';
+const CHROME = 'rgba(11, 11, 12, 0.85)';
+const SHEET = 'rgba(20, 20, 22, 0.96)';
+const FACE = '#2A2A2E';
+const ENDED = '#5A5A60';
 
 // Une position terminée reste sur la carte (grisée) pendant ce temps.
 const ENDED_VISIBLE_MS = 24 * 3600 * 1000;
@@ -48,39 +59,56 @@ function pinsFor(contacts: Contact[], now: number): Pin[] {
   return pins;
 }
 
-// Un contact sur la carte : son avatar dans un rond, cerclé de vert s'il est choisi ; un halo pulse tant
-// que le partage est en direct ; il tombe à sa place en arrivant.
+const initialOf = (name: string) => name.trim().charAt(0).toUpperCase() || '?';
+
+// Le visage d'un contact : sa photo si on l'a, sinon son initiale, sur le gris de la planche.
+function Face({ publicKey, name, size }: { publicKey: string; name: string; size: number }) {
+  const photo = useMediaUri(getContactProfile(publicKey).photo_uri, { scope: 'app' });
+  if (photo) return <Image source={{ uri: photo }} style={{ width: size, height: size, borderRadius: size / 2 }} />;
+  return <Text style={{ fontSize: size * 0.38, fontWeight: '700', color: INK }}>{initialOf(name)}</Text>;
+}
+
+// Un contact sur la carte (planche) : il tombe à sa place, son halo vert pulse tant que le partage est
+// en direct et il dérive à peine ; choisi, son contour passe au vert et il grossit un peu.
 function ContactPin({ pin, selected, index }: { pin: Pin; selected: boolean; index: number }) {
   const styles = useStyles();
   const reduced = useReducedMotion();
   const pulse = useSharedValue(0);
+  const drift = useSharedValue(0);
   const chosen = useSharedValue(selected ? 1 : 0);
   useEffect(() => {
     chosen.set(timing(selected ? 1 : 0, 220));
   }, [selected, chosen]);
   useEffect(() => {
     cancelAnimation(pulse);
+    cancelAnimation(drift);
     pulse.set(0);
-    if (pin.live && !reduced) pulse.set(withDelay(index * 300, withRepeat(withTiming(1, { duration: 2200, easing: Easing.out(Easing.cubic) }), -1, false)));
-  }, [pin.live, reduced, index, pulse]);
+    drift.set(0);
+    if (!pin.live || reduced) return;
+    pulse.set(withDelay(index * 300, withRepeat(withTiming(1, { duration: 2200, easing: Easing.out(Easing.cubic) }), -1, false)));
+    drift.set(withDelay(1000, withRepeat(withTiming(1, { duration: 2500 + index * 500, easing: Easing.inOut(Easing.sin) }), -1, true)));
+  }, [pin.live, reduced, index, pulse, drift]);
   const halo = useAnimatedStyle(() => ({ opacity: 0.55 * (1 - pulse.get()), transform: [{ scale: 0.6 + 2 * pulse.get() }] }));
+  const body = useAnimatedStyle(() => ({ transform: [{ translateX: 6 * drift.get() }, { translateY: -4 * drift.get() }] }));
   const face = useAnimatedStyle(() => ({ transform: [{ scale: 1 + 0.15 * chosen.get() }] }));
   return (
     <Reanimated.View entering={enterUp(-14, 420, 120 + index * 90)} style={styles.pin}>
-      {pin.live && <Reanimated.View style={[styles.halo, halo]} />}
-      <Reanimated.View style={[styles.face, selected ? styles.faceSelected : pin.live ? styles.faceLive : styles.faceEnded, face]}>
-        <Avatar uri={getContactProfile(pin.contact.publicKey).photo_uri} size={PIN - 6} />
+      <Reanimated.View style={[styles.pinBody, body]}>
+        {pin.live && <Reanimated.View style={[styles.halo, halo]} />}
+        <Reanimated.View style={[styles.face, { borderColor: selected ? SIGNATURE : pin.live ? INK : ENDED }, !pin.live && styles.faceEnded, face]}>
+          <Face publicKey={pin.contact.publicKey} name={pin.contact.name} size={PIN - 6} />
+        </Reanimated.View>
+        <View style={styles.tag}>
+          <Text style={styles.tagText} numberOfLines={1}>
+            {pin.contact.name}
+          </Text>
+        </View>
       </Reanimated.View>
-      <View style={styles.tag}>
-        <Text style={styles.tagText} numberOfLines={1}>
-          {pin.contact.name}
-        </Text>
-      </View>
     </Reanimated.View>
   );
 }
 
-// Mon point, vert (ou gris en mode discret), qui pulse doucement.
+// Mon point : vert avec un halo qui pulse ; gris en mode discret.
 function MeDot({ hidden }: { hidden: boolean }) {
   const styles = useStyles();
   const reduced = useReducedMotion();
@@ -90,11 +118,11 @@ function MeDot({ hidden }: { hidden: boolean }) {
     pulse.set(withRepeat(withTiming(1, { duration: 2000, easing: Easing.out(Easing.cubic) }), -1, false));
     return () => cancelAnimation(pulse);
   }, [reduced, pulse]);
-  const halo = useAnimatedStyle(() => ({ opacity: hidden ? 0 : 0.5 * (1 - pulse.get()), transform: [{ scale: 0.6 + 1.8 * pulse.get() }] }));
+  const halo = useAnimatedStyle(() => ({ opacity: hidden ? 0 : 0.55 * (1 - pulse.get()), transform: [{ scale: 0.6 + 2 * pulse.get() }] }));
   return (
     <View style={styles.me} accessibilityLabel={t('carte.toi')}>
       <Reanimated.View style={[styles.meHalo, halo]} />
-      <View style={[styles.meDot, hidden && styles.meDotHidden]} />
+      <View style={[styles.meDot, { backgroundColor: hidden ? ENDED : SIGNATURE }]} />
     </View>
   );
 }
@@ -102,20 +130,46 @@ function MeDot({ hidden }: { hidden: boolean }) {
 function RoundButton({ onPress, label, active, children }: { onPress: () => void; label: string; active?: boolean; children: React.ReactNode }) {
   const styles = useStyles();
   const feedback = usePressFeedback();
+  const lit = useSharedValue(active ? 1 : 0);
+  useEffect(() => {
+    lit.set(timing(active ? 1 : 0, 220));
+  }, [active, lit]);
+  const light = useAnimatedStyle(() => ({ opacity: lit.get() }));
   return (
     <Pressable onPress={onPress} onPressIn={feedback.onPressIn} onPressOut={feedback.onPressOut} accessibilityRole="button" accessibilityLabel={label} hitSlop={6}>
-      <Reanimated.View style={[styles.round, active && styles.roundActive, feedback.style]}>{children}</Reanimated.View>
+      <Reanimated.View style={[styles.round, feedback.style]}>
+        <Reanimated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.roundLit, light]} />
+        {children}
+      </Reanimated.View>
     </Pressable>
   );
 }
+
+// L'avatar de la fiche se pose en tournant à peine (0,6 et -12° vers sa place), à chaque contact choisi.
+const avatarIn: EntryExitAnimationFunction = () => {
+  'worklet';
+  const config = { duration: 360, easing: EASE, reduceMotion: ReduceMotion.System };
+  return {
+    initialValues: { transform: [{ scale: 0.6 }, { rotate: '-12deg' }] },
+    animations: { transform: [{ scale: withTiming(1, config) }, { rotate: withTiming('0deg', config) }] },
+  };
+};
+
+// La fiche du bas rejoue son entrée : fondu, 14 points de montée, échelle 0,97 → 1.
+const cardIn: EntryExitAnimationFunction = () => {
+  'worklet';
+  const config = { duration: 320, easing: EASE, reduceMotion: ReduceMotion.System };
+  return {
+    initialValues: { opacity: 0, transform: [{ translateY: 14 }, { scale: 0.97 }] },
+    animations: { opacity: withTiming(1, config), transform: [{ translateY: withTiming(0, config) }, { scale: withTiming(1, config) }] },
+  };
+};
 
 type Props = { contacts: Contact[]; focus: string | null; onBack: () => void; onOpenChat: (publicKey: string) => void };
 
 // La carte des contacts qui me partagent leur position (planche « Carte ») : hors ligne, la zone gardée
 // sur le téléphone ; la fiche du bas rejoue son entrée quand on choisit un autre contact.
 export function MapScreen({ contacts, focus, onBack, onOpenChat }: Props) {
-  const colors = useColors();
-  const dark = useIsDark();
   const styles = useStyles();
   const { top } = useInsets();
   const bottom = useNavigationBarHeight();
@@ -139,6 +193,7 @@ export function MapScreen({ contacts, focus, onBack, onOpenChat }: Props) {
   const [selected, setSelected] = useState<string | null>(focus ?? pins[0]?.contact.publicKey ?? null);
   const chosen = pins.find((pin) => pin.contact.publicKey === selected) ?? pins[0] ?? null;
   const sharingWith = contacts.filter((contact) => chat.isSharingLocation(contact.publicKey));
+  const hidden = sharingWith.length === 0;
   const camera = useRef<CameraRef>(null);
 
   const start = chosen?.location ?? me ?? (region ? { longitude: (region.bounds[0] + region.bounds[2]) / 2, latitude: (region.bounds[1] + region.bounds[3]) / 2 } : null);
@@ -152,7 +207,7 @@ export function MapScreen({ contacts, focus, onBack, onOpenChat }: Props) {
 
   // Mode discret : tous mes partages en cours s'arrêtent (chacun reçoit « partage terminé »).
   const goDiscreet = () => {
-    if (sharingWith.length === 0) {
+    if (hidden) {
       showDialog(t('carte.discret'), t('carte.discretRien'));
       return;
     }
@@ -192,18 +247,20 @@ export function MapScreen({ contacts, focus, onBack, onOpenChat }: Props) {
 
   const detail = (pin: Pin) => {
     const away = me ? formatDistance(distanceKm(me, pin.location), t('position.virgule')) : null;
-    const parts = [pin.live ? t('carte.enDirect') : t('carte.partagee', { quand: ago(now - pin.location.at) }), away ? t('position.aDistance', { distance: away }) : null, pin.live ? ago(now - pin.location.at) : null];
+    const parts = pin.live
+      ? [t('carte.enDirect'), away ? t('position.aDistance', { distance: away }) : null, ago(now - pin.location.at)]
+      : [t('carte.partagee', { quand: ago(now - pin.location.at) }), away ? t('position.aDistance', { distance: away }) : null];
     return parts.filter(Boolean).join(' · ');
   };
 
   return (
     <View style={styles.screen}>
       {region && start ? (
-        <Map style={StyleSheet.absoluteFill} mapStyle={mapStyleFor(dark)} logo={false} compass={false} attribution touchPitch={false}>
-          <Camera ref={camera} initialViewState={{ center: [start.longitude, start.latitude], zoom: 13 }} />
+        <Map style={StyleSheet.absoluteFill} mapStyle={PEAR_MAP_STYLE} logo={false} compass={false} attribution touchPitch={false} touchRotate={false}>
+          <Camera ref={camera} initialViewState={{ center: [start.longitude, start.latitude], zoom: 13.5 }} />
           {me && (
             <Marker id="me" lngLat={[me.longitude, me.latitude]}>
-              <MeDot hidden={sharingWith.length === 0} />
+              <MeDot hidden={hidden} />
             </Marker>
           )}
           {pins.map((pin, index) => (
@@ -216,26 +273,26 @@ export function MapScreen({ contacts, focus, onBack, onOpenChat }: Props) {
         <View style={[StyleSheet.absoluteFill, styles.blank]} />
       )}
 
-      <View style={[styles.header, { top: top + spacing.sm }]}>
+      <Reanimated.View entering={enterUp(-10, 300)} style={[styles.header, { top: top + spacing.sm }]}>
         <RoundButton onPress={onBack} label={t('commun.retour')}>
-          <ArrowLeft size={20} color={colors.text} strokeWidth={1.9} />
+          <ArrowLeft size={20} color={INK} strokeWidth={1.9} />
         </RoundButton>
         <View style={styles.titlePill}>
           <Text style={styles.title}>{t('carte.titre')}</Text>
         </View>
-        <RoundButton onPress={goDiscreet} label={t('carte.discret')} active={sharingWith.length === 0}>
-          {sharingWith.length === 0 ? <EyeOff size={20} color={colors.background} strokeWidth={1.9} /> : <Eye size={20} color={colors.text} strokeWidth={1.9} />}
+        <RoundButton onPress={goDiscreet} label={hidden ? t('carte.discret') : t('carte.discret')} active={hidden}>
+          {hidden ? <EyeOff size={20} color={MAP_COLORS.background} strokeWidth={1.9} /> : <Eye size={20} color={INK} strokeWidth={1.9} />}
         </RoundButton>
-      </View>
+      </Reanimated.View>
 
-      <View style={[styles.sheet, { bottom: bottom + spacing.md }]}>
+      <Reanimated.View entering={cardIn} style={[styles.sheet, { bottom: bottom + 26 }]}>
         {!region ? (
-          <Reanimated.View entering={enterUp(16, 320)} style={styles.download}>
+          <View style={styles.download}>
             <Text style={styles.cardTitle}>{t('carte.telechargerTitre')}</Text>
             <Text style={styles.cardText}>{t('carte.telechargerAide', { km: REGION_RADIUS_KM })}</Text>
             {progress === null ? (
               <Pressable onPress={download} accessibilityRole="button" style={({ pressed }) => [styles.primary, pressed && styles.pressed]}>
-                <Download size={18} color={colors.onSignature} strokeWidth={1.9} />
+                <Download size={18} color={MAP_COLORS.background} strokeWidth={1.9} />
                 <Text style={styles.primaryLabel}>{t('carte.telecharger')}</Text>
               </Pressable>
             ) : (
@@ -243,11 +300,12 @@ export function MapScreen({ contacts, focus, onBack, onOpenChat }: Props) {
                 <View style={[styles.progressFill, { width: `${Math.round(progress * 100)}%` }]} />
               </View>
             )}
-          </Reanimated.View>
+          </View>
         ) : chosen ? (
-          // La clé change à chaque contact : la fiche rejoue son entrée (fondu, 14 points de montée).
-          <Reanimated.View key={chosen.contact.publicKey} entering={enterUp(14, 320)} style={styles.card}>
-            <Avatar uri={getContactProfile(chosen.contact.publicKey).photo_uri} size={48} />
+          <Reanimated.View key={chosen.contact.publicKey} entering={cardIn} style={styles.card}>
+            <Reanimated.View entering={avatarIn} style={styles.cardAvatar}>
+              <Face publicKey={chosen.contact.publicKey} name={chosen.contact.name} size={48} />
+            </Reanimated.View>
             <View style={styles.flex}>
               <Text style={styles.cardTitle} numberOfLines={1}>
                 {chosen.contact.name}
@@ -257,123 +315,52 @@ export function MapScreen({ contacts, focus, onBack, onOpenChat }: Props) {
               </Text>
             </View>
             <Pressable onPress={() => onOpenChat(chosen.contact.publicKey)} accessibilityRole="button" accessibilityLabel={t('contact.ecrire')} style={({ pressed }) => [styles.write, pressed && styles.pressed]}>
-              <MessageCircle size={19} color={colors.background} strokeWidth={1.9} />
+              <MessageCircle size={19} color={MAP_COLORS.background} strokeWidth={1.9} />
             </Pressable>
           </Reanimated.View>
         ) : (
           <Text style={styles.cardText}>{t('carte.personne')}</Text>
         )}
         <View style={styles.footer}>
-          <Lock size={14} color={colors.signatureStrong} strokeWidth={2} />
-          <Text style={styles.footerText}>{sharingWith.length === 0 ? t('carte.footerDiscret') : t('carte.footer', { n: sharingWith.length })}</Text>
+          <Lock size={14} color={SIGNATURE} strokeWidth={2} />
+          <Text style={styles.footerText}>{hidden ? t('carte.footerDiscret') : t('carte.footer', { n: sharingWith.length })}</Text>
         </View>
-      </View>
+      </Reanimated.View>
     </View>
   );
 }
 
-const useStyles = createStyles((colors) => ({
+const useStyles = createStyles(() => ({
   flex: { flex: 1 },
-  screen: { flex: 1, backgroundColor: colors.background },
-  blank: { backgroundColor: colors.surface },
-  header: {
-    position: 'absolute',
-    left: 14,
-    right: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  round: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.full,
-    backgroundColor: colors.elevated,
-    alignItems: 'center',
-    justifyContent: 'center',
-    boxShadow: `0px 4px 14px ${colors.shadow}`,
-  },
-  roundActive: { backgroundColor: colors.text },
-  titlePill: {
-    flex: 1,
-    height: 44,
-    borderRadius: 22,
-    paddingHorizontal: spacing.md,
-    justifyContent: 'center',
-    backgroundColor: colors.elevated,
-    boxShadow: `0px 4px 14px ${colors.shadow}`,
-  },
-  title: { fontSize: 15, fontWeight: '600', color: colors.text },
-  sheet: {
-    position: 'absolute',
-    left: 10,
-    right: 10,
-    padding: spacing.md,
-    gap: 12,
-    borderRadius: 26,
-    backgroundColor: colors.elevated,
-    boxShadow: `0px 10px 30px ${colors.shadow}`,
-  },
+  screen: { flex: 1, backgroundColor: MAP_COLORS.background },
+  blank: { backgroundColor: MAP_COLORS.background },
+  header: { position: 'absolute', left: 14, right: 14, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  round: { width: 44, height: 44, borderRadius: radius.full, overflow: 'hidden', backgroundColor: CHROME, alignItems: 'center', justifyContent: 'center' },
+  roundLit: { backgroundColor: INK },
+  titlePill: { flex: 1, height: 44, borderRadius: 22, paddingHorizontal: spacing.md, justifyContent: 'center', backgroundColor: CHROME },
+  title: { fontSize: 15, fontWeight: '600', color: INK },
+  sheet: { position: 'absolute', left: 10, right: 10, padding: spacing.md, gap: 12, borderRadius: 26, backgroundColor: SHEET },
   card: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  cardAvatar: { width: 48, height: 48, borderRadius: 24, overflow: 'hidden', backgroundColor: FACE, alignItems: 'center', justifyContent: 'center' },
   download: { gap: 10 },
-  cardTitle: { fontSize: 17, fontWeight: '600', color: colors.text },
-  cardText: { fontSize: 13, lineHeight: 18, color: colors.textMuted },
-  write: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.full,
-    backgroundColor: colors.text,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primary: {
-    height: 50,
-    borderRadius: 25,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: colors.signature,
-  },
-  primaryLabel: { fontSize: 15, fontWeight: '600', color: colors.onSignature },
-  progress: { height: 6, borderRadius: 3, overflow: 'hidden', backgroundColor: colors.surface },
-  progressFill: { height: '100%', borderRadius: 3, backgroundColor: colors.signatureStrong },
-  footer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingTop: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-  },
-  footerText: { flex: 1, fontSize: 12, color: colors.textMuted },
+  cardTitle: { fontSize: 17, fontWeight: '600', color: INK },
+  cardText: { fontSize: 13, lineHeight: 18, marginTop: 2, color: MUTED },
+  write: { width: 44, height: 44, borderRadius: radius.full, backgroundColor: INK, alignItems: 'center', justifyContent: 'center' },
+  primary: { height: 50, borderRadius: 25, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: INK },
+  primaryLabel: { fontSize: 15, fontWeight: '600', color: MAP_COLORS.background },
+  progress: { height: 6, borderRadius: 3, overflow: 'hidden', backgroundColor: '#222226' },
+  progressFill: { height: '100%', borderRadius: 3, backgroundColor: SIGNATURE },
+  footer: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#222226' },
+  footerText: { flex: 1, fontSize: 12, color: MUTED },
   pressed: { opacity: 0.85, transform: [{ scale: 0.97 }] },
-  // Épingles
-  pin: { width: PIN, height: PIN + 22, alignItems: 'center' },
-  halo: { position: 'absolute', top: 0, width: PIN, height: PIN, borderRadius: PIN / 2, backgroundColor: colors.signatureStrong },
-  face: {
-    width: PIN,
-    height: PIN,
-    borderRadius: PIN / 2,
-    borderWidth: 3,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.elevated,
-    overflow: 'hidden',
-  },
-  faceLive: { borderColor: colors.background },
-  faceEnded: { borderColor: colors.textMuted, opacity: 0.7 },
-  faceSelected: { borderColor: colors.signatureStrong },
-  tag: {
-    marginTop: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 9,
-    backgroundColor: colors.elevated,
-  },
-  tagText: { fontSize: 11, fontWeight: '600', color: colors.text },
+  pin: { width: PIN + 40, height: PIN + 24, alignItems: 'center' },
+  pinBody: { alignItems: 'center' },
+  halo: { position: 'absolute', top: 0, width: PIN, height: PIN, borderRadius: PIN / 2, backgroundColor: SIGNATURE },
+  face: { width: PIN, height: PIN, borderRadius: PIN / 2, borderWidth: 3, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', backgroundColor: FACE },
+  faceEnded: { opacity: 0.7 },
+  tag: { marginTop: 6, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 9, backgroundColor: CHROME },
+  tagText: { fontSize: 11, fontWeight: '600', color: INK },
   me: { width: 22, height: 22, alignItems: 'center', justifyContent: 'center' },
-  meHalo: { position: 'absolute', width: 22, height: 22, borderRadius: 11, backgroundColor: colors.signatureStrong },
-  meDot: { width: 16, height: 16, borderRadius: 8, borderWidth: 3, borderColor: colors.background, backgroundColor: colors.signatureStrong },
-  meDotHidden: { backgroundColor: colors.textMuted },
+  meHalo: { position: 'absolute', width: 22, height: 22, borderRadius: 11, backgroundColor: SIGNATURE },
+  meDot: { width: 16, height: 16, borderRadius: 8, borderWidth: 3, borderColor: MAP_COLORS.background },
 }));
