@@ -1,4 +1,4 @@
-import { ComponentRef, useEffect, useRef } from 'react';
+import { ComponentRef, ReactNode, useEffect, useRef } from 'react';
 import { Animated, Easing, NativeScrollEvent, NativeSyntheticEvent, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { haptics } from '../../haptics';
@@ -6,8 +6,7 @@ import { haptics } from '../../haptics';
 import { t } from '../../i18n';
 import { createMediaStyles, fixed, radius, spacing } from '../../theme';
 import { lockTabSwipe } from '../tabSwipeLock';
-import { FilteredView } from './FilteredView';
-import { FILTERS, FilterId, NO_ADJUSTMENTS, presetOf, stepsOf } from './filters';
+import { FILTERS, FilterId, NO_ADJUSTMENTS, presetOf, stepsOf, tintsOf, viewFiltersOf } from './filters';
 import type { StampKind } from './stamps';
 
 // Tous les filtres, dans l'ordre de l'éditeur : Original, les marques, puis les couleurs.
@@ -75,18 +74,43 @@ function StampSample({ kind, size }: { kind: StampKind; size: number }) {
   return <Text style={[styles.stampText, styles.stampFilm, { fontSize: size * 0.24 }]}>'26</Text>;
 }
 
-export function FilterSwatch({ id, size }: { id: FilterId; size: number }) {
+// Un contenu filtré, découpé dans un rond. Le filtre d'Android se pose sur la vue qui découpe
+// elle-même : posé sur un enfant (FilteredView), il dessinait parfois hors du rond (coins carrés).
+// Les voiles (fané, température) sont découpés par le même rond.
+export function RoundFiltered({ id, radius: corner, children }: { id: FilterId; radius: number; children: ReactNode }) {
+  const styles = useStyles();
+  const steps = stepsOf(id, NO_ADJUSTMENTS);
+  const filters = viewFiltersOf(steps);
+  const round = { borderRadius: corner };
+  return (
+    <View style={[StyleSheet.absoluteFill, styles.clip, round]}>
+      <View style={[StyleSheet.absoluteFill, styles.clip, round, filters.length > 0 && { filter: filters }]}>{children}</View>
+      {tintsOf(steps).map((tint, index) => (
+        <View key={index} pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: tint.color, opacity: tint.opacity }]} />
+      ))}
+    </View>
+  );
+}
+
+// Trois couches : l'ombre sur le rond extérieur (qui ne découpe rien, sinon il couperait l'ombre), le
+// contenu découpé dans le rond, puis le bord blanc par-dessus (le contenu ne peut plus le cacher).
+// `flat` : sans ombre ni bord (au cœur du déclencheur).
+export function FilterSwatch({ id, size, flat = false }: { id: FilterId; size: number; flat?: boolean }) {
   const styles = useStyles();
   const preset = presetOf(id);
+  const round = { width: size, height: size, borderRadius: size / 2 };
   return (
-    <View style={[styles.swatch, { width: size, height: size, borderRadius: size / 2 }, preset.stamp && styles.swatchStamp]}>
+    <View style={[round, !flat && styles.swatchShadow]}>
       {preset.stamp ? (
-        <StampSample kind={preset.stamp} size={size} />
+        <View style={[StyleSheet.absoluteFill, styles.clip, styles.swatchStamp, { borderRadius: size / 2 }]}>
+          <StampSample kind={preset.stamp} size={size} />
+        </View>
       ) : (
-        <FilteredView steps={stepsOf(id, NO_ADJUSTMENTS)} style={StyleSheet.absoluteFill}>
+        <RoundFiltered id={id} radius={size / 2}>
           <Scene size={size} />
-        </FilteredView>
+        </RoundFiltered>
       )}
+      {!flat && <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.swatchRing, { borderRadius: size / 2 }]} />}
     </View>
   );
 }
@@ -141,8 +165,9 @@ export function FilterStrip({ value, hidden, onChange, onRestyle }: Props) {
         snapToInterval={ITEM_WIDTH}
         decelerationRate="fast"
         contentOffset={{ x: current.current * ITEM_WIDTH, y: 0 }}
-        // La marge verticale laisse la place à l'ombre des pastilles, que la bande coupait.
-        contentContainerStyle={{ paddingHorizontal: (width - ITEM_WIDTH) / 2, paddingVertical: 14 }}
+        // La marge verticale laisse la place à l'ombre des pastilles, que la bande coupait (52 + 2 × 16
+        // = 84, la hauteur de la rangée du déclencheur).
+        contentContainerStyle={{ paddingHorizontal: (width - ITEM_WIDTH) / 2, paddingVertical: 16 }}
         onScroll={onScroll}
         scrollEventThrottle={16}
         onTouchStart={() => lockTabSwipe(true)}
@@ -184,13 +209,19 @@ const useStyles = createMediaStyles((colors) => ({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  swatch: {
+  clip: {
     overflow: 'hidden',
-    borderWidth: 2.5,
-    borderColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.35)',
+  },
+  swatchShadow: {
+    // Un fond sous le contenu : l'ombre d'Android suit la forme d'une vue qui a un fond.
+    backgroundColor: colors.text,
+    boxShadow: `0px 2px 6px ${colors.overlay}`,
+  },
+  swatchRing: {
+    borderWidth: 2.5,
+    borderColor: colors.background,
   },
   swatchStamp: {
     backgroundColor: fixed.filterStripBackground,

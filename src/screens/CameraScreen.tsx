@@ -4,7 +4,7 @@ import { useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import { haptics } from '../haptics';
 import { NavigationBar } from 'expo-navigation-bar';
 import { StatusBar } from 'expo-status-bar';
-import { Camera, Check, Download, Lock, Send, Settings, Square, SwitchCamera, X, Zap, ZapOff } from 'lucide-react-native';
+import { Camera, Check, Download, Lock, Send, Settings, SwitchCamera, X, Zap, ZapOff } from 'lucide-react-native';
 
 import { setScreenBrightness } from '../../modules/pear-native';
 import { hasLastCameraFrame, PearCameraHandle, PearCameraView, wideLens } from '../../modules/pear-native/camera';
@@ -16,7 +16,7 @@ import { showDialog } from '../components/dialog';
 import { ContactPickerSheet } from '../components/ContactPickerSheet';
 import { MediaEditor, MediaEditorHandle } from '../components/MediaEditor';
 import { FilteredView } from '../components/editor/FilteredView';
-import { FilterStrip, FilterSwatch } from '../components/editor/FilterStrip';
+import { FilterStrip } from '../components/editor/FilterStrip';
 import { FilterId, NO_ADJUSTMENTS, presetOf, stepsOf } from '../components/editor/filters';
 import { getStampStyle, nextStampStyle, readAmbient } from '../components/editor/ambient';
 import { Ambient, formatStamp, NO_AMBIENT, StampMarks } from '../components/editor/stamps';
@@ -30,13 +30,14 @@ import { VIDEO_BITRATE } from '../config';
 import { t } from '../i18n';
 import { logCameraStep } from './cameraTiming';
 import { activeLevel, ZoomBar, zoomLevels } from './camera/ZoomBar';
+import { RecordingTimer, SHUTTER_SIZE, ShutterFace } from './camera/Shutter';
+import { LastShot, PhotoFlash } from './camera/CaptureFeedback';
 
 // En dessous de ce temps, c'est une photo. Au-delà, le maintien filme.
 const HOLD_MS = 250;
 // Le cadenas est à cette distance, à gauche du déclencheur. Lâcher assez près de lui verrouille la vidéo.
 const LOCK_DISTANCE = 112;
 const LOCK_REACH = 28;
-const SHUTTER_SIZE = 84;
 const PHOTO_MAX_SIZE = 2048;
 const PHOTO_JPEG_QUALITY = 82;
 const DOUBLE_TAP_MS = 300;
@@ -231,6 +232,10 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
   const [locked, setLocked] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [capture, setCapture] = useState<Capture | null>(null);
+  // Chaque photo : le cœur du déclencheur se tasse et l'aperçu s'éclaire. La dernière photo reste
+  // en miniature (une vidéo l'efface : elle n'a pas d'image à montrer).
+  const [shots, setShots] = useState(0);
+  const [lastShot, setLastShot] = useState<Capture | null>(null);
   // Le filtre en direct, appliqué à l'aperçu ; lu par une référence quand la vidéo se termine.
   const [liveFilter, setLiveFilter] = useState<FilterId>('none');
   const liveFilterRef = useRef(liveFilter);
@@ -333,7 +338,9 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
     camera.current
       .startRecording()
       .then((uri) => {
-        if (uri) setCapture({ uri, kind: 'video', takenAt: Date.now(), filter: liveFilterRef.current });
+        if (!uri) return;
+        setCapture({ uri, kind: 'video', takenAt: Date.now(), filter: liveFilterRef.current });
+        setLastShot(null);
       })
       .catch((e) => {
         log.warn('vidéo', e);
@@ -360,11 +367,14 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
   const takePhoto = async () => {
     animateShutter(1);
     vibrate();
+    setShots((count) => count + 1);
     try {
       // Déjà tournée et réduite à 2048 px par la caméra : une image légère part plus vite (et passe le relais).
       const photo = await camera.current?.takePicture(PHOTO_MAX_SIZE, PHOTO_JPEG_QUALITY);
       if (!photo?.uri) return;
-      setCapture({ uri: photo.uri, kind: 'image', takenAt: Date.now(), filter: liveFilterRef.current });
+      const taken: Capture = { uri: photo.uri, kind: 'image', takenAt: Date.now(), filter: liveFilterRef.current };
+      setCapture(taken);
+      setLastShot(taken);
     } catch (e) {
       showDialog(t('camera.photoNonPrise'), String(e));
     }
@@ -569,6 +579,7 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
       )}
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.frontGlow, { opacity: frontGlow }]} />
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.flipFade, { opacity: flipFade }]} />
+      <PhotoFlash shots={shots} />
       <View collapsable={false} style={StyleSheet.absoluteFill} accessibilityLabel={t('camera.changerAide')} {...surface.panHandlers} />
 
       {!filming && (
@@ -582,12 +593,7 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
         </View>
       )}
 
-      {recording && (
-        <View style={[styles.timer, { top: topInset + spacing.md }]}>
-          <View style={styles.timerDot} />
-          <Text style={styles.timerText}>{formatElapsed(elapsed)}</Text>
-        </View>
-      )}
+      {recording && <RecordingTimer label={formatElapsed(elapsed)} top={topInset + spacing.md} />}
 
       {facing === 'back' && (
         <ZoomBar
@@ -600,6 +606,17 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
             setLensId(level.lens);
             setZoom(level.zoom);
           }}
+        />
+      )}
+
+      {/* Montée seulement hors de la relecture : elle se pose dans son coin quand la relecture se ferme. */}
+      {lastShot && !capture && (
+        <LastShot
+          uri={lastShot.uri}
+          filter={lastShot.filter}
+          hidden={filming}
+          bottom={barSpace + SHUTTER_SIZE + ZOOM_BAR_SPACE}
+          onPress={() => setCapture(lastShot)}
         />
       )}
 
@@ -619,22 +636,10 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
           {...shutter.panHandlers}
           accessibilityRole="button"
           accessibilityLabel={locked ? t('camera.arreterVideo') : t('camera.declencheur')}
-          style={[styles.shutter, filming && styles.shutterFilming, { transform: [{ translateX: shutterX }, { scale: shutterScale }] }]}
+          style={[styles.shutter, { transform: [{ translateX: shutterX }, { scale: shutterScale }] }]}
         >
-          <Animated.View style={[styles.shutterInner, { opacity: lockProgress.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }]}>
-            {/* Le filtre choisi se voit au cœur du déclencheur, comme une lentille sur Snap. */}
-            {liveFilter !== 'none' && <FilterSwatch id={liveFilter} size={SHUTTER_SIZE - 22} />}
-          </Animated.View>
-          {filming && (
-            <Animated.View
-              style={[
-                styles.stopIcon,
-                { opacity: lockProgress, transform: [{ scale: lockProgress.interpolate({ inputRange: [0, 1], outputRange: [0.2, 1] }) }] },
-              ]}
-            >
-              <Square size={30} color={colors.danger} fill={colors.danger} strokeWidth={1.75} />
-            </Animated.View>
-          )}
+          {/* Verrouillée, la vidéo s'arrête d'un appui : le cœur, déjà un carré rouge, sert d'arrêt. */}
+          <ShutterFace filming={filming} recording={recording} elapsed={elapsed} filter={liveFilter} shots={shots} />
         </Animated.View>
         {filming && (
           <Animated.View
@@ -660,6 +665,8 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
           onDiscard={() => setCapture(null)}
           onSent={(publicKey) => {
             setCapture(null);
+            // Le fichier envoyé a été déplacé : plus de miniature à montrer.
+            setLastShot(null);
             onSent(publicKey);
           }}
         />
@@ -701,28 +708,6 @@ const useStyles = createMediaStyles((colors) => ({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  timer: {
-    position: 'absolute',
-    alignSelf: 'center',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    height: 32,
-    borderRadius: radius.full,
-    backgroundColor: colors.overlay,
-  },
-  timerDot: {
-    width: 8,
-    height: 8,
-    borderRadius: radius.full,
-    backgroundColor: colors.danger,
-  },
-  timerText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.background,
-  },
   shutterRow: {
     position: 'absolute',
     left: 0,
@@ -735,23 +720,8 @@ const useStyles = createMediaStyles((colors) => ({
     width: SHUTTER_SIZE,
     height: SHUTTER_SIZE,
     borderRadius: radius.full,
-    borderWidth: 5,
-    borderColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  shutterFilming: {
-    borderColor: colors.danger,
-  },
-  shutterInner: {
-    width: SHUTTER_SIZE - 22,
-    height: SHUTTER_SIZE - 22,
-    borderRadius: radius.full,
-    overflow: 'hidden',
-    backgroundColor: colors.background,
-  },
-  stopIcon: {
-    position: 'absolute',
   },
   flipFade: {
     backgroundColor: colors.text,
