@@ -1,7 +1,7 @@
 import { ReactNode, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { FlatList, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
-import Reanimated, { cancelAnimation, Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withRepeat, withTiming } from 'react-native-reanimated';
+import Reanimated, { useAnimatedStyle, useSharedValue, withDelay } from 'react-native-reanimated';
 import QRCode from 'react-native-qrcode-svg';
 import { Bell, ChevronRight, Link2, MessageCircle, QrCode, ScanLine, Share2, UserPlus } from 'lucide-react-native';
 
@@ -35,8 +35,6 @@ type Props = {
 const FLIP_MS = 500;
 // Le QR code au dos de la carte : assez grand pour se scanner de près (lien court, peu de modules).
 const QR_SIZE = 160;
-// Un aller du trait qui balaie le QR code.
-const SWEEP_MS = 1200;
 // Les premières lignes entrent l'une après l'autre ; les suivantes sont déjà là.
 const CASCADE_ROWS = 10;
 const CASCADE_STEP_MS = 35;
@@ -173,24 +171,6 @@ function CardButton({ label, icon: Icon, primary, onPress }: { label: string; ic
   );
 }
 
-// Un trait vert qui monte et descend doucement sur le QR code tant qu'il est montré.
-function QrSweep({ active }: { active: boolean }) {
-  const styles = useStyles();
-  const reduced = useReducedMotion();
-  const y = useSharedValue(0);
-  const shown = useSharedValue(0);
-  useEffect(() => {
-    shown.set(timing(active && !reduced ? 1 : 0, DURATION.small));
-    cancelAnimation(y);
-    if (!active || reduced) return;
-    y.set(0);
-    y.set(withRepeat(withTiming(1, { duration: SWEEP_MS, easing: Easing.inOut(Easing.sin) }), -1, true));
-    return () => cancelAnimation(y);
-  }, [active, reduced]);
-  const style = useAnimatedStyle(() => ({ opacity: shown.get(), transform: [{ translateY: y.get() * (QR_SIZE - 2) }] }));
-  return <Reanimated.View pointerEvents="none" style={[styles.sweep, style]} />;
-}
-
 // « Ajouter quelqu'un » : Scanner, Mon code, Lien. « Mon code » retourne la carte (sur le fil natif)
 // et montre le QR code au dos, noir sur blanc quel que soit le thème (même donnée que MyQrSheet).
 function AddCard({ publicKey, onScan, onPaste }: { publicKey: string; onScan: () => void; onPaste: () => void }) {
@@ -244,9 +224,8 @@ function AddCard({ publicKey, onScan, onPaste }: { publicKey: string; onScan: ()
         </View>
       </Reanimated.View>
       <Reanimated.View pointerEvents={flipped ? 'auto' : 'none'} importantForAccessibility={flipped ? 'auto' : 'no-hide-descendants'} style={[styles.face, styles.backFace, back]}>
-        <View accessibilityRole="image" accessibilityLabel={t('qr.titre')} style={styles.qr}>
+        <View accessibilityRole="image" accessibilityLabel={t('qr.titre')}>
           <QRCode value={link} size={QR_SIZE} ecl="L" color={fixed.black} backgroundColor={fixed.white} />
-          <QrSweep active={flipped} />
         </View>
         <View style={styles.backText}>
           {!!name && (
@@ -272,20 +251,6 @@ function AddCard({ publicKey, onScan, onPaste }: { publicKey: string; onScan: ()
 const useStyles = createStyles((colors) => ({
   flex: {
     flex: 1,
-  },
-  qr: {
-    width: QR_SIZE,
-    height: QR_SIZE,
-    overflow: 'hidden',
-  },
-  sweep: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: colors.signatureStrong,
   },
   header: {
     gap: spacing.md,
