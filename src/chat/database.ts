@@ -862,6 +862,13 @@ export function getMediaUsage(): MediaUsage[] {
   );
 }
 
+// La même place, par type de média (photos, vidéos, vocaux, fichiers), pour l'écran Stockage.
+export type KindUsage = { kind: string; bytes: number };
+
+export function getMediaUsageByKind(): KindUsage[] {
+  return db().getAllSync<KindUsage>(`SELECT kind, COALESCE(SUM(file_size), 0) AS bytes FROM messages WHERE ${MEDIA_FREEABLE} GROUP BY kind`);
+}
+
 // Supprime les fichiers des médias d'une conversation (tous, ou ceux d'avant `before`) : les messages
 // restent, affichés « Média supprimé ». Renvoie le nombre de médias supprimés.
 export function deleteConversationMedia(contact: string, before = Number.MAX_SAFE_INTEGER): number {

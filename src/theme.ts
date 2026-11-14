@@ -101,6 +101,8 @@ export const fixed = {
   coolTint: '#0A6CFF',
   filmOrange: '#FF8A1F',
   filmGlow: '#C8320A',
+  // Stockage : une couleur par type de média, distinctes aussi en clarté.
+  storage: { image: '#9DB84A', video: '#4F9DB5', audio: '#8C7CD6', file: '#D9B45F' },
   // Appareil photo : boutons gris sur le fond noir sous l'aperçu, onglet inactif.
   cameraSurface: '#1C1C1F',
   cameraIdle: '#6E6E73',
