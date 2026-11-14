@@ -1,5 +1,45 @@
 # Journal des versions
 
+## 1.7.0 (versionCode 10)
+
+### Résumé
+
+- Pear change de look : accueil, conversation, réglages, profil, appareil photo et éditeur ont été entièrement redessinés, avec des animations plus douces partout.
+- Nouvelle carte de vos proches, hors ligne et en clair ou sombre : leur position en direct, la vôtre, et « Envoyer seulement ma position actuelle ».
+- Appareil photo plus rapide à ouvrir, envoi direct à un contact depuis une conversation, et photos « vue unique » en un geste.
+- Conversations plus rapides à ouvrir, nouvelle sélection d'un message et bouton pour revenir en bas.
+
+### Détails
+
+#### Nouveautés
+
+- Carte des contacts (MapLibre) : la zone autour de vous (25 km) se télécharge une fois puis reste sur le téléphone ; la carte n'utilise plus le réseau ensuite. Épingles à photo ou initiale qui dérivent à peine quand le partage est en direct, fiche du contact, mode discret qui arrête tous les partages. Carte claire ou sombre selon le thème.
+- Position : partage « tant que l'app est ouverte », feuille d'envoi avec mini-carte, et « Envoyer seulement ma position actuelle » (sans suivi).
+- Conversation : sélection d'un message refaite (le message monte, les réactions sortent du coin de la bulle, le menu se déplie ligne par ligne ; un texte trop long se replie pour tenir ; l'heure et les coches s'ouvrent au milieu d'un groupe).
+- Conversation : bouton « revenir en bas » quand on est remonté, qui devient une pastille verte avec le nombre de nouveaux messages.
+- Joindre : feuille avec les photos récentes, et tuiles Appareil (la photo part directement au contact), Fichier, Position, Une fois (vue unique), Stickers.
+- Personnaliser la conversation : grand aperçu vivant, couleurs des bulles, roue de couleurs, fonds d'écran.
+- Profil du contact : six actions (Écrire, Rechercher, Personnaliser, Ma position, Couper le son, Éphémères), onglet Médias.
+- Réglages : une page par catégorie (Apparence, Notifications, Confidentialité, Sauvegarde, Mises à jour), verrou de l'app en interrupteur, page Stockage avec la place prise par type et par contact.
+- Pop-ups, toasts et feuilles du bas redessinés ; icônes animées (envoi, micro, épingle, corbeille, cloche, verrou).
+- Appareil photo : nouveau déclencheur, onglets Photo / Vidéo, recadrage avec redressement, éditeur photo et vidéo refait.
+- Vocaux et lecteur vidéo refaits.
+
+#### Corrections
+
+- Appareil photo : un appui sur un outil de l'éditeur ajoutait un texte ; le bouton pour changer de caméra était mal placé.
+- Contacts : le trait qui balayait le QR code gênait le scan, il est retiré.
+- Conversation : reprendre le défilement après un arrêt ne bloquait plus ; le retour Réglages → Profil ne fait plus réapparaître la page une image.
+- Les séries (flammes) sont retirées de toute l'app.
+
+#### Technique
+
+- Ouverture des conversations plus rapide : signaux du moteur regroupés une fois par image, bulles qui ne se redessinent plus pour rien, connexion et « lu » lancés après l'arrivée de la page.
+- Appareil photo prêt plus vite : l'écran est préparé d'avance (caméra éteinte) et la caméra s'allume dès que le doigt touche l'onglet.
+- Toutes les animations et les gestes passent par Reanimated et gesture-handler (fil de l'interface), sans rebond.
+- Les filtres fun de l'appareil photo (suivi du visage MediaPipe, Apache 2.0) sont prêts mais pas encore activés ; la mention de licence est dans Réglages > Mises à jour > Licences.
+- Nouvelles dépendances natives : MapLibre, MediaPipe Tasks Vision, CameraX Effects.
+
 ## 1.6.0 (versionCode 9)
 
 ### Résumé
