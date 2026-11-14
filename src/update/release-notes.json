@@ -1,7 +1,7 @@
 {
-  "version": "1.6.0",
-  "versionCode": 9,
-  "summary": "- Messages éphémères et photos à vue unique : en bas d'une conversation, tirez vers le haut pour activer ou couper les messages qui s'effacent tout seuls.\n- Recherche dans les messages, notes à moi-même, albums photo, stickers maison, aperçu des liens et vocaux avec forme d'onde et vitesse de lecture.\n- Nouvelle interface : couleur poire, coches « lu » animées, bulle « écrit… », poire animée (tirer pour actualiser, transferts, écrans vides).\n- Sécurité : verrou par empreinte, base de messages et fichiers chiffrés sur le téléphone, mises à jour signées.\n- Pear est plus rapide à l'ouverture des conversations et de l'accueil.",
+  "version": "1.7.0",
+  "versionCode": 10,
+  "summary": "- Pear change de look : accueil, conversation, réglages, profil, appareil photo et éditeur ont été entièrement redessinés, avec des animations plus douces partout.\n- Nouvelle carte de vos proches, hors ligne et en clair ou sombre : leur position en direct, la vôtre, et « Envoyer seulement ma position actuelle ».\n- Appareil photo plus rapide à ouvrir, envoi direct à un contact depuis une conversation, et photos « vue unique » en un geste.\n- Conversations plus rapides à ouvrir, nouvelle sélection d'un message et bouton pour revenir en bas.",
   "pages": {
     "1.6.0": [
       {
