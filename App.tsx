@@ -1,5 +1,7 @@
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, AppState, Easing, BackHandler, PanResponder, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { AppState, BackHandler, PanResponder, StyleSheet, useWindowDimensions, View } from 'react-native';
+import Reanimated, { Easing, makeMutable, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 import { NavigationBar } from 'expo-navigation-bar';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -103,7 +105,42 @@ const NOT_KEPT_UNDER = ['camera', 'scan'];
 // Délai avant de monter un parent qui ne l'était pas : la page qui vient d'arriver passe d'abord.
 const PARENT_MOUNT_DELAY_MS = 600;
 
-type PageMotion = { g: Animated.Value; enter: Animated.Value };
+type PageMotion = { g: SharedValue<number>; enter: SharedValue<number> };
+
+// La courbe des écrans (celle de motion.easing), sur le fil de l'interface.
+const SCREEN_EASE = Easing.bezier(0.2, 0.8, 0.2, 1);
+const screenTiming = () => ({ duration: motion.screen, easing: SCREEN_EASE });
+
+type LayerKind = 'top' | 'parent' | 'hidden';
+
+// L'enveloppe de chaque page montée. Toujours le même composant, quelle que soit sa place : une page qui
+// passe du dessus au-dessous (ou l'inverse) n'est jamais remontée.
+// top : arrive de la droite en fondu ; au retour, repart vers la droite en s'effaçant.
+// parent : se décale un peu à gauche quand la page arrive, revient quand elle repart.
+function PageLayer({ kind, top, tabDrag, handlers, children }: { kind: LayerKind; top: PageMotion; tabDrag: SharedValue<number>; handlers?: object; children: ReactNode }) {
+  const style = useAnimatedStyle(() => {
+    if (kind === 'hidden') return { opacity: 0, transform: [{ translateX: 0 }] };
+    const enter = top.enter.get();
+    const g = top.g.get();
+    if (kind === 'parent') return { opacity: 1, transform: [{ translateX: enter * (-UNDER_SHIFT + UNDER_SHIFT * g) }] };
+    return { opacity: enter * (1 - g), transform: [{ translateX: PAGE_SHIFT * (1 - enter) + PAGE_SHIFT * g + tabDrag.get() }] };
+  });
+  return (
+    <Reanimated.View pointerEvents={kind === 'top' ? 'auto' : 'none'} {...handlers} style={[StyleSheet.absoluteFill, style]}>
+      {children}
+    </Reanimated.View>
+  );
+}
+
+// L'onglet voisin pendant le glissement entre onglets.
+function NeighborLayer({ tabDrag, offset, children }: { tabDrag: SharedValue<number>; offset: number; children: ReactNode }) {
+  const style = useAnimatedStyle(() => ({ transform: [{ translateX: tabDrag.get() + offset }] }));
+  return (
+    <Reanimated.View pointerEvents="none" style={[StyleSheet.absoluteFill, style]}>
+      {children}
+    </Reanimated.View>
+  );
+}
 
 function sameDeps(a: unknown[], b: unknown[]) {
   return a.length === b.length && a.every((value, index) => value === b[index]);
@@ -145,7 +182,7 @@ function App() {
   const motionFor = (key: string, entering = false) => {
     let motion = motions.get(key);
     if (!motion) {
-      motion = { g: new Animated.Value(0), enter: new Animated.Value(entering ? 0 : 1) };
+      motion = { g: makeMutable(0), enter: makeMutable(entering ? 0 : 1) };
       motions.set(key, motion);
     }
     return motion;
@@ -157,7 +194,7 @@ function App() {
   const [leavingKey, setLeavingKey] = useState<string | null>(null);
   // Les valeurs à jour pour les fonctions créées une seule fois (écouteurs, navigation).
   const nav = useRef<{ route: Route; parent: Route | null }>({ route, parent: null });
-  const tabDrag = useRef(new Animated.Value(0)).current;
+  const tabDrag = useSharedValue(0);
   const { width: screenWidth } = useWindowDimensions();
   const url = Linking.useURL();
   const update = useUpdateState();
@@ -358,7 +395,11 @@ function App() {
     !isTabSwipeLocked() && x0 > TAB_EDGE && x0 < screenWidth - TAB_EDGE && Math.abs(dx) > 24 && Math.abs(dx) > Math.abs(dy) * 2;
 
   const settleTab = (toValue: number, then: () => void) =>
-    Animated.timing(tabDrag, { toValue, duration: motion.screen, easing: motion.easing, useNativeDriver: true }).start(then);
+    tabDrag.set(
+      withTiming(toValue, screenTiming(), (finished) => {
+        if (finished) scheduleOnRN(then);
+      }),
+    );
 
   const tabSwipe = useRef(
     PanResponder.create({
@@ -369,7 +410,7 @@ function App() {
       onPanResponderMove: (event, { dx }) => {
         const next = neighborOf(dx);
         // Pas d'onglet de ce côté : la page résiste un peu.
-        tabDrag.setValue(next ? dx : dx * 0.2);
+        tabDrag.set(next ? dx : dx * 0.2);
         setNeighbor((current) => (current?.name === next?.name ? current : next));
       },
       onPanResponderRelease: (event, { dx, vx }) => {
@@ -377,7 +418,7 @@ function App() {
         if (next && (Math.abs(dx) > screenWidth * TAB_SWIPE_RATIO || Math.abs(vx) > 0.5)) {
           settleTab(-next.side * screenWidth, () => {
             setRoute({ name: next.name } as Route);
-            tabDrag.setValue(0);
+            tabDrag.set(0);
             setNeighbor(null);
           });
         } else settleTab(0, () => setNeighbor(null));
@@ -394,16 +435,20 @@ function App() {
     exiting.current = true;
     const { g } = motionFor(routeKey(nav.current.route));
     const leaving = routeKey(nav.current.route);
-    Animated.timing(g, { toValue: 1, duration: motion.screen, easing: motion.easing, useNativeDriver: true }).start(() => {
-      // La page partie est d'abord cachée par un style fixe, puis démontée à l'image suivante : quand
-      // son animation native est détachée, Android remet son opacité à 1 le temps d'une image, ce qui
-      // faisait réapparaître la page (Réglages au retour vers Profil).
+    // La page partie est d'abord cachée par un style fixe, puis démontée à l'image suivante : elle ne
+    // réapparaît pas le temps d'une image (Réglages au retour vers Profil).
+    const done = () => {
       setLeavingKey(leaving);
       requestAnimationFrame(() => {
         exiting.current = false;
         setRouteState(parent);
       });
-    });
+    };
+    g.set(
+      withTiming(1, screenTiming(), (finished) => {
+        if (finished) scheduleOnRN(done);
+      }),
+    );
   }).current;
 
   // Toute la navigation passe par ici : revenir au parent déjà monté est animé, aller ailleurs fait
@@ -434,7 +479,7 @@ function App() {
   useEffect(() => {
     setLeavingKey(null);
     const { enter } = motionFor(currentKey);
-    Animated.timing(enter, { toValue: 1, duration: motion.screen, easing: motion.easing, useNativeDriver: true }).start();
+    enter.set(withTiming(1, screenTiming()));
     for (const key of [...motions.keys()]) if (!mountedKeys.current.has(key)) motions.delete(key);
     setParentReady(false);
     const timer = setTimeout(() => setParentReady(true), PARENT_MOUNT_DELAY_MS);
@@ -766,9 +811,9 @@ function App() {
         const key = routeKey(layer);
         if (warmCamera && position === 0) {
           return (
-            <Animated.View key={key} pointerEvents="none" style={[StyleSheet.absoluteFill, styles.hidden]}>
+            <PageLayer key={key} kind="hidden" top={top} tabDrag={tabDrag}>
               <View style={StyleSheet.absoluteFill}>{renderPage(layer, false)}</View>
-            </Animated.View>
+            </PageLayer>
           );
         }
         const index = position - (warmCamera ? 1 : 0);
@@ -776,57 +821,24 @@ function App() {
         if (!isTop) {
           const isParent = index === layers.length - 2;
           return (
-            <Animated.View
-              key={key}
-              pointerEvents="none"
-              style={[
-                StyleSheet.absoluteFill,
-                isParent
-                  ? {
-                      // Se décale un peu à gauche quand la page arrive, revient quand elle repart.
-                      transform: [{ translateX: Animated.multiply(top.enter, top.g.interpolate({ inputRange: [0, 1], outputRange: [-UNDER_SHIFT, 0] })) }],
-                    }
-                  : styles.hidden,
-              ]}
-            >
+            <PageLayer key={key} kind={isParent ? 'parent' : 'hidden'} top={top} tabDrag={tabDrag}>
               {/* Même enveloppe que la page du dessus : en devenant la page du dessus, elle n'est pas remontée. */}
               <View style={StyleSheet.absoluteFill}>{renderPage(layer, false)}</View>
               {!TAB_ROUTES.includes(route.name) && TAB_ROUTES.includes(layer.name) && <BottomBar active={layer.name as Tab} onChange={() => {}} />}
-            </Animated.View>
+            </PageLayer>
           );
         }
         return (
-          <Animated.View
-            key={key}
-            {...tabSwipe.panHandlers}
-            style={[
-              StyleSheet.absoluteFill,
-              {
-                // Arrive de la droite en fondu ; au retour, repart vers la droite en s'effaçant.
-                opacity: Animated.multiply(top.enter, top.g.interpolate({ inputRange: [0, 1], outputRange: [1, 0] })),
-                transform: [
-                  {
-                    translateX: Animated.add(
-                      Animated.add(top.enter.interpolate({ inputRange: [0, 1], outputRange: [PAGE_SHIFT, 0] }), top.g.interpolate({ inputRange: [0, 1], outputRange: [0, PAGE_SHIFT] })),
-                      tabDrag,
-                    ),
-                  },
-                ],
-              },
-            ]}
-          >
+          <PageLayer key={key} kind="top" top={top} tabDrag={tabDrag} handlers={tabSwipe.panHandlers}>
             <View style={[StyleSheet.absoluteFill, leavingKey === key && styles.hidden]}>{renderPage(layer, true)}</View>
-          </Animated.View>
+          </PageLayer>
         );
       })}
       {neighbor && (
-        <Animated.View
-          pointerEvents="none"
-          style={[StyleSheet.absoluteFill, { transform: [{ translateX: Animated.add(tabDrag, neighbor.side * screenWidth) }] }]}
-        >
+        <NeighborLayer tabDrag={tabDrag} offset={neighbor.side * screenWidth}>
           {/* La caméra n'est pas allumée pour un simple glissement : un fond noir la représente. */}
           {neighbor.name === 'camera' ? <View style={styles.cameraPlaceholder} /> : render({ name: neighbor.name } as Route, true)}
-        </Animated.View>
+        </NeighborLayer>
       )}
       {identity && !error && !filming && TAB_ROUTES.includes(route.name) && (
         <BottomBar active={route.name as Tab} onChange={(tab) => setRoute({ name: tab } as Route)} />
@@ -850,7 +862,8 @@ const CAMERA_ROUTE = { name: 'camera' } as Route;
 // Voile de la couleur de l'ancien thème, qui s'efface pendant que le nouveau apparaît dessous.
 function useThemeFade(colors: Palette) {
   const [veil, setVeil] = useState<string | null>(null);
-  const opacity = useRef(new Animated.Value(0)).current;
+  const opacity = useSharedValue(0);
+  const veilStyle = useAnimatedStyle(() => ({ opacity: opacity.get() }));
   const previous = useRef(colors);
 
   useEffect(() => {
@@ -858,11 +871,16 @@ function useThemeFade(colors: Palette) {
     const from = previous.current.background;
     previous.current = colors;
     setVeil(from);
-    opacity.setValue(1);
-    Animated.timing(opacity, { toValue: 0, duration: THEME_FADE_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start(() => setVeil(null));
+    opacity.set(1);
+    const clear = () => setVeil(null);
+    opacity.set(
+      withTiming(0, { duration: THEME_FADE_MS, easing: Easing.out(Easing.cubic) }, (finished) => {
+        if (finished) scheduleOnRN(clear);
+      }),
+    );
   }, [colors, opacity]);
 
-  return veil ? <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: veil, opacity }]} /> : null;
+  return veil ? <Reanimated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: veil }, veilStyle]} /> : null;
 }
 
 const useStyles = createStyles((colors) => ({

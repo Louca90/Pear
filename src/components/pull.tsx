@@ -1,5 +1,8 @@
 import { ReactNode, useEffect, useRef, useState } from 'react';
-import { Animated, StyleSheet, Text } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
+import Reanimated, { interpolate, useAnimatedReaction, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
+import { EASE } from '../motion';
 import { GestureDetector, GestureHandlerRootView, GestureStateManager, usePanGesture } from 'react-native-gesture-handler';
 
 import { PULL_MAX, PULL_THRESHOLD } from '../chat/ephemeral';
@@ -23,7 +26,7 @@ type Options = {
 };
 
 export function usePullGesture({ dir, canPull, onTrigger, hold }: Options) {
-  const offset = useRef(new Animated.Value(0)).current;
+  const offset = useSharedValue(0);
   const allowed = useRef(false);
   const armed = useRef(false);
   const busyRef = useRef(false);
@@ -41,7 +44,7 @@ export function usePullGesture({ dir, canPull, onTrigger, hold }: Options) {
 
   const settle = () => {
     armed.current = false;
-    Animated.timing(offset, { toValue: 0, duration: motion.small, easing: motion.easing, useNativeDriver: true }).start();
+    offset.set(withTiming(0, { duration: motion.small, easing: EASE }));
   };
 
   const gesture = usePanGesture({
@@ -63,7 +66,7 @@ export function usePullGesture({ dir, canPull, onTrigger, hold }: Options) {
     onUpdate: (event) => {
       if (!allowed.current) return;
       const pulled = Math.max(0, Math.min(PULL_MAX, dir * event.translationY));
-      offset.setValue(dir * pulled);
+      offset.set(dir * pulled);
       const over = pulled >= PULL_THRESHOLD;
       if (over !== armed.current) {
         armed.current = over;
@@ -81,7 +84,7 @@ export function usePullGesture({ dir, canPull, onTrigger, hold }: Options) {
       if (!holding) return settle();
       busyRef.current = true;
       setBusy(true);
-      Animated.timing(offset, { toValue: dir * holding.distance, duration: motion.small, easing: motion.easing, useNativeDriver: true }).start();
+      offset.set(withTiming(dir * holding.distance, { duration: motion.small, easing: EASE }));
       timer.current = setTimeout(() => {
         busyRef.current = false;
         setBusy(false);
@@ -98,7 +101,7 @@ export function usePullGesture({ dir, canPull, onTrigger, hold }: Options) {
 
 type PullViewProps = {
   gesture: ReturnType<typeof usePanGesture>;
-  offset: Animated.Value;
+  offset: SharedValue<number>;
   // L'indicateur, posé dans l'espace que la liste découvre en se décalant.
   indicator: ReactNode;
   children: ReactNode;
@@ -106,18 +109,19 @@ type PullViewProps = {
 
 // La zone qui se décale avec le doigt, et l'indicateur caché derrière elle.
 export function PullView({ gesture, offset, indicator, children }: PullViewProps) {
+  const shifted = useAnimatedStyle(() => ({ transform: [{ translateY: offset.get() }] }));
   return (
     <GestureHandlerRootView style={styles.flex}>
       {indicator}
       <GestureDetector gesture={gesture}>
-        <Animated.View style={[styles.flex, { transform: [{ translateY: offset }] }]}>{children}</Animated.View>
+        <Reanimated.View style={[styles.flex, shifted]}>{children}</Reanimated.View>
       </GestureDetector>
     </GestureHandlerRootView>
   );
 }
 
 type PullPearProps = {
-  offset: Animated.Value;
+  offset: SharedValue<number>;
   dir: 1 | -1;
   // `ripening` : se remplit (éphémères). `bitten` : se fait croquer (actualiser).
   kind: 'ripening' | 'bitten';
@@ -130,29 +134,25 @@ export function PullPear({ offset, dir, kind, busy, label }: PullPearProps) {
   const styles2 = useStyles();
   const colors = useColors();
   const [progress, setProgress] = useState(0);
-  const distance: Animated.AnimatedInterpolation<number> = offset.interpolate({ inputRange: [-PULL_MAX, PULL_MAX], outputRange: dir === 1 ? [-PULL_MAX, PULL_MAX] : [PULL_MAX, -PULL_MAX] });
-
-  useEffect(() => {
-    // Par pas de 5 % : la poire ne se redessine pas à chaque point parcouru.
-    const id = offset.addListener(({ value }) => {
-      const next = Math.round(Math.max(0, Math.min(1, (dir * value) / PULL_THRESHOLD)) * 20) / 20;
-      setProgress((current) => (current === next ? current : next));
-    });
-    return () => offset.removeListener(id);
-  }, [offset, dir]);
+  // Par pas de 5 % : la poire ne se redessine pas à chaque point parcouru.
+  useAnimatedReaction(
+    () => Math.round(Math.max(0, Math.min(1, (dir * offset.get()) / PULL_THRESHOLD)) * 20) / 20,
+    (next, previous) => {
+      if (next !== previous) scheduleOnRN(setProgress, next);
+    },
+  );
+  const fade = useAnimatedStyle(() => ({ opacity: interpolate(dir * offset.get(), [6, 36], [0, 1], 'clamp') }));
+  const grow = useAnimatedStyle(() => ({ transform: [{ scale: interpolate(dir * offset.get(), [0, PULL_THRESHOLD], [0.7, 1], 'clamp') }] }));
 
   const state: PearState = busy ? 'searching' : kind === 'ripening' ? 'ripening' : progress > 0 ? 'bitten' : 'idle';
   const full = progress >= 1;
   return (
-    <Animated.View
-      pointerEvents="none"
-      style={[styles2.pull, dir === 1 ? styles2.top : styles2.bottom, { opacity: distance.interpolate({ inputRange: [6, 36], outputRange: [0, 1], extrapolate: 'clamp' }) }]}
-    >
-      <Animated.View style={{ transform: [{ scale: distance.interpolate({ inputRange: [0, PULL_THRESHOLD], outputRange: [0.7, 1], extrapolate: 'clamp' }) }] }}>
+    <Reanimated.View pointerEvents="none" style={[styles2.pull, dir === 1 ? styles2.top : styles2.bottom, fade]}>
+      <Reanimated.View style={grow}>
         <Pear height={36} color={full && kind === 'ripening' ? colors.signatureStrong : colors.text} state={state} progress={progress} />
-      </Animated.View>
+      </Reanimated.View>
       {label && !busy ? <Text style={styles2.label}>{label(full)}</Text> : null}
-    </Animated.View>
+    </Reanimated.View>
   );
 }
 
