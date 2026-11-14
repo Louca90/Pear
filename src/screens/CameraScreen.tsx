@@ -115,10 +115,12 @@ type ReviewProps = {
   contacts: Contact[];
   onDiscard: () => void;
   onSent: (publicKey: string) => void;
+  // Ouvert depuis une conversation : « Envoyer » part directement à ce contact.
+  to?: string;
 };
 
 // Après la prise : on garde, on envoie à un contact, ou on jette. Rien ne part sans un choix.
-function CaptureReview({ capture, contacts, onDiscard, onSent }: ReviewProps) {
+function CaptureReview({ capture, contacts, onDiscard, onSent, to }: ReviewProps) {
   const colors = useMediaColors();
   const styles = useStyles();
   const [picking, setPicking] = useState(false);
@@ -199,7 +201,7 @@ function CaptureReview({ capture, contacts, onDiscard, onSent }: ReviewProps) {
           initialFilter={capture.filter}
           actions={{
             onClose: onDiscard,
-            onSend: () => setPicking(true),
+            onSend: () => (to ? send([to]) : setPicking(true)),
             extra: (
               <IconButton onPress={save} disabled={saved} label={saved ? t('camera.enregistre') : t('camera.enregistrerGalerie')} style={styles.roundControl}>
                 {saved ? <Check size={22} color={colors.background} strokeWidth={2} /> : <Download size={22} color={colors.background} strokeWidth={1.9} />}
@@ -224,12 +226,13 @@ function CaptureReview({ capture, contacts, onDiscard, onSent }: ReviewProps) {
 
 type Props = {
   contacts: Contact[];
+  to?: string;
   onSent: (publicKey: string) => void;
   onRecordingChange: (recording: boolean) => void;
 };
 
 // Comme sur Snap : un appui prend une photo, le maintien filme, et glisser vers le cadenas libère le doigt.
-export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
+export function CameraScreen({ contacts, to, onSent, onRecordingChange }: Props) {
   const colors = useMediaColors();
   const styles = useStyles();
   const { top: topInset } = useInsets();
@@ -738,6 +741,7 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
         <CaptureReview
           capture={capture}
           contacts={contacts}
+          to={to}
           onDiscard={() => setCapture(null)}
           onSent={(publicKey) => {
             setCapture(null);

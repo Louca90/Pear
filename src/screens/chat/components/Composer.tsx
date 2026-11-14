@@ -40,6 +40,8 @@ type Props = {
   onFile: () => void;
   onLocation?: () => void;
   onStickers?: () => void;
+  onCamera?: () => void;
+  onOnce?: () => void;
   // Photos récentes choisies dans le menu Joindre.
   onSendRecent: (files: PickedFile[]) => void;
   onVoiceRecorded: (uri: string, seconds: number, wave?: string) => void;
@@ -66,6 +68,8 @@ export function Composer({
   onFile,
   onLocation,
   onStickers,
+  onCamera,
+  onOnce,
   onSendRecent,
   onVoiceRecorded,
   onVoiceTooShort,
@@ -93,7 +97,7 @@ export function Composer({
     <View style={styles.composerArea}>
       {/* Comble l'espace qui peut rester entre la saisie et le clavier (ou le bas de l'écran) : le fond d'écran n'y transparaît plus. */}
       <View pointerEvents="none" style={styles.composerUnderlay} />
-      {attachOpen && <AttachSheet onPhotos={onPhotos} onFile={onFile} onLocation={onLocation} onStickers={onStickers} onSendRecent={onSendRecent} />}
+      {attachOpen && <AttachSheet onPhotos={onPhotos} onFile={onFile} onLocation={onLocation} onStickers={onStickers} onCamera={onCamera} onOnce={onOnce} onSendRecent={onSendRecent} />}
       <ComposerModeCard mode={mode} name={name} onCancel={onCancelMode} onJump={onJump} />
       <View style={[styles.composer, { paddingBottom: keyboardOpen ? spacing.sm : bottom + spacing.sm }]}>
         {voice.phase !== 'idle' ? (

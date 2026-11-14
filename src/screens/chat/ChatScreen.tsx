@@ -70,16 +70,19 @@ type Props = {
   intent?: ChatIntent;
   onNotifications: () => void;
   onMedia: () => void;
+  // L'appareil photo de Pear, dont la photo part directement à ce contact.
+  onCamera: () => void;
 };
 
 export type ChatIntent = 'search' | 'location' | 'ephemeral';
 
-export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustomize, preview, jump, intent, onNotifications, onMedia }: Props) {
+export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustomize, preview, jump, intent, onNotifications, onMedia, onCamera }: Props) {
   const styles = useStyles();
   const colors = useColors();
   const [draft, setDraft] = useState(() => getDraft(contactKey));
   const [attachOpen, setAttachOpen] = useState(false);
-  const [galleryOpen, setGalleryOpen] = useState(false);
+  // 'once' : ouverte par la tuile « Une fois », vue unique déjà choisie.
+  const [galleryOpen, setGalleryOpen] = useState<boolean | 'once'>(false);
   const [toast, setToast] = useState<{ text: string; token: number } | null>(null);
   const [forwarding, setForwarding] = useState<Message | null>(null);
   const [showingReactions, setShowingReactions] = useState<Message | null>(null);
@@ -738,6 +741,18 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
                 setGalleryOpen(true);
               }}
               onFile={pickDocument}
+              onCamera={() => {
+                setAttachOpen(false);
+                onCamera();
+              }}
+              onOnce={
+                isSelf(contactKey)
+                  ? undefined
+                  : () => {
+                      setAttachOpen(false);
+                      setGalleryOpen('once');
+                    }
+              }
               onSendRecent={(files) => {
                 setAttachOpen(false);
                 sendFromGallery(files);
@@ -790,7 +805,7 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
       {locationOpen && <LocationSheet name={name} onShare={startSharing} onClose={() => setLocationOpen(false)} />}
       {menuOpen && <ChatMenu items={menuItems} onClose={() => setMenuOpen(false)} />}
       {searching && <ChatSearch contactKey={contactKey} name={name} onClose={() => setSearching(false)} onPick={jumpTo} />}
-      {galleryOpen && <MediaPicker onPick={sendFromGallery} onClose={() => setGalleryOpen(false)} allowOnce={!isSelf(contactKey)} />}
+      {galleryOpen && <MediaPicker onPick={sendFromGallery} onClose={() => setGalleryOpen(false)} allowOnce={!isSelf(contactKey)} initialOnce={galleryOpen === 'once'} />}
     </Screen>
   );
 }

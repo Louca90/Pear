@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import * as MediaLibrary from 'expo-media-library/legacy';
 import Reanimated, { interpolateColor, ReduceMotion, useAnimatedStyle, useSharedValue, withDelay, withTiming, type EntryExitAnimationFunction } from 'react-native-reanimated';
-import { FileText, Images, LucideIcon, MapPin, Plus, Sticker } from 'lucide-react-native';
+import { Camera, Eye, FileText, Images, LucideIcon, MapPin, Plus, Sticker } from 'lucide-react-native';
 
 import { PickedFile } from '../../../chat/manager';
 import { Thumbnail, toPickedFile } from '../../../components/MediaPicker';
@@ -181,12 +181,16 @@ type SheetProps = {
   // Absents (notes à moi-même) : le choix n'est pas proposé.
   onLocation?: () => void;
   onStickers?: () => void;
+  // Appareil photo de Pear : la photo part directement à ce contact.
+  onCamera?: () => void;
+  // Galerie avec la vue unique déjà choisie.
+  onOnce?: () => void;
   onSendRecent: (files: PickedFile[]) => void;
 };
 
 // Le menu Joindre : les photos récentes (un appui les choisit, « Envoyer » les envoie ensemble), puis
 // une tuile par type de pièce jointe.
-export function AttachSheet({ onPhotos, onFile, onLocation, onStickers, onSendRecent }: SheetProps) {
+export function AttachSheet({ onPhotos, onFile, onLocation, onStickers, onCamera, onOnce, onSendRecent }: SheetProps) {
   const styles = useStyles();
   const recent = useRecentAssets();
   const [selected, setSelected] = useState<MediaLibrary.Asset[]>([]);
@@ -203,8 +207,10 @@ export function AttachSheet({ onPhotos, onFile, onLocation, onStickers, onSendRe
   };
   const tiles = [
     { icon: Images, label: t('chat.galerie'), primary: true, onPress: onPhotos },
+    ...(onCamera ? [{ icon: Camera, label: t('chat.appareil'), onPress: onCamera }] : []),
     { icon: FileText, label: t('chat.fichier'), onPress: onFile },
     ...(onLocation ? [{ icon: MapPin, label: t('position.court'), onPress: onLocation }] : []),
+    ...(onOnce ? [{ icon: Eye, label: t('chat.uneFois'), onPress: onOnce }] : []),
     ...(onStickers ? [{ icon: Sticker, label: t('stickers.titre'), onPress: onStickers }] : []),
   ];
 
@@ -315,9 +321,11 @@ const useStyles = createStyles((colors) => ({
   },
   tiles: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    rowGap: spacing.sm,
   },
   tilePlace: {
-    flex: 1,
+    width: '33.333%',
   },
   tile: {
     alignItems: 'center',

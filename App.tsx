@@ -60,7 +60,8 @@ import { t } from './src/i18n';
 type Route =
   | { name: 'home' }
   | { name: 'contacts' }
-  | { name: 'camera' }
+  // to : ouvert depuis une conversation, la photo part directement à ce contact.
+  | { name: 'camera'; to?: string }
   | { name: 'scan' }
   | { name: 'profile' }
   | { name: 'diagnostic' }
@@ -296,6 +297,7 @@ function App() {
     if (current.name === 'diagnostic' || current.name === 'discover') return { name: 'settingsPage', page: 'updates' };
     if (current.name === 'storage' || current.name === 'settings' || current.name === 'settingsPage') return { name: 'profile' };
     if (current.name === 'customize') return { name: 'chat', publicKey: current.publicKey };
+    if (current.name === 'camera' && current.to) return { name: 'chat', publicKey: current.to };
     if (current.name === 'notifications') return { name: 'customize', publicKey: current.publicKey };
     if (current.name === 'contact' && isSaved(current.publicKey)) return { name: 'chat', publicKey: current.publicKey };
     return { name: 'home' };
@@ -502,6 +504,7 @@ function App() {
       return (
         <CameraScreen
           contacts={contacts}
+          to={current.to}
           onSent={(publicKey) => setRoute({ name: 'chat', publicKey })}
           onRecordingChange={setFilming}
         />
@@ -600,6 +603,7 @@ function App() {
           intent={current.intent}
           onNotifications={() => setRoute({ name: 'notifications', publicKey })}
           onMedia={() => setRoute({ name: 'contact', publicKey, tab: 'media' })}
+          onCamera={() => setRoute({ name: 'camera', to: publicKey })}
         />
       );
     }

@@ -211,10 +211,12 @@ type PickerProps = {
   onClose: () => void;
   // Une seule photo (fond d'écran…) : un appui la choisit, sans onglet vidéos.
   single?: boolean;
+  // Ouvert par « Une fois » : la vue unique est déjà choisie.
+  initialOnce?: boolean;
 };
 
 // Notre propre galerie : photos, vidéos et albums, sans quitter l'app. La permission n'est demandée qu'ici.
-export function MediaPicker({ onPick, onClose, single, allowOnce }: PickerProps) {
+export function MediaPicker({ onPick, onClose, single, allowOnce, initialOnce }: PickerProps) {
   const colors = useColors();
   const styles = useStyles();
   const bottom = useNavigationBarHeight();
@@ -246,7 +248,7 @@ export function MediaPicker({ onPick, onClose, single, allowOnce }: PickerProps)
   );
 
   // Vue unique (lot 4.7) : les médias choisis ne pourront être ouverts qu'une fois.
-  const [once, setOnce] = useState(false);
+  const [once, setOnce] = useState(!!initialOnce && !!allowOnce);
   const send = () => {
     try {
       onPick(selected.map(toPickedFile).map((file) => (once ? { ...file, once: true } : file)));
