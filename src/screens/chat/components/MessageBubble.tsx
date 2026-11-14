@@ -1,5 +1,5 @@
 import { memo, ReactNode, useEffect, useRef, useState } from 'react';
-import { Animated, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import Reanimated, { Easing, interpolate, ReduceMotion, useAnimatedStyle, useSharedValue, withSequence, withTiming, type SharedValue } from 'react-native-reanimated';
 import { GestureDetector } from 'react-native-gesture-handler';
 import { Forward, Reply } from 'lucide-react-native';
@@ -273,13 +273,13 @@ function BubbleView({ message, name, palettes, hidden, mediaHidden, pulse, onOpe
           {endsGroup ? meta : metaReveal ? <RevealMeta value={metaReveal}>{meta}</RevealMeta> : null}
         </Pressable>
         {badge.shown && (
-          <Animated.View style={badge.style}>
+          <Reanimated.View style={badge.style}>
             <Pressable onPress={() => onShowReactions?.(message)} disabled={!onShowReactions} hitSlop={6} style={[styles.reactions, bare && styles.reactionsBare]} accessibilityLabel={t('reactions.titre')}>
               {lastReactions.current.map((emoji, index) => (
                 <Text key={index} style={styles.reactionEmoji}>{emoji}</Text>
               ))}
             </Pressable>
-          </Animated.View>
+          </Reanimated.View>
         )}
         <LikeBurst token={burst} style={mine ? styles.burstMine : styles.burstTheirs} />
       </Reanimated.View>

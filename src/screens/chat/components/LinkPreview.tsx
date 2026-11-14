@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react';
-import { ActivityIndicator, Animated, Image, Linking, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Linking, Pressable, Text, View } from 'react-native';
+import Reanimated from 'react-native-reanimated';
+import { enterUp } from '../../../motion';
 import { Link2, X } from 'lucide-react-native';
 
 import type { DraftPreview } from '../../../chat/linkPreview';
@@ -41,13 +43,9 @@ export function LinkPreviewCard({ preview, palette }: { preview: LinkPreview; pa
 export function DraftPreviewCard({ draft, onDismiss }: { draft: DraftPreview; onDismiss: () => void }) {
   const styles = useStyles();
   const colors = useColors();
-  const appear = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.timing(appear, { toValue: 1, duration: motion.small, easing: motion.easing, useNativeDriver: true }).start();
-  }, [appear]);
 
   return (
-    <Animated.View style={[styles.draft, { opacity: appear, transform: [{ translateY: appear.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }] }]}>
+    <Reanimated.View entering={enterUp(8, motion.small)} style={styles.draft}>
       {draft.preview?.image ? (
         <Image source={{ uri: jpegDataUri(draft.preview.image) }} style={styles.draftImage} resizeMode="cover" />
       ) : (
@@ -66,7 +64,7 @@ export function DraftPreviewCard({ draft, onDismiss }: { draft: DraftPreview; on
       <IconButton onPress={onDismiss} label={t('lien.retirer')} hitSlop={8}>
         <X size={18} color={colors.textMuted} strokeWidth={1.75} />
       </IconButton>
-    </Animated.View>
+    </Reanimated.View>
   );
 }
 

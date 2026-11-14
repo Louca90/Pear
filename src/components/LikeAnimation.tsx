@@ -1,52 +1,44 @@
 import { useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, Easing, StyleSheet, View, ViewStyle } from 'react-native';
+import { StyleSheet, View, ViewStyle } from 'react-native';
+import Reanimated, { Easing, interpolate, ReduceMotion, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 import { Heart } from 'lucide-react-native';
 import { fixed } from '../theme';
 
 const HEART_MS = 700;
 const MAX_HEARTS = 3;
 const HEART_COLOR = fixed.heart;
-
-// « Réduire les animations » du système : un simple fondu, sans mouvement.
-let reduceMotion = false;
-AccessibilityInfo.isReduceMotionEnabled()
-  .then((value) => {
-    reduceMotion = value;
-  })
-  .catch(() => {});
-AccessibilityInfo.addEventListener('reduceMotionChanged', (value) => {
-  reduceMotion = value;
-});
+const RISE = Easing.in(Easing.quad);
+const GROW = Easing.out(Easing.cubic);
 
 // Un cœur : il grandit en douceur (sans dépasser sa taille), légèrement penché, puis monte en s'effaçant.
+// « Réduire les animations » du système : un simple fondu, sans mouvement.
 function FloatingHeart({ size, onDone }: { size: number; onDone: () => void }) {
-  const progress = useRef(new Animated.Value(0)).current;
+  const progress = useSharedValue(0);
   const tilt = useRef(`${Math.round(Math.random() * 24 - 12)}deg`).current;
-  const still = useRef(reduceMotion).current;
+  const still = useReducedMotion();
 
   useEffect(() => {
-    Animated.timing(progress, { toValue: 1, duration: HEART_MS, easing: Easing.linear, useNativeDriver: true }).start(onDone);
+    progress.set(
+      withTiming(1, { duration: HEART_MS, easing: Easing.linear, reduceMotion: ReduceMotion.Never }, (finished) => {
+        if (finished) scheduleOnRN(onDone);
+      }),
+    );
   }, [progress, onDone]);
 
+  const style = useAnimatedStyle(() => {
+    const p = progress.get();
+    const opacity = interpolate(p, [0, 0.15, 0.6, 1], [0, 1, 1, 0], 'clamp');
+    if (still) return { opacity };
+    const translateY = p < 0.55 ? 0 : -size * 0.9 * RISE((p - 0.55) / 0.45);
+    const scale = p < 0.3 ? 0.3 + 0.7 * GROW(p / 0.3) : 1;
+    return { opacity, transform: [{ translateY }, { scale }, { rotate: tilt }] };
+  });
+
   return (
-    <Animated.View
-      pointerEvents="none"
-      style={[
-        styles.heart,
-        {
-          opacity: progress.interpolate({ inputRange: [0, 0.15, 0.6, 1], outputRange: [0, 1, 1, 0] }),
-          transform: still
-            ? []
-            : [
-                { translateY: progress.interpolate({ inputRange: [0, 0.55, 1], outputRange: [0, 0, -size * 0.9], easing: Easing.in(Easing.quad) }) },
-                { scale: progress.interpolate({ inputRange: [0, 0.3, 1], outputRange: [0.3, 1, 1], easing: Easing.out(Easing.cubic) }) },
-                { rotate: tilt },
-              ],
-        },
-      ]}
-    >
+    <Reanimated.View pointerEvents="none" style={[styles.heart, style]}>
       <Heart size={size} color={HEART_COLOR} fill={HEART_COLOR} strokeWidth={1.5} />
-    </Animated.View>
+    </Reanimated.View>
   );
 }
 
@@ -75,19 +67,26 @@ export function LikeBurst({ token, size = 22, style }: { token: number; size?: n
 }
 
 // Badge de réaction : apparaît en fondu en grandissant un peu (sans rebond), disparaît en rétrécissant.
+// Rien ne s'anime à l'apparition d'une bulle : seulement quand une réaction arrive ou s'en va.
 export function useReactionAppear(visible: boolean) {
-  const appear = useRef(new Animated.Value(visible ? 1 : 0)).current;
+  const appear = useSharedValue(visible ? 1 : 0);
   const [shown, setShown] = useState(visible);
+  const still = useReducedMotion();
+  const first = useRef(true);
   useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
     if (visible) setShown(true);
-    Animated.timing(appear, { toValue: visible ? 1 : 0, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start(({ finished }) => {
-      if (finished && !visible) setShown(false);
-    });
+    const hide = () => setShown(false);
+    appear.set(
+      withTiming(visible ? 1 : 0, { duration: 220, easing: GROW }, (finished) => {
+        if (finished && !visible) scheduleOnRN(hide);
+      }),
+    );
   }, [visible, appear]);
-  const style = {
-    opacity: appear,
-    transform: reduceMotion ? [] : [{ scale: appear.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) }],
-  };
+  const style = useAnimatedStyle(() => ({ opacity: appear.get(), transform: still ? [] : [{ scale: 0.6 + 0.4 * appear.get() }] }));
   return { shown, style };
 }
 

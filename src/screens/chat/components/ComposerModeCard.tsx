@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Image, Pressable, Text, View } from 'react-native';
+import { Image, Pressable, Text, View } from 'react-native';
+import Reanimated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 import { Pencil, Play, Reply, X } from 'lucide-react-native';
 
 import { describeMessage, Message } from '../../../chat/database';
@@ -39,14 +41,18 @@ export function ComposerModeCard({ mode, name, onCancel, onJump }: { mode: Mode 
   const styles = useStyles();
   const [shown, setShown] = useState<Mode | null>(mode);
   const [height, setHeight] = useState(0);
-  const open = useRef(new Animated.Value(mode ? 1 : 0)).current;
+  const open = useSharedValue(mode ? 1 : 0);
 
   useEffect(() => {
     if (mode) setShown(mode);
-    Animated.timing(open, { toValue: mode ? 1 : 0, duration: mode ? OPEN_MS : CLOSE_MS, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start(({ finished }) => {
-      if (finished && !mode) setShown(null);
-    });
+    const hide = () => setShown(null);
+    open.set(
+      withTiming(mode ? 1 : 0, { duration: mode ? OPEN_MS : CLOSE_MS, easing: Easing.out(Easing.cubic) }, (finished) => {
+        if (finished && !mode) scheduleOnRN(hide);
+      }),
+    );
   }, [mode, open]);
+  const wrapperStyle = useAnimatedStyle(() => (height ? { height: open.get() * height, opacity: open.get() } : { opacity: open.get() }));
 
   if (!shown) return null;
   const { kind, message } = shown;
@@ -54,7 +60,7 @@ export function ComposerModeCard({ mode, name, onCancel, onJump }: { mode: Mode 
   const media = message.kind === 'image' || message.kind === 'video';
 
   return (
-    <Animated.View style={[styles.wrapper, { height: height ? open.interpolate({ inputRange: [0, 1], outputRange: [0, height] }) : undefined, opacity: open }]}>
+    <Reanimated.View style={[styles.wrapper, wrapperStyle]}>
       <View onLayout={(event) => setHeight(event.nativeEvent.layout.height)} style={styles.measure}>
         <Pressable
           onPress={() => kind === 'reply' && onJump(message.id)}
@@ -76,7 +82,7 @@ export function ComposerModeCard({ mode, name, onCancel, onJump }: { mode: Mode 
           </IconButton>
         </Pressable>
       </View>
-    </Animated.View>
+    </Reanimated.View>
   );
 }
 

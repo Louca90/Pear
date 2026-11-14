@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
+import Reanimated, { FadeIn } from 'react-native-reanimated';
 
 import { Message } from '../../../chat/database';
 import { chat } from '../../../chat/manager';
@@ -41,18 +42,12 @@ function RepairRow({ contact, name, hasWallpaper }: { contact: string; name: str
   const styles = useStyles();
   const colors = useColors();
   const [pending, setPending] = useState(() => chat.isRepairPending(contact));
-  const fade = useRef(new Animated.Value(1)).current;
-  useEffect(() => {
-    if (!pending) return;
-    fade.setValue(0);
-    Animated.timing(fade, { toValue: 1, duration: 180, useNativeDriver: true }).start();
-  }, [pending, fade]);
   const muted = hasWallpaper ? colors.onMedia : colors.textMuted;
   return (
     <View style={[styles.repairRow, hasWallpaper && styles.metaPill]}>
       <Text style={[styles.systemText, styles.centered, { color: muted }]}>{t('chat.sessionCassee', { nom: name })}</Text>
       {pending ? (
-        <Animated.Text style={[styles.systemText, styles.centered, { color: muted, opacity: fade }]}>{t('chat.reparationDemandee')}</Animated.Text>
+        <Reanimated.Text entering={FadeIn.duration(180)} style={[styles.systemText, styles.centered, { color: muted }]}>{t('chat.reparationDemandee')}</Reanimated.Text>
       ) : (
         <Pressable
           accessibilityRole="button"

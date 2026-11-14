@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
-import Reanimated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
-import { DURATION, timing } from '../../../motion';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Reanimated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { DURATION, EASE, timing } from '../../../motion';
 import { Search, Timer } from 'lucide-react-native';
 import { DotsIcon } from '../../../components/AnimatedIcons';
 
@@ -49,9 +49,10 @@ export function ChatHeader({ contactKey, name, onBack, onInfo, onCustomize, onSe
   const { route, status } = chat.getLink(contactKey);
   const notes = isSelf(contactKey);
   // Mode éphémère : un fin liseré sous l'en-tête, qui apparaît et disparaît en fondu.
-  const edge = useRef(new Animated.Value(ephemeral ? 1 : 0)).current;
+  const edge = useSharedValue(ephemeral ? 1 : 0);
+  const edgeStyle = useAnimatedStyle(() => ({ opacity: edge.get() }));
   useEffect(() => {
-    Animated.timing(edge, { toValue: ephemeral ? 1 : 0, duration: motion.small, easing: motion.easing, useNativeDriver: true }).start();
+    edge.set(withTiming(ephemeral ? 1 : 0, { duration: motion.small, easing: EASE }));
   }, [ephemeral, edge]);
   // Connexion en cours avec ce contact : la petite poire en pointillés tourne à côté du nom.
   const connecting = !notes && chat.isOnline() && !chat.isContactOnline(contactKey) && status === 'connecting';
@@ -117,7 +118,7 @@ export function ChatHeader({ contactKey, name, onBack, onInfo, onCustomize, onSe
           </View>
         }
       />
-      <Animated.View pointerEvents="none" style={[styles.edge, { opacity: edge }]} />
+      <Reanimated.View pointerEvents="none" style={[styles.edge, edgeStyle]} />
     </View>
   );
 }

@@ -1,11 +1,13 @@
 import { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import Reanimated, { useAnimatedProps, useAnimatedStyle, useSharedValue, withDelay, withTiming, type SharedValue } from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
 import { Clock, Timer } from 'lucide-react-native';
 
 import { Message } from '../../../chat/database';
 import { isSelf } from '../../../chat/self';
 import { motion, useColors } from '../../../theme';
+import { EASE } from '../../../motion';
 
 import { formatTime } from '../format';
 import { scheduleLabel } from './ScheduleSheet';
@@ -13,7 +15,7 @@ import { useChatStyles } from '../styles';
 import { MetaTone } from '../types';
 import { t } from '../../../i18n';
 
-const AnimatedPath = Animated.createAnimatedComponent(Path);
+const AnimatedPath = Reanimated.createAnimatedComponent(Path);
 
 // Tracés des coches (ceux de Check et CheckCheck de lucide, sur 24 points).
 const SINGLE = 'M20 6 9 17l-5-5';
@@ -23,18 +25,24 @@ const SECOND = 'M13 16l1.5 1.5L22 10';
 const SECOND_LENGTH = 13;
 const SIZE = 14;
 
-function Ticks({ double, color, draw }: { double: boolean; color: string; draw?: Animated.Value }) {
+function Ticks({ double, color, draw }: { double: boolean; color: string; draw?: SharedValue<number> }) {
   return (
     <Svg width={SIZE} height={SIZE} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.75 * (24 / SIZE)} strokeLinecap="round" strokeLinejoin="round">
       <Path d={double ? FIRST : SINGLE} />
       {double &&
         (draw ? (
-          <AnimatedPath d={SECOND} strokeDasharray={SECOND_LENGTH} strokeDashoffset={draw.interpolate({ inputRange: [0, 1], outputRange: [SECOND_LENGTH, 0] })} />
+          <DrawnPath draw={draw} />
         ) : (
           <Path d={SECOND} />
         ))}
     </Svg>
   );
+}
+
+// La seconde coche, tracée sur le fil de l'interface.
+function DrawnPath({ draw }: { draw: SharedValue<number> }) {
+  const props = useAnimatedProps(() => ({ strokeDashoffset: SECOND_LENGTH * (1 - draw.get()) }));
+  return <AnimatedPath d={SECOND} strokeDasharray={SECOND_LENGTH} animatedProps={props} />;
 }
 
 // 1 coche : pas encore reçu. 2 coches grises : reçu. 2 coches poire : lu (conversation ouverte par l'autre).
@@ -43,25 +51,25 @@ function Ticks({ double, color, draw }: { double: boolean; color: string; draw?:
 export function StatusTicks({ status, tone }: { status: Message['status']; tone: MetaTone }) {
   const colors = useColors();
   const previous = useRef(status);
-  const draw = useRef(new Animated.Value(1)).current;
-  const tint = useRef(new Animated.Value(status === 'read' ? 1 : 0)).current;
+  const draw = useSharedValue(1);
+  const tint = useSharedValue(status === 'read' ? 1 : 0);
+  const tintStyle = useAnimatedStyle(() => ({ opacity: tint.get() }));
 
   useEffect(() => {
     const from = previous.current;
     previous.current = status;
     if (from === status) return;
     const read = status === 'read';
-    const steps: Animated.CompositeAnimation[] = [];
     // La seconde coche se dessine quand elle apparaît (envoyé → reçu ou lu), et se redessine au passage
-    // de reçu à lu, avant de changer de couleur. Le tracé SVG ne passe pas par le fil natif.
+    // de reçu à lu, avant de changer de couleur.
     const appears = status === 'delivered' && from !== 'read';
-    if (appears || (read && from !== 'read')) {
-      draw.setValue(0);
-      steps.push(Animated.timing(draw, { toValue: 1, duration: motion.small, easing: motion.easing, useNativeDriver: false }));
+    const drawn = appears || (read && from !== 'read');
+    if (drawn) {
+      draw.set(0);
+      draw.set(withTiming(1, { duration: motion.small, easing: EASE }));
     }
-    tint.setValue(0);
-    if (read) steps.push(Animated.timing(tint, { toValue: 1, duration: motion.small, easing: motion.easing, useNativeDriver: true }));
-    Animated.sequence(steps).start();
+    tint.set(0);
+    if (read) tint.set(withDelay(drawn ? motion.small : 0, withTiming(1, { duration: motion.small, easing: EASE })));
   }, [status, draw, tint]);
 
   if (status === 'scheduled') return <Clock size={SIZE} color={tone.muted} strokeWidth={1.75} accessibilityLabel={t('programme.programme')} />;
@@ -71,9 +79,9 @@ export function StatusTicks({ status, tone }: { status: Message['status']; tone:
     <View accessible accessibilityLabel={label}>
       <Ticks double={double} color={tone.muted} draw={draw} />
       {status === 'read' && (
-        <Animated.View style={[StyleSheet.absoluteFill, { opacity: tint }]}>
+        <Reanimated.View style={[StyleSheet.absoluteFill, tintStyle]}>
           <Ticks double color={colors.signatureStrong} />
-        </Animated.View>
+        </Reanimated.View>
       )}
     </View>
   );

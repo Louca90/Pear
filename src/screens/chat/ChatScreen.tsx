@@ -1,5 +1,7 @@
 import { ComponentRef, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { Animated, FlatList, Image, Keyboard, KeyboardAvoidingView, Linking, PermissionsAndroid, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, Image, Keyboard, KeyboardAvoidingView, Linking, PermissionsAndroid, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import Reanimated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { EASE } from '../../motion';
 import { BlurTargetView } from 'expo-blur';
 import * as Clipboard from 'expo-clipboard';
 import * as DocumentPicker from 'expo-document-picker';
@@ -163,10 +165,11 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
   // Date collante (lot 3.4) : pendant qu'on fait défiler, le jour des messages du haut de l'écran.
   // Effacée 800 ms après l'arrêt du défilement.
   const [stickyDay, setStickyDay] = useState('');
-  const stickyOpacity = useRef(new Animated.Value(0)).current;
+  const stickyOpacity = useSharedValue(0);
+  const stickyStyle = useAnimatedStyle(() => ({ opacity: stickyOpacity.get() }));
   const stickyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showSticky = (visible: boolean) =>
-    Animated.timing(stickyOpacity, { toValue: visible ? 1 : 0, duration: motion.small, easing: motion.easing, useNativeDriver: true }).start();
+    stickyOpacity.set(withTiming(visible ? 1 : 0, { duration: motion.small, easing: EASE }));
   const stickyProps = {
     onScrollBeginDrag: () => {
       if (stickyTimer.current) clearTimeout(stickyTimer.current);
@@ -669,9 +672,9 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
               windowSize={11}
             />
             {stickyDay !== '' && (
-              <Animated.View pointerEvents="none" style={[styles.sticky, { opacity: stickyOpacity }]}>
+              <Reanimated.View pointerEvents="none" style={[styles.sticky, stickyStyle]}>
                 <Text style={styles.stickyText}>{stickyDay}</Text>
-              </Animated.View>
+              </Reanimated.View>
             )}
             </View>
           )}
