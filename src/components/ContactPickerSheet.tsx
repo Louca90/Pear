@@ -140,7 +140,8 @@ export function ContactPickerSheet({ title, contacts, onSend, onClose }: Props) 
             <Pressable onPress={() => toggle(item.publicKey)} style={({ pressed }) => [styles.row, pressed && styles.pressed]} accessibilityState={{ checked: selected.includes(item.publicKey) }}>
               <Avatar uri={getContactProfile(item.publicKey).photo_uri} size={40} />
               <View style={styles.nameLine}>
-                <Text style={styles.name} numberOfLines={1}>{item.name}</Text>              </View>
+                <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
+              </View>
               <CheckBox checked={selected.includes(item.publicKey)} />
             </Pressable>
           )}

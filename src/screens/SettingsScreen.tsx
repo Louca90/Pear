@@ -174,7 +174,8 @@ export function SettingsScreen({ onBack, onDiagnostic, onBlocked, onStorage, onS
           <SettingRow icon={Sparkles} label={t('nouveautes.decouvrir')} onPress={onDiscover} />
           {__DEV__ && <SettingRow icon={RefreshCw} label={t('reglages.revoirPriseEnMain')} onPress={onReplayOnboarding} chevron={false} />}
         </SettingsGroup>
-      </ScrollView>      {whatsNewOpen && <WhatsNew pages={currentPages} onClose={() => setWhatsNewOpen(false)} />}
+      </ScrollView>
+      {whatsNewOpen && <WhatsNew pages={currentPages} onClose={() => setWhatsNewOpen(false)} />}
       {languageOpen && <LanguageSheet onClose={() => setLanguageOpen(false)} />}
     </Screen>
   );
