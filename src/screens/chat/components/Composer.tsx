@@ -1,11 +1,12 @@
-import { ComponentRef, RefObject, useMemo } from 'react';
+import { ComponentRef, RefObject, useEffect, useMemo, useState } from 'react';
 import { Animated, findNodeHandle, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { setIncognitoKeyboard } from '../../../../modules/pear-native';
-import { ArrowUp, Check, ChevronUp, Lock, Mic, Smile, Trash2 } from 'lucide-react-native';
+import { ArrowUp, Check, ChevronUp, Lock, Smile, Trash2 } from 'lucide-react-native';
 
 import { Message } from '../../../chat/database';
 import { MAX_TEXT_LENGTH } from '../../../chat/manager';
 import { IconButton, useNavigationBarHeight } from '../../../components/ui';
+import { MicIcon, SendIcon } from '../../../components/AnimatedIcons';
 import { createStyles, fixed, radius, spacing, useColors } from '../../../theme';
 
 import { VOICE_CANCEL_DISTANCE, VOICE_LOCK_DISTANCE } from '../constants';
@@ -73,6 +74,12 @@ export function Composer({
   const colors = useColors();
   const bottom = useNavigationBarHeight();
   const voice = useVoiceRecorder(onVoiceRecorded, onVoiceTooShort);
+  // Les icônes jouent leur geste : l'avion part à chaque envoi, les ondes s'allument quand le micro est tenu.
+  const [sent, setSent] = useState(0);
+  const [holds, setHolds] = useState(0);
+  useEffect(() => {
+    if (voice.phase === 'holding') setHolds((count) => count + 1);
+  }, [voice.phase]);
   useBackInterceptor(attachOpen, onCloseAttach);
   // Le micro devient progressivement une poubelle, au fil du glissé vers la gauche.
   const trashAmount = voice.dragX.interpolate({ inputRange: [-VOICE_CANCEL_DISTANCE, -VOICE_CANCEL_DISTANCE * 0.2], outputRange: [1, 0], extrapolate: 'clamp' });
@@ -131,14 +138,17 @@ export function Composer({
         )}
         {(draft.trim() || editing) && voice.phase === 'idle' ? (
           <IconButton
-            onPress={onSend}
+            onPress={() => {
+              setSent((count) => count + 1);
+              onSend();
+            }}
             onLongPress={editing ? undefined : onSchedule}
             disabled={!draft.trim()}
             label={editing ? t('commun.enregistrer') : t('chat.envoyer')}
             hitSlop={0}
             style={[styles.send, !draft.trim() && styles.sendDisabled]}
           >
-            {editing ? <Check size={20} color={colors.onSignature} strokeWidth={2} /> : <ArrowUp size={20} color={colors.onSignature} strokeWidth={2} />}
+            {editing ? <Check size={20} color={colors.onSignature} strokeWidth={2} /> : <SendIcon size={20} color={colors.onSignature} strokeWidth={2} play={sent} />}
           </IconButton>
         ) : (
           <Animated.View
@@ -151,8 +161,14 @@ export function Composer({
               <Trash2 size={20} color={fixed.white} strokeWidth={2} />
             </Animated.View>
             <Animated.View style={[styles.micLayer, { opacity: Animated.multiply(Animated.subtract(1, trashAmount), Animated.subtract(1, voice.lockProgress)) }]}>
-              <Mic size={20} color={colors.onSignature} strokeWidth={2} />
+              <MicIcon size={20} color={colors.onSignature} strokeWidth={2} play={holds} />
             </Animated.View>
+            {/* Le message vient de partir : l'avion s'envole par-dessus le micro qui a repris sa place. */}
+            {sent > 0 && (
+              <View key={sent} pointerEvents="none" style={styles.micLayer}>
+                <SendIcon size={20} color={colors.onSignature} strokeWidth={2} away autoPlay />
+              </View>
+            )}
             <Animated.View style={[styles.micLayer, { opacity: voice.lockProgress }]}>
               <ArrowUp size={20} color={colors.onSignature} strokeWidth={2} />
             </Animated.View>

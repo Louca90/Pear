@@ -1,8 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import Reanimated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { DURATION, timing } from '../../../motion';
-import { EllipsisVertical, Search, Timer } from 'lucide-react-native';
+import { Search, Timer } from 'lucide-react-native';
+import { DotsIcon } from '../../../components/AnimatedIcons';
 
 import { getContactProfile } from '../../../chat/database';
 import { Pear } from '../../../components/Pear';
@@ -44,6 +45,7 @@ export function ChatHeader({ contactKey, name, onBack, onInfo, onCustomize, onSe
   const colors = useColors();
   const styles = useStyles();
   const photo = getContactProfile(contactKey).photo_uri;
+  const [dots, setDots] = useState(0);
   const { route, status } = chat.getLink(contactKey);
   const notes = isSelf(contactKey);
   // Mode éphémère : un fin liseré sous l'en-tête, qui apparaît et disparaît en fondu.
@@ -102,8 +104,14 @@ export function ChatHeader({ contactKey, name, onBack, onInfo, onCustomize, onSe
               <Search size={22} color={colors.text} strokeWidth={1.75} />
             </IconButton>
             {!notes && (
-              <IconButton onPress={onMenu} label={t('chat.plusOptions')}>
-                <EllipsisVertical size={24} color={colors.text} strokeWidth={1.75} />
+              <IconButton
+                onPress={() => {
+                  setDots((count) => count + 1);
+                  onMenu();
+                }}
+                label={t('chat.plusOptions')}
+              >
+                <DotsIcon size={24} color={colors.text} play={dots} />
               </IconButton>
             )}
           </View>

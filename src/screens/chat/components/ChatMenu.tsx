@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Reanimated, { ReduceMotion, withDelay, withTiming, type EntryExitAnimationFunction } from 'react-native-reanimated';
 
 import { useInsets } from '../../../components/ui';
+import type { AnimatedIconProps } from '../../../components/AnimatedIcons';
 import { t } from '../../../i18n';
 import { DURATION, EASE, exitFade } from '../../../motion';
 import { useBackInterceptor } from '../../../navigation/backInterceptors';
@@ -10,6 +11,8 @@ import { createStyles, spacing, useColors } from '../../../theme';
 
 export type ChatMenuItem = {
   icon: ComponentType<{ size: number; color: string; strokeWidth: number }>;
+  // Une icône animée (planche Icônes) : elle joue son geste une fois, à l'ouverture du menu.
+  animated?: ComponentType<AnimatedIconProps>;
   label: string;
   // À droite, en gris (réglage en cours : « 1 h », « Toutes »…).
   value?: string;
@@ -82,7 +85,7 @@ export function ChatMenu({ items, onClose }: { items: ChatMenuItem[]; onClose: (
                   accessibilityLabel={item.value ? `${item.label}, ${item.value}` : item.label}
                   style={({ pressed }) => [styles.item, pressed && styles.itemPressed]}
                 >
-                  <Icon size={19} color={color} strokeWidth={1.8} />
+                  {item.animated ? <item.animated size={19} color={color} strokeWidth={1.8} autoPlay delay={180 + index * ITEM_STEP} /> : <Icon size={19} color={color} strokeWidth={1.8} />}
                   <Text style={[styles.label, { color }]} numberOfLines={1}>
                     {item.label}
                   </Text>

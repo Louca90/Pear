@@ -10,6 +10,7 @@ import { BackupSheet } from '../../components/BackupSheet';
 import { showDialog } from '../../components/dialog';
 import { LanguageSheet } from '../../components/LanguageSheet';
 import { Pear } from '../../components/Pear';
+import { LockIcon } from '../../components/AnimatedIcons';
 import { SegmentedControl } from '../../components/SegmentedControl';
 import { SettingRow, SettingsGroup } from '../../components/SettingsGroup';
 import { Toggle } from '../../components/Toggle';
@@ -208,15 +209,18 @@ function LockCard({ on, onChange }: { on: boolean; onChange: (value: boolean) =>
   const colors = useColors();
   const styles = useStyles();
   const lit = useSharedValue(on ? 1 : 0);
+  // Le voyant du cadenas s'allume chaque fois que le verrou est activé.
+  const [lights, setLights] = useState(0);
   useEffect(() => {
     lit.set(timing(on ? 1 : 0, 260));
+    if (on) setLights((count) => count + 1);
   }, [on, lit]);
   const back = useAnimatedStyle(() => ({ opacity: lit.get() }));
   return (
     <View style={styles.lockCard}>
       <Reanimated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.lockLit, back]} />
       <View style={styles.bannerIcon}>
-        <Lock size={22} color={on ? colors.onSignature : colors.text} strokeWidth={1.8} />
+        <LockIcon size={22} color={on ? colors.onSignature : colors.text} strokeWidth={1.8} play={lights} />
       </View>
       <View style={styles.flex}>
         <Text style={[styles.lockTitle, on && { color: colors.onSignature }]}>{t('reglages.verrou')}</Text>

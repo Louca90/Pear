@@ -24,6 +24,7 @@ import { bubblePalette, createStyles, motion, radius, spacing, useColors } from 
 import { ChatHeader } from './components/ChatHeader';
 import { ChatSearch } from './components/ChatSearch';
 import { ChatMenu, ChatMenuItem } from './components/ChatMenu';
+import { BellIcon, PinIcon, TrashIcon } from '../../components/AnimatedIcons';
 import { LocationSheet, ShareChoice } from './components/LocationSheet';
 import { DraftPreviewCard } from './components/LinkPreview';
 import { StickerSheet } from './components/StickerSheet';
@@ -372,13 +373,13 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
   const scheduledActions = (message: Message): Action[] => [
     { label: t('programme.envoyerMaintenant'), icon: Send, onPress: () => chat.sendScheduledNow(contactKey, message.id) },
     { label: t('chat.copier'), icon: Copy, onPress: () => Clipboard.setStringAsync(message.text) },
-    { label: t('programme.annuler'), icon: Trash2, danger: true, onPress: () => chat.deleteForMe(contactKey, message.id) },
+    { label: t('programme.annuler'), icon: Trash2, animated: TrashIcon, danger: true, onPress: () => chat.deleteForMe(contactKey, message.id) },
   ];
 
   // Un média à vue unique ne se copie, ne se transfère, ne s'enregistre ni ne s'épingle.
   const onceActions = (message: Message): Action[] => [
     { label: t('chat.repondre'), icon: Reply, onPress: () => startReply(message) },
-    { label: t('commun.supprimer'), icon: Trash2, danger: true, onPress: () => confirmDelete(message) },
+    { label: t('commun.supprimer'), icon: Trash2, animated: TrashIcon, danger: true, onPress: () => confirmDelete(message) },
   ];
 
   const actionsFor = (message: Message): Action[] => message.status === 'scheduled' ? scheduledActions(message) : message.view_once ? onceActions(message) : [
@@ -408,8 +409,8 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
       : [{ label: t('transfert.transferer'), icon: Forward, onPress: () => setForwarding(message) }]),
     message.pinned
       ? { label: t('chat.desepingler'), icon: PinOff, onPress: () => chat.pin(contactKey, message.id, false) }
-      : { label: t('chat.epingler'), icon: Pin, onPress: () => chat.pin(contactKey, message.id, true) },
-    { label: t('commun.supprimer'), icon: Trash2, danger: true, onPress: () => confirmDelete(message) },
+      : { label: t('chat.epingler'), icon: Pin, animated: PinIcon, onPress: () => chat.pin(contactKey, message.id, true) },
+    { label: t('commun.supprimer'), icon: Trash2, animated: TrashIcon, danger: true, onPress: () => confirmDelete(message) },
   ];
 
   const cancelComposerMode = () => {
@@ -558,11 +559,12 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
     { icon: Search, label: t('recherche.dansConversation'), onPress: () => setSearching(true) },
     { icon: Palette, label: t('chat.personnaliser'), onPress: onCustomize },
     { icon: Timer, label: t('contact.ephemeres'), value: ephemeral ? ephemeralLabel(ephemeral, true) : t('menu.non'), onPress: chooseEphemeral },
-    { icon: Bell, label: t('contact.notifications'), value: mutedKinds === 0 ? t('menu.toutes') : mutedKinds >= 5 ? t('menu.coupees') : t('menu.certaines'), onPress: onNotifications },
+    { icon: Bell, animated: BellIcon, label: t('contact.notifications'), value: mutedKinds === 0 ? t('menu.toutes') : mutedKinds >= 5 ? t('menu.coupees') : t('menu.certaines'), onPress: onNotifications },
     { icon: MapPin, label: t('menu.partagerPosition'), onPress: shareLocation },
     { icon: Images, label: t('menu.medias'), onPress: onMedia },
     {
       icon: Trash2,
+      animated: TrashIcon,
       label: t('menu.vider'),
       danger: true,
       separated: true,

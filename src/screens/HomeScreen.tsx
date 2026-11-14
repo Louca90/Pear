@@ -1,5 +1,6 @@
 import { Map as MapIcon } from 'lucide-react-native';
 import { openMap } from '../map/openMap';
+import { PinIcon, TrashIcon } from '../components/AnimatedIcons';
 import { ComponentRef, memo, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import Reanimated, { LayoutAnimationConfig, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
@@ -409,8 +410,8 @@ export function HomeScreen({ contacts, onAdd, onOpen, onRequests, permissionMiss
             </View>
           }
           onClose={() => setSelected(null)}
-          actions={isSelf(selected.item.contact.publicKey) ? [{ label: t('liste.supprimer'), icon: Trash2, danger: true, onPress: () => confirmDelete(selected.item) }] : [
-            { label: selected.item.pinned ? t('liste.desepingler') : t('liste.epingler'), icon: selected.item.pinned ? PinOff : Pin, onPress: () => togglePin(selected.item) },
+          actions={isSelf(selected.item.contact.publicKey) ? [{ label: t('liste.supprimer'), icon: Trash2, animated: TrashIcon, danger: true, onPress: () => confirmDelete(selected.item) }] : [
+            { label: selected.item.pinned ? t('liste.desepingler') : t('liste.epingler'), icon: selected.item.pinned ? PinOff : Pin, animated: selected.item.pinned ? undefined : PinIcon, onPress: () => togglePin(selected.item) },
             ...(selected.item.unread > 0
               ? [
                   {
@@ -420,7 +421,7 @@ export function HomeScreen({ contacts, onAdd, onOpen, onRequests, permissionMiss
                   },
                 ]
               : []),
-            { label: t('liste.supprimer'), icon: Trash2, danger: true, onPress: () => confirmDelete(selected.item) },
+            { label: t('liste.supprimer'), icon: Trash2, animated: TrashIcon, danger: true, onPress: () => confirmDelete(selected.item) },
           ]}
         />
       )}

@@ -166,9 +166,9 @@ export function MessageSelection({ message, name, palettes, position, avatar, re
       </Animated.View>
 
       <Animated.View style={[styles.actionsMenu, edge, { top: targetY + previewHeight + SELECTION_GAP }, appear]}>
-        {actions.map(({ label, icon: Icon, onPress, danger }) => (
+        {actions.map(({ label, icon: Icon, animated: Animated_, onPress, danger }, index) => (
           <Pressable key={label} onPress={() => dismiss(onPress)} style={({ pressed }) => [styles.action, pressed && styles.actionPressed]}>
-            <Icon size={20} color={danger ? colors.danger : colors.text} strokeWidth={1.75} />
+            {Animated_ ? <Animated_ size={20} color={danger ? colors.danger : colors.text} strokeWidth={1.75} autoPlay delay={200 + index * 40} /> : <Icon size={20} color={danger ? colors.danger : colors.text} strokeWidth={1.75} />}
             <Text style={[styles.actionLabel, danger && { color: colors.danger }]}>{label}</Text>
           </Pressable>
         ))}

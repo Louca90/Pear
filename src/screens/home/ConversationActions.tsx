@@ -1,6 +1,8 @@
 import { ReactNode, useEffect, useRef } from 'react';
 import { Animated, Easing, Modal, Pressable, StyleSheet, Text, useWindowDimensions } from 'react-native';
 import { LucideIcon } from 'lucide-react-native';
+import type { ComponentType } from 'react';
+import type { AnimatedIconProps } from '../../components/AnimatedIcons';
 
 import { t } from '../../i18n';
 import { createStyles, radius, spacing, useColors } from '../../theme';
@@ -11,7 +13,8 @@ const EASING = Easing.bezier(0.2, 0.8, 0.2, 1);
 const MENU_GAP = spacing.sm;
 const ITEM_HEIGHT = 48;
 
-export type ConversationAction = { label: string; icon: LucideIcon; onPress: () => void; danger?: boolean };
+// animated : l'icône animée de la planche Icônes, qui joue son geste à l'ouverture.
+export type ConversationAction = { label: string; icon: LucideIcon; animated?: ComponentType<AnimatedIconProps>; onPress: () => void; danger?: boolean };
 export type Rect = { x: number; y: number; width: number; height: number };
 
 type Props = {
@@ -72,9 +75,9 @@ export function ConversationActions({ rect, row, actions, onClose }: Props) {
           },
         ]}
       >
-        {actions.map(({ label, icon: Icon, onPress, danger }) => (
+        {actions.map(({ label, icon: Icon, animated: Animated_, onPress, danger }, index) => (
           <Pressable key={label} onPress={() => close(onPress)} style={({ pressed }) => [styles.item, pressed && styles.pressed]}>
-            <Icon size={20} color={danger ? colors.danger : colors.text} strokeWidth={1.75} />
+            {Animated_ ? <Animated_ size={20} color={danger ? colors.danger : colors.text} strokeWidth={1.75} autoPlay delay={200 + index * 40} /> : <Icon size={20} color={danger ? colors.danger : colors.text} strokeWidth={1.75} />}
             <Text style={[styles.label, danger && styles.danger]}>{label}</Text>
           </Pressable>
         ))}
