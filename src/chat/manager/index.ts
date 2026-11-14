@@ -19,7 +19,7 @@ import { publishMyToken, retryAll, watch } from './connections';
 import { ChatCore } from './core';
 import { addSystemMessage, applyEphemeral, ephemeralFor, ephemeralSettingTime, flush, lastEphemeralChoice, sendEvent } from './outbox';
 import { expiryFor } from '../ephemeral';
-import { sharedLocationId, startLocation, stopLocation, tickLocations } from './location';
+import { sharedLocationId, startLocation, stopLocation, stopOpenLocations, tickLocations } from './location';
 import { isRepairPending, requestRepair } from './sessions';
 import { getMyProfile, saveProfile, shareProfile } from './profile';
 import { acceptFile, closeIncomingFiles, dropIncomingFile, refuseFile, sendFile } from './transfers';
@@ -390,15 +390,20 @@ class ChatManager extends ChatCore {
 
   // Partage ma position avec ce contact pendant `seconds`, seulement par la connexion directe.
   // false si le téléphone ne donne aucune position.
-  startLocation(contact: string, seconds: number) {
+  // open : « tant que l'app est ouverte » (seconds ignoré).
+  startLocation(contact: string, seconds: number, open = false) {
     if (isSelf(contact)) return false;
-    const started = startLocation(this, contact, seconds);
+    const started = startLocation(this, contact, seconds, open);
     if (started) reconcile(this);
     return started;
   }
 
   stopLocation(contact: string) {
     stopLocation(this, contact);
+  }
+
+  stopOpenLocations() {
+    stopOpenLocations(this);
   }
 
   // Je partage ma position avec ce contact en ce moment.

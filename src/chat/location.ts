@@ -4,6 +4,9 @@
 // jamais par push ni par le relais : sans connexion, rien ne part et rien n'attend sur un serveur.
 
 export const LOCATION_DURATIONS = [15 * 60, 3600, 8 * 3600] as const;
+// « Tant que l'app est ouverte » : la fin glisse de cette durée à chaque position envoyée, et le partage
+// s'arrête dès que Pear passe en arrière-plan. Si le téléphone coupe Pear d'un coup, il finit seul.
+export const OPEN_SHARE_WINDOW_S = 10 * 60;
 // Durée la plus longue acceptée d'un contact, avec une marge pour une horloge décalée.
 const MAX_SHARE_MS = (8 * 3600 + 600) * 1000;
 
@@ -14,6 +17,8 @@ export type SharedLocation = {
   at: number;
   // Fin du partage. Passée (ou égale à at) : le partage est terminé.
   until: number;
+  // Partage « tant que l'app est ouverte » (la fin affichée n'a alors pas de sens).
+  open?: true;
 };
 
 const isCoordinate = (value: unknown, max: number): value is number => typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= max;
@@ -22,10 +27,10 @@ const isTime = (value: unknown): value is number => Number.isSafeInteger(value) 
 // Une position reçue de l'autre téléphone, ou relue dans la base. null si un champ n'est pas valide.
 export function parseLocation(value: unknown): SharedLocation | null {
   if (value === null || typeof value !== 'object') return null;
-  const { latitude, longitude, at, until } = value as Record<string, unknown>;
+  const { latitude, longitude, at, until, open } = value as Record<string, unknown>;
   if (!isCoordinate(latitude, 90) || !isCoordinate(longitude, 180) || !isTime(at) || !isTime(until)) return null;
   // Une fin trop lointaine est ramenée à la durée maximale.
-  return { latitude, longitude, at, until: Math.min(until, at + MAX_SHARE_MS) };
+  return { latitude, longitude, at, until: Math.min(until, at + MAX_SHARE_MS), ...(open === true ? { open: true as const } : {}) };
 }
 
 export function parseLocationText(text: string): SharedLocation | null {

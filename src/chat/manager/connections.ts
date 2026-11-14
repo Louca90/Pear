@@ -7,6 +7,7 @@ import { PeerLink } from '../../network/peer';
 import { publishTokens } from '../../network/tokens';
 import { recordPush } from '../../diagnostics';
 
+import { stopOpenLocations } from './location';
 import { ChatCore } from './core';
 import { receivePush } from './incoming';
 import { receive } from './messageIO';
@@ -91,7 +92,11 @@ export function watch(core: ChatCore) {
   addNetworkStateListener(update);
 
   // Pear passe au premier plan ou en arrière-plan : le contact doit le savoir sans attendre 4 s.
-  AppState.addEventListener('change', () => core.links.forEach((link) => link.peer.beat()));
+  AppState.addEventListener('change', (state) => {
+    core.links.forEach((link) => link.peer.beat());
+    // « Tant que l'app est ouverte » : Pear quitte le premier plan, le partage s'arrête (le contact le voit).
+    if (state === 'background') stopOpenLocations(core);
+  });
 
   const messaging = getMessaging();
   getToken(messaging)

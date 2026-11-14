@@ -3,7 +3,7 @@ import { randombytes_buf, to_base64 } from 'react-native-libsodium';
 
 import { lastKnownLocation } from '../../../modules/pear-native';
 import { addMessage, getMessage, getSetting, setLocationText, setSetting } from '../database';
-import { isSharing, locationText, parseLocation, parseLocationText, SharedLocation } from '../location';
+import { isSharing, locationText, OPEN_SHARE_WINDOW_S, parseLocation, parseLocationText, SharedLocation } from '../location';
 import { log } from '../../log';
 
 import { ChatCore } from './core';
@@ -22,7 +22,12 @@ import { Payload } from './types';
 const KEEP_MS = 60 * 1000;
 const SHARES_KEY = 'location_shares';
 
-type Share = { id: string; until: number };
+// open : « tant que l'app est ouverte » (voir OPEN_SHARE_WINDOW_S).
+type Share = { id: string; until: number; open?: boolean };
+
+// Un partage « app ouverte » laissé par un lancement précédent (Pear fermé) s'arrête au premier tour.
+const launchedAt = Date.now();
+const openSince = new Map<string, number>();
 
 // Mes partages en cours, par contact. Gardés dans les réglages : un partage reprend si Pear est rouvert
 // avant sa fin.
@@ -34,7 +39,7 @@ function loadShares(): Map<string, Share> {
   try {
     const saved = JSON.parse(getSetting(SHARES_KEY) ?? '{}') as Record<string, Share>;
     for (const [contact, share] of Object.entries(saved)) {
-      if (typeof share?.id === 'string' && typeof share?.until === 'number') shares.set(contact, share);
+      if (typeof share?.id === 'string' && typeof share?.until === 'number') shares.set(contact, { id: share.id, until: share.until, ...(share.open ? { open: true } : {}) });
     }
   } catch {
     // Réglage illisible : aucun partage en cours.
@@ -61,16 +66,18 @@ export function sharedLocationId(contact: string): string | null {
 
 // Commence à partager ma position avec ce contact pendant `seconds`. false si le téléphone ne donne
 // aucune position (autorisation refusée, localisation coupée).
-export function startLocation(core: ChatCore, contact: string, seconds: number): boolean {
+export function startLocation(core: ChatCore, contact: string, seconds: number, open = false): boolean {
   const position = lastKnownLocation();
   if (!position) return false;
   // Un seul partage par contact : le précédent s'arrête.
   stopLocation(core, contact);
   const now = Date.now();
   const id = to_base64(randombytes_buf(16));
-  const location: SharedLocation = { ...position, at: now, until: now + seconds * 1000 };
+  const until = now + (open ? OPEN_SHARE_WINDOW_S : seconds) * 1000;
+  const location: SharedLocation = { ...position, at: now, until, ...(open ? { open: true as const } : {}) };
   addMessage({ id, contact, mine: 1, text: locationText(location), status: 'read', created_at: now, kind: 'location', conn_session: core.sessionFor(contact) });
-  loadShares().set(contact, { id, until: location.until });
+  loadShares().set(contact, { id, until, ...(open ? { open: true } : {}) });
+  if (open) openSince.set(contact, now);
   saveShares();
   core.keepConnected(contact, KEEP_MS);
   send(core, contact, id, location);
@@ -87,7 +94,8 @@ export function stopLocation(core: ChatCore, contact: string) {
   const current = parseLocationText(getMessage(share.id, contact)?.text ?? '');
   if (current) {
     const now = Date.now();
-    const ended: SharedLocation = { ...current, at: now, until: now };
+    const { open: _open, ...rest } = current;
+    const ended: SharedLocation = { ...rest, at: now, until: now };
     setLocationText(share.id, contact, 1, locationText(ended));
     send(core, contact, share.id, ended);
   }
@@ -102,7 +110,9 @@ export function tickLocations(core: ChatCore) {
   const now = Date.now();
   let changed = false;
   for (const [contact, share] of [...all]) {
-    if (now >= share.until || !getMessage(share.id, contact)) {
+    // « App ouverte » : arrêté si Pear n'est plus au premier plan, ou s'il vient d'un lancement précédent.
+    const staleOpen = share.open && (AppState.currentState !== 'active' || (openSince.get(contact) ?? 0) < launchedAt);
+    if (staleOpen || now >= share.until || !getMessage(share.id, contact)) {
       // Fini, ou message supprimé : plus rien ne part.
       stopLocation(core, contact);
       continue;
@@ -110,12 +120,21 @@ export function tickLocations(core: ChatCore) {
     core.keepConnected(contact, KEEP_MS);
     const position = lastKnownLocation();
     if (!position) continue;
-    const location: SharedLocation = { ...position, at: now, until: share.until };
+    if (share.open) {
+      share.until = now + OPEN_SHARE_WINDOW_S * 1000;
+      saveShares();
+    }
+    const location: SharedLocation = { ...position, at: now, until: share.until, ...(share.open ? { open: true as const } : {}) };
     setLocationText(share.id, contact, 1, locationText(location));
     send(core, contact, share.id, location);
     changed = true;
   }
   if (changed) core.notify();
+}
+
+// Pear passe en arrière-plan : les partages « tant que l'app est ouverte » s'arrêtent tout de suite.
+export function stopOpenLocations(core: ChatCore) {
+  for (const [contact, share] of [...loadShares()]) if (share.open) stopLocation(core, contact);
 }
 
 // Une position reçue du contact (première ou mise à jour d'un partage déjà affiché).

@@ -24,12 +24,12 @@ import { bubblePalette, createStyles, motion, radius, spacing, useColors } from 
 import { ChatHeader } from './components/ChatHeader';
 import { ChatSearch } from './components/ChatSearch';
 import { ChatMenu, ChatMenuItem } from './components/ChatMenu';
+import { LocationSheet, ShareChoice } from './components/LocationSheet';
 import { DraftPreviewCard } from './components/LinkPreview';
 import { StickerSheet } from './components/StickerSheet';
 import { useDraftPreview } from '../../chat/linkPreview';
 import { isSelf, SELF } from '../../chat/self';
 import { EPHEMERAL_CHOICES } from '../../chat/ephemeral';
-import { LOCATION_DURATIONS } from '../../chat/location';
 import { useEphemeralPull } from './hooks/useEphemeralPull';
 import { PullPear, PullView } from '../../components/pull';
 import { Composer } from './components/Composer';
@@ -463,32 +463,30 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
     });
   };
 
-  // Position en direct (lot 4.8) : la durée, puis l'autorisation de position (approximative), puis le partage.
+  // Position en direct : la feuille de choix (durée ou « tant que l'app est ouverte »), puis l'autorisation
+  // de position (approximative), puis le partage.
+  const [locationOpen, setLocationOpen] = useState(false);
   const shareLocation = () => {
     setAttachOpen(false);
-    const start = async (seconds: number) => {
-      try {
-        const granted = (await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION)) === PermissionsAndroid.RESULTS.GRANTED;
-        if (!granted) {
-          showDialog(t('position.refusee'), t('position.refuseeAide'), [
-            { label: t('commun.ouvrirReglages'), onPress: () => Linking.openSettings() },
-            { label: t('commun.annuler'), style: 'cancel' },
-          ]);
-          return;
-        }
-        if (chat.startLocation(contactKey, seconds)) scroll.followSent();
-        else showDialog(t('position.indisponible'), t('position.indisponibleAide'));
-      } catch (e) {
-        showDialog(t('position.indisponible'), String(e));
-      }
-    };
-    const labels = [t('position.min15'), t('position.h1'), t('position.h8')];
-    showDialog(t('position.partager'), t('position.aide'), [
-      ...LOCATION_DURATIONS.map((seconds, index) => ({ label: labels[index], onPress: () => void start(seconds) })),
-      { label: t('commun.annuler'), style: 'cancel' as const },
-    ]);
+    setLocationOpen(true);
   };
-
+  const startSharing = async ({ seconds, open }: ShareChoice) => {
+    setLocationOpen(false);
+    try {
+      const granted = (await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION)) === PermissionsAndroid.RESULTS.GRANTED;
+      if (!granted) {
+        showDialog(t('position.refusee'), t('position.refuseeAide'), [
+          { label: t('commun.ouvrirReglages'), onPress: () => Linking.openSettings() },
+          { label: t('commun.annuler'), style: 'cancel' },
+        ]);
+        return;
+      }
+      if (chat.startLocation(contactKey, seconds, open)) scroll.followSent();
+      else showDialog(t('position.indisponible'), t('position.indisponibleAide'));
+    } catch (e) {
+      showDialog(t('position.indisponible'), String(e));
+    }
+  };
   // L'image et sa taille sont préparées dès le toucher, pendant la fenêtre du double appui : la
   // visionneuse s'ouvre sans attendre une fois l'appui simple confirmé.
   const prepared = useRef(new Map<string, Promise<{ poster: string; size: { width: number; height: number } }>>()).current;
@@ -787,6 +785,7 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
           onSend={(sticker) => sendPicked({ uri: sticker.uri, name: 'sticker.png', size: 0, mime: 'image/png', kind: 'image', keepSource: true, meta: { sticker: true } })}
         />
       )}
+      {locationOpen && <LocationSheet name={name} onShare={startSharing} onClose={() => setLocationOpen(false)} />}
       {menuOpen && <ChatMenu items={menuItems} onClose={() => setMenuOpen(false)} />}
       {searching && <ChatSearch contactKey={contactKey} name={name} onClose={() => setSearching(false)} onPick={jumpTo} />}
       {galleryOpen && <MediaPicker onPick={sendFromGallery} onClose={() => setGalleryOpen(false)} allowOnce={!isSelf(contactKey)} />}

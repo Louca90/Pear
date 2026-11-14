@@ -811,6 +811,12 @@ export const fr = {
     aide: 'Le média s\'efface après avoir été ouvert une fois.',
   },
   position: {
+    sArrete: 'S’arrête tout seul',
+    uneJournee: 'Pour une journée',
+    tantQueOuverte: 'Tant que l’app est ouverte',
+    tantQueOuverteAide: 'S’arrête dès que tu quittes Pear',
+    partagerDirect: 'Partager en direct',
+    seulVoit: 'Chiffré · seul·e {nom} voit ta position',
     titre: 'Position en direct',
     court: 'Position',
     maPosition: 'Ma position en direct',

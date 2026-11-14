@@ -812,6 +812,12 @@ export const en: Dictionary = {
     aide: 'The media is erased after being opened once.',
   },
   position: {
+    sArrete: 'Stops on its own',
+    uneJournee: 'For a day',
+    tantQueOuverte: 'While the app is open',
+    tantQueOuverteAide: 'Stops as soon as you leave Pear',
+    partagerDirect: 'Share live',
+    seulVoit: 'Encrypted · only {nom} sees your location',
     titre: 'Live location',
     court: 'Location',
     maPosition: 'My live location',

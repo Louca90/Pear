@@ -16,6 +16,11 @@ describe('position en direct', () => {
     expect(parseLocationText(locationText({ ...lyon, at: 5, until: 9 }))).toEqual({ ...lyon, at: 5, until: 9 });
   });
 
+  it('garde la marque « tant que l’app est ouverte », et seulement si elle vaut true', () => {
+    expect(parseLocation({ ...paris, at: 1000, until: 2000, open: true })).toEqual({ ...paris, at: 1000, until: 2000, open: true });
+    expect(parseLocation({ ...paris, at: 1000, until: 2000, open: 'oui' })).toEqual({ ...paris, at: 1000, until: 2000 });
+  });
+
   it('borne la durée d’un partage reçu à 8 heures', () => {
     const year = 365 * 24 * 3600 * 1000;
     const parsed = parseLocation({ ...paris, at: 1000, until: 1000 + year });
