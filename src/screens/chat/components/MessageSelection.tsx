@@ -1,6 +1,6 @@
 import { ReactNode, RefObject, useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import Reanimated, { Easing, interpolate, ReduceMotion, useAnimatedStyle, useSharedValue, withDelay, withTiming, type SharedValue } from 'react-native-reanimated';
+import { Pressable, ScrollView, StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
+import Reanimated, { Easing, ReduceMotion, useAnimatedStyle, useSharedValue, withDelay, withTiming, type SharedValue } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
 import { SmilePlus } from 'lucide-react-native';
 
@@ -22,7 +22,8 @@ const LIFT_SCALE = 1.03;
 // Place gardée sous un message de milieu de groupe pour sa ligne heure/coches, qui s'ouvre.
 const META_ROOM = 22;
 const META_MS = 220;
-const OPEN_MS = 320;
+const LIFT_MS = 300;
+const VEIL_MS = 220;
 // Courbe douce, sans dépassement (planche « Sélection d'un message »).
 const CURVE = Easing.bezier(0.2, 0.8, 0.2, 1);
 const timing = (duration: number) => ({ duration, easing: CURVE, reduceMotion: ReduceMotion.System });
@@ -71,18 +72,22 @@ type SelectionProps = {
   onClose: () => void;
 };
 
-// Apparition décalée d'un élément d'une liste (émojis, lignes du menu) : chacun a sa part de
-// l'avancement de la sélection, le suivant commence un peu après. À la fermeture, l'ordre s'inverse.
-function Staggered({ progress, index, count, from, span, kind, children }: { progress: SharedValue<number>; index: number; count: number; from: number; span: number; kind: 'emoji' | 'rowStart' | 'rowEnd'; children: ReactNode }) {
-  const step = Math.min(0.06, (1 - from - span) / Math.max(1, count - 1));
-  const begin = from + index * step;
-  const end = begin + span;
-  const style = useAnimatedStyle(() => {
-    const amount = interpolate(progress.get(), [begin, end], [0, 1], 'clamp');
+// Un élément qui arrive avec son propre délai et sa propre durée (valeurs de la planche « Sélection
+// d'un message »). exit passe de 1 à 0 à la fermeture : tout repart ensemble, plus vite.
+type TimedKind = 'bar' | 'emoji' | 'menu' | 'rowStart' | 'rowEnd';
+function Timed({ exit, delay, duration, kind, style, children }: { exit: SharedValue<number>; delay: number; duration: number; kind: TimedKind; style?: StyleProp<ViewStyle>; children: ReactNode }) {
+  const own = useSharedValue(0);
+  useEffect(() => {
+    own.set(withDelay(delay, withTiming(1, timing(duration))));
+  }, [own, delay, duration]);
+  const animated = useAnimatedStyle(() => {
+    const amount = own.get() * exit.get();
+    if (kind === 'bar') return { opacity: amount, transform: [{ scale: 0.6 + 0.4 * amount }] };
     if (kind === 'emoji') return { opacity: amount, transform: [{ translateY: 8 * (1 - amount) }, { scale: 0.5 + 0.5 * amount }] };
+    if (kind === 'menu') return { opacity: amount, transform: [{ translateY: -6 * (1 - amount) }, { scale: 0.92 + 0.08 * amount }] };
     return { opacity: amount, transform: [{ translateX: (kind === 'rowEnd' ? 8 : -8) * (1 - amount) }] };
   });
-  return <Reanimated.View style={style}>{children}</Reanimated.View>;
+  return <Reanimated.View style={[style, animated]}>{children}</Reanimated.View>;
 }
 
 // Sélection d'un message (planche « Sélection d'un message ») : le fond se floute et s'assombrit, le
@@ -93,8 +98,11 @@ function Staggered({ progress, index, count, from, span, kind, children }: { pro
 export function MessageSelection({ message, name, palettes, position, avatar, rect, origin, clip, blurTarget, actions, onReact, onClose }: SelectionProps) {
   const colors = useColors();
   const styles = useStyles();
+  // Montée du message (et repli d'un texte trop long), voile, ligne heure / coches, sortie commune.
   const progress = useSharedValue(0);
+  const veil = useSharedValue(0);
   const metaReveal = useSharedValue(0);
+  const exit = useSharedValue(1);
   const [pickerOpen, setPickerOpen] = useState(false);
   const closing = useRef(false);
   const mine = message.mine === 1;
@@ -102,8 +110,7 @@ export function MessageSelection({ message, name, palettes, position, avatar, re
   const dismiss = (after?: () => void) => {
     if (closing.current) return;
     closing.current = true;
-    metaReveal.set(withTiming(0, timing(SELECTION_CLOSE_MS)));
-    progress.set(withTiming(0, timing(SELECTION_CLOSE_MS)));
+    for (const value of [metaReveal, progress, veil, exit]) value.set(withTiming(0, timing(SELECTION_CLOSE_MS)));
     setTimeout(() => {
       onClose();
       after?.();
@@ -111,9 +118,10 @@ export function MessageSelection({ message, name, palettes, position, avatar, re
   };
 
   useEffect(() => {
-    progress.set(withTiming(1, timing(OPEN_MS)));
+    progress.set(withTiming(1, timing(LIFT_MS)));
+    veil.set(withTiming(1, timing(VEIL_MS)));
     metaReveal.set(withDelay(80, withTiming(1, timing(META_MS))));
-  }, [progress, metaReveal]);
+  }, [progress, veil, metaReveal]);
 
   // Le retour ferme la sélection sans quitter la conversation.
   useBackInterceptor(true, () => dismiss());
@@ -131,24 +139,14 @@ export function MessageSelection({ message, name, palettes, position, avatar, re
   const edge = mine ? styles.alignEnd : styles.alignStart;
   const side = mine ? 'right' : 'left';
 
-  const scrim = useAnimatedStyle(() => ({ opacity: interpolate(progress.get(), [0, 0.7], [0, 1], 'clamp') }));
+  const scrim = useAnimatedStyle(() => ({ opacity: veil.get() }));
   const lifted = useAnimatedStyle(() => {
     const p = progress.get();
     if (preview) return { opacity: p, transform: [{ scale: 0.97 + 0.03 * p }] };
     return { opacity: 1, transform: [{ translateY: (targetY - startY) * p }, { scale: 1 + (LIFT_SCALE - 1) * p }] };
   });
-  const bar = useAnimatedStyle(() => {
-    const amount = interpolate(progress.get(), [0.05, 0.6], [0, 1], 'clamp');
-    return { opacity: amount, transform: [{ scale: 0.6 + 0.4 * amount }] };
-  });
-  const menu = useAnimatedStyle(() => {
-    const amount = interpolate(progress.get(), [0.12, 0.65], [0, 1], 'clamp');
-    return { opacity: amount, transform: [{ translateY: -6 * (1 - amount) }, { scale: 0.92 + 0.08 * amount }] };
-  });
-
   const fit = fold ? { maxHeight: previewHeight - metaRoom, fullHeight: rect.height, progress } : undefined;
   const bubble = <Bubble message={message} name={name} palettes={palettes} position={position} avatar={avatar} spaced={false} metaReveal={metaReveal} fit={fit} />;
-  const reactionCount = QUICK_REACTIONS.length + 1;
   const place = preview ? { top: targetY - areaTop, height: previewHeight } : fold ? { top: startY - areaTop } : { top: startY - areaTop, height: previewHeight };
 
   return (
@@ -172,31 +170,31 @@ export function MessageSelection({ message, name, palettes, position, avatar, re
         </Reanimated.View>
       </View>
 
-      <Reanimated.View style={[styles.reactionBar, edge, { top: targetY - REACTIONS_HEIGHT - spacing.sm, transformOrigin: `${side} bottom` }, bar]}>
+      <Timed exit={exit} delay={40} duration={260} kind="bar" style={[styles.reactionBar, edge, { top: targetY - REACTIONS_HEIGHT - spacing.sm, transformOrigin: `${side} bottom` }]}>
         {QUICK_REACTIONS.map((emoji, index) => (
-          <Staggered key={emoji} progress={progress} index={index} count={reactionCount} from={0.15} span={0.45} kind="emoji">
+          <Timed key={emoji} exit={exit} delay={90 + index * 30} duration={240} kind="emoji">
             <IconButton onPress={() => react(emoji)} label={emoji} hitSlop={4} style={[styles.reactionOption, message.my_reaction === emoji && styles.reactionChosen]}>
               <Text style={styles.reactionChoice}>{emoji}</Text>
             </IconButton>
-          </Staggered>
+          </Timed>
         ))}
-        <Staggered progress={progress} index={QUICK_REACTIONS.length} count={reactionCount} from={0.15} span={0.45} kind="emoji">
+        <Timed exit={exit} delay={90 + QUICK_REACTIONS.length * 30} duration={240} kind="emoji">
           <IconButton onPress={() => setPickerOpen(true)} label={t('chat.tousEmojis')} hitSlop={4} style={styles.reactionOption}>
             <SmilePlus size={24} color={colors.text} strokeWidth={1.75} />
           </IconButton>
-        </Staggered>
-      </Reanimated.View>
+        </Timed>
+      </Timed>
 
-      <Reanimated.View style={[styles.actionsMenu, edge, { top: targetY + previewHeight + SELECTION_GAP, transformOrigin: `${side} top` }, menu]}>
+      <Timed exit={exit} delay={60} duration={260} kind="menu" style={[styles.actionsMenu, edge, { top: targetY + previewHeight + SELECTION_GAP, transformOrigin: `${side} top` }]}>
         {actions.map(({ label, icon: Icon, animated: AnimatedIcon, onPress, danger }, index) => (
-          <Staggered key={label} progress={progress} index={index} count={actions.length} from={0.3} span={0.4} kind={mine ? 'rowEnd' : 'rowStart'}>
+          <Timed key={label} exit={exit} delay={120 + index * 35} duration={220} kind={mine ? 'rowEnd' : 'rowStart'}>
             <Pressable onPress={() => dismiss(onPress)} style={({ pressed }) => [styles.action, pressed && styles.actionPressed]}>
               {AnimatedIcon ? <AnimatedIcon size={20} color={danger ? colors.danger : colors.text} strokeWidth={1.75} autoPlay delay={200 + index * 40} /> : <Icon size={20} color={danger ? colors.danger : colors.text} strokeWidth={1.75} />}
               <Text style={[styles.actionLabel, danger && { color: colors.danger }]}>{label}</Text>
             </Pressable>
-          </Staggered>
+          </Timed>
         ))}
-      </Reanimated.View>
+      </Timed>
 
       {pickerOpen && <EmojiPicker onPick={react} onClose={() => setPickerOpen(false)} />}
     </View>
