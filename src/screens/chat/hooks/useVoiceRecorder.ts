@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Keyboard, Linking, PanResponder } from 'react-native';
-import { Easing, useSharedValue, withTiming } from 'react-native-reanimated';
+import { Keyboard, Linking } from 'react-native';
+import { usePanGesture } from 'react-native-gesture-handler';
+import { Easing, ReduceMotion, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
 import { RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder } from 'expo-audio';
 import { haptics } from '../../../haptics';
 import { encodeWave } from '../../../chat/meta';
@@ -9,6 +10,9 @@ import { showDialog } from '../../../components/dialog';
 
 import { VOICE_CANCEL_DISTANCE, VOICE_LOCK_DISTANCE, VOICE_MIN_MS } from '../constants';
 import { t } from '../../../i18n';
+
+// Le micro revient à sa place (ou grossit) en douceur, sans dépasser.
+const SETTLE = { duration: 200, easing: Easing.bezier(0.2, 0.8, 0.2, 1), reduceMotion: ReduceMotion.System };
 
 // Maintenir le micro enregistre, lâcher envoie. Glisser à gauche annule, glisser vers le haut verrouille :
 // le doigt est alors libre, et on choisit ensuite d'envoyer ou de supprimer.
@@ -21,10 +25,10 @@ export function useVoiceRecorder(onRecorded: (uri: string, seconds: number, wave
   const levels = useRef<number[]>([]);
   const [phase, setPhase] = useState<'idle' | 'holding' | 'locked'>('idle');
   const [seconds, setSeconds] = useState(0);
-  const dragX = useRef(new Animated.Value(0)).current;
-  const dragY = useRef(new Animated.Value(0)).current;
-  const lockProgress = useRef(new Animated.Value(0)).current;
-  const scale = useRef(new Animated.Value(1)).current;
+  const dragX = useSharedValue(0);
+  const dragY = useSharedValue(0);
+  const lockProgress = useSharedValue(0);
+  const scale = useSharedValue(1);
   const liveLevel = useSharedValue(0);
   const phaseRef = useRef<'idle' | 'holding' | 'locked'>('idle');
   const startedAt = useRef(0);
@@ -37,8 +41,7 @@ export function useVoiceRecorder(onRecorded: (uri: string, seconds: number, wave
     setPhase(next);
   };
 
-  const settle = (value: Animated.Value, toValue: number) =>
-    Animated.spring(value, { toValue, useNativeDriver: true, overshootClamping: true, damping: 15, stiffness: 240 }).start();
+  const settle = (value: SharedValue<number>, toValue: number) => value.set(withTiming(toValue, SETTLE));
 
   useEffect(() => {
     if (phase === 'idle') return;
@@ -121,8 +124,8 @@ export function useVoiceRecorder(onRecorded: (uri: string, seconds: number, wave
     if (phaseRef.current !== 'holding') return;
     // Un seul axe à la fois : soit vers la poubelle, soit vers le cadenas.
     const sideways = Math.abs(dx) >= Math.abs(dy);
-    dragX.setValue(sideways ? Math.min(0, dx) : 0);
-    dragY.setValue(sideways ? 0 : Math.min(0, dy));
+    dragX.set(sideways ? Math.min(0, dx) : 0);
+    dragY.set(sideways ? 0 : Math.min(0, dy));
     const cancelling = sideways && dx < -VOICE_CANCEL_DISTANCE;
     if (cancelling !== overCancel.current) {
       overCancel.current = cancelling;
@@ -156,21 +159,21 @@ export function useVoiceRecorder(onRecorded: (uri: string, seconds: number, wave
     }
   };
 
+  // Le geste (gesture-handler) : le doigt posé démarre, ses déplacements glissent vers la poubelle ou
+  // le cadenas, le doigt levé (ou le geste interrompu) termine. La logique reste en JS (autorisation,
+  // enregistreur, vibrations) ; le micro suit le doigt par des valeurs Reanimated.
   const latest = useRef({ press, move, release });
   latest.current = { press, move, release };
-  const panHandlers = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onPanResponderTerminationRequest: () => false,
-      onPanResponderGrant: () => {
-        Keyboard.dismiss();
-        latest.current.press();
-      },
-      onPanResponderMove: (_event, { dx, dy }) => latest.current.move(dx, dy),
-      onPanResponderRelease: () => latest.current.release(),
-      onPanResponderTerminate: () => latest.current.release(),
-    }),
-  ).current.panHandlers;
+  const gesture = usePanGesture({
+    runOnJS: true,
+    minDistance: 0,
+    onBegin: () => {
+      Keyboard.dismiss();
+      latest.current.press();
+    },
+    onUpdate: (event) => latest.current.move(event.translationX, event.translationY),
+    onFinalize: () => latest.current.release(),
+  });
 
-  return { phase, seconds, dragX, dragY, lockProgress, scale, liveLevel, panHandlers, discard: () => stop(false) };
+  return { phase, seconds, dragX, dragY, lockProgress, scale, liveLevel, gesture, discard: () => stop(false) };
 }

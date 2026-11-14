@@ -1,5 +1,7 @@
 import { ComponentRef, RefObject, useEffect, useMemo, useState } from 'react';
-import { Animated, findNodeHandle, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { findNodeHandle, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import Reanimated, { interpolate, useAnimatedStyle } from 'react-native-reanimated';
+import { GestureDetector } from 'react-native-gesture-handler';
 import { setIncognitoKeyboard } from '../../../../modules/pear-native';
 import { ArrowUp, Check, ChevronUp, Lock, Smile, Trash2 } from 'lucide-react-native';
 
@@ -86,7 +88,14 @@ export function Composer({
   }, [voice.phase]);
   useBackInterceptor(attachOpen, onCloseAttach);
   // Le micro devient progressivement une poubelle, au fil du glissé vers la gauche.
-  const trashAmount = voice.dragX.interpolate({ inputRange: [-VOICE_CANCEL_DISTANCE, -VOICE_CANCEL_DISTANCE * 0.2], outputRange: [1, 0], extrapolate: 'clamp' });
+  const { dragX, dragY, lockProgress, scale } = voice;
+  const micStyle = useAnimatedStyle(() => ({ transform: [{ translateX: dragX.get() }, { translateY: dragY.get() }, { scale: scale.get() }] }));
+  const trashStyle = useAnimatedStyle(() => ({ opacity: interpolate(dragX.get(), [-VOICE_CANCEL_DISTANCE, -VOICE_CANCEL_DISTANCE * 0.2], [1, 0], 'clamp') }));
+  const micIconStyle = useAnimatedStyle(() => ({
+    opacity: (1 - interpolate(dragX.get(), [-VOICE_CANCEL_DISTANCE, -VOICE_CANCEL_DISTANCE * 0.2], [1, 0], 'clamp')) * (1 - lockProgress.get()),
+  }));
+  const lockedIconStyle = useAnimatedStyle(() => ({ opacity: lockProgress.get() }));
+  const lockHintStyle = useAnimatedStyle(() => ({ transform: [{ scale: interpolate(dragY.get(), [-VOICE_LOCK_DISTANCE, 0], [1.25, 1], 'clamp') }] }));
 
   const mode = useMemo(
     () => (editing ? { kind: 'edit' as const, message: editing } : replyingTo ? { kind: 'reply' as const, message: replyingTo } : null),
@@ -129,16 +138,10 @@ export function Composer({
           </View>
         )}
         {voice.phase === 'holding' && (
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              styles.voiceLockHint,
-              { transform: [{ scale: voice.dragY.interpolate({ inputRange: [-VOICE_LOCK_DISTANCE, 0], outputRange: [1.25, 1], extrapolate: 'clamp' }) }] },
-            ]}
-          >
+          <Reanimated.View pointerEvents="none" style={[styles.voiceLockHint, lockHintStyle]}>
             <Lock size={18} color={colors.text} strokeWidth={1.75} />
             <ChevronUp size={16} color={colors.textMuted} strokeWidth={1.75} />
-          </Animated.View>
+          </Reanimated.View>
         )}
         {(draft.trim() || editing) && voice.phase === 'idle' ? (
           <IconButton
@@ -155,28 +158,29 @@ export function Composer({
             {editing ? <Check size={20} color={colors.onSignature} strokeWidth={2} /> : <SendIcon size={20} color={colors.onSignature} strokeWidth={2} play={sent} />}
           </IconButton>
         ) : (
-          <Animated.View
-            {...voice.panHandlers}
+          <GestureDetector gesture={voice.gesture}>
+          <Reanimated.View
             accessibilityRole="button"
             accessibilityLabel={voice.phase === 'locked' ? t('chat.envoyerVocal') : t('chat.maintenirVocal')}
-            style={[styles.send, { transform: [{ translateX: voice.dragX }, { translateY: voice.dragY }, { scale: voice.scale }] }]}
+            style={[styles.send, micStyle]}
           >
-            <Animated.View style={[styles.micLayer, styles.micTrash, { opacity: trashAmount }]}>
+            <Reanimated.View style={[styles.micLayer, styles.micTrash, trashStyle]}>
               <Trash2 size={20} color={fixed.white} strokeWidth={2} />
-            </Animated.View>
-            <Animated.View style={[styles.micLayer, { opacity: Animated.multiply(Animated.subtract(1, trashAmount), Animated.subtract(1, voice.lockProgress)) }]}>
+            </Reanimated.View>
+            <Reanimated.View style={[styles.micLayer, micIconStyle]}>
               <MicIcon size={20} color={colors.onSignature} strokeWidth={2} play={holds} />
-            </Animated.View>
+            </Reanimated.View>
             {/* Le message vient de partir : l'avion s'envole par-dessus le micro qui a repris sa place. */}
             {sent > 0 && (
               <View key={sent} pointerEvents="none" style={styles.micLayer}>
                 <SendIcon size={20} color={colors.onSignature} strokeWidth={2} away autoPlay />
               </View>
             )}
-            <Animated.View style={[styles.micLayer, { opacity: voice.lockProgress }]}>
+            <Reanimated.View style={[styles.micLayer, lockedIconStyle]}>
               <ArrowUp size={20} color={colors.onSignature} strokeWidth={2} />
-            </Animated.View>
-          </Animated.View>
+            </Reanimated.View>
+          </Reanimated.View>
+          </GestureDetector>
         )}
         {/* Menu ouvert : un appui sur le bouton d'envoi ou le micro referme seulement le menu. */}
         {attachOpen && <Pressable onPress={onCloseAttach} accessibilityLabel={t('commun.fermer')} style={styles.sendCover} />}

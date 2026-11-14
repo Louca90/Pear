@@ -1,8 +1,9 @@
 import { useEffect } from 'react';
-import { Animated, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import Reanimated, {
   cancelAnimation,
   Easing,
+  interpolate,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
@@ -80,7 +81,7 @@ export function RecordingRow({
 }: {
   seconds: number;
   locked: boolean;
-  dragX: Animated.Value;
+  dragX: SharedValue<number>;
   // Niveau du micro de 0 à 1 (useVoiceRecorder → liveLevel) ; facultatif.
   level?: SharedValue<number>;
   onDiscard: () => void;
@@ -90,7 +91,6 @@ export function RecordingRow({
   const reduced = useReducedMotion();
   const blink = useSharedValue(1);
   const nudge = useSharedValue(0);
-  const cancelRange = { inputRange: [-VOICE_CANCEL_DISTANCE, -VOICE_CANCEL_DISTANCE * 0.5], extrapolate: 'clamp' as const };
 
   useEffect(() => {
     if (reduced) return;
@@ -126,6 +126,20 @@ export function RecordingRow({
 
   const dotStyle = useAnimatedStyle(() => ({ opacity: blink.get() }));
   const nudgeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: nudge.get() }] }));
+  // 1 au repos, 0 quand le doigt atteint la distance d'annulation.
+  const stay = (x: number) => {
+    'worklet';
+    return interpolate(x, [-VOICE_CANCEL_DISTANCE, -VOICE_CANCEL_DISTANCE * 0.5], [0, 1], 'clamp');
+  };
+  const waveStyle = useAnimatedStyle(() => ({ opacity: locked ? 1 : stay(dragX.get()) }));
+  const cancelHint = useAnimatedStyle(() => {
+    const amount = stay(dragX.get());
+    return { opacity: amount, transform: [{ translateX: -14 * (1 - amount) }] };
+  });
+  const releaseHint = useAnimatedStyle(() => {
+    const amount = stay(dragX.get());
+    return { opacity: 1 - amount, transform: [{ translateX: 14 * amount }] };
+  });
 
   return (
     <View style={styles.recordingRow}>
@@ -138,39 +152,23 @@ export function RecordingRow({
       )}
       <Reanimated.View style={[styles.recordingDot, dotStyle]} />
       <Text style={styles.recordingTime}>{formatClock(seconds)}</Text>
-      <Animated.View style={[styles.wave, !locked && { opacity: dragX.interpolate({ ...cancelRange, outputRange: [0, 1] }) }]}>
+      <Reanimated.View style={[styles.wave, waveStyle]}>
         <LiveWave level={level} color={colors.text} />
-      </Animated.View>
+      </Reanimated.View>
       {locked ? (
         <Reanimated.View entering={popIn()} style={styles.recordingLock} accessibilityLabel={t('chat.vocalVerrouille')}>
           <Lock size={18} color={colors.text} strokeWidth={1.75} />
         </Reanimated.View>
       ) : (
         <View style={styles.recordingHints} accessibilityLabel={t('chat.glisserAnnuler')}>
-          <Animated.View
-            style={{
-              opacity: dragX.interpolate({ ...cancelRange, outputRange: [0, 1] }),
-              transform: [{ translateX: dragX.interpolate({ ...cancelRange, outputRange: [-14, 0] }) }],
-            }}
-          >
+          <Reanimated.View style={cancelHint}>
             <Reanimated.Text numberOfLines={1} style={[styles.recordingHint, nudgeStyle]}>
               {t('vocal.annulerCourt')}
             </Reanimated.Text>
-          </Animated.View>
-          <Animated.Text
-            numberOfLines={1}
-            style={[
-              styles.recordingHint,
-              styles.releaseHint,
-              { color: colors.danger },
-              {
-                opacity: dragX.interpolate({ ...cancelRange, outputRange: [1, 0] }),
-                transform: [{ translateX: dragX.interpolate({ ...cancelRange, outputRange: [0, 14] }) }],
-              },
-            ]}
-          >
+          </Reanimated.View>
+          <Reanimated.Text numberOfLines={1} style={[styles.recordingHint, styles.releaseHint, { color: colors.danger }, releaseHint]}>
             {t('chat.lacherAnnuler')}
-          </Animated.Text>
+          </Reanimated.Text>
         </View>
       )}
     </View>

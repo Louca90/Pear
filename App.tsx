@@ -2,6 +2,7 @@ import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, AppState, Easing, BackHandler, PanResponder, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { NavigationBar } from 'expo-navigation-bar';
 import { StatusBar } from 'expo-status-bar';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as Linking from 'expo-linking';
 import notifee from '@notifee/react-native';
 
@@ -112,11 +113,16 @@ function routeKey(route: Route) {
   return route.name + ('publicKey' in route ? `:${route.publicKey}` : '');
 }
 
+const rootStyle = StyleSheet.create({ flex: { flex: 1 } });
+
 export default function Root() {
   return (
-    <ErrorBoundary name="app">
-      <App />
-    </ErrorBoundary>
+    // Racine des gestes (gesture-handler) pour toute l'app : bulles, micro, éditeur…
+    <GestureHandlerRootView style={rootStyle.flex}>
+      <ErrorBoundary name="app">
+        <App />
+      </ErrorBoundary>
+    </GestureHandlerRootView>
   );
 }
 
