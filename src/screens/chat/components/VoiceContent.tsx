@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AudioPlayer, setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import Reanimated, { interpolate, useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
@@ -20,6 +20,7 @@ import { formatClock } from '../format';
 import { useChatStyles } from '../styles';
 import { log } from '../../../log';
 import { t } from '../../../i18n';
+import { useTransferProgress } from '../hooks/useTransferProgress';
 
 // Un seul vocal à la fois : en lancer un met le précédent en pause.
 let playingVoice: AudioPlayer | null = null;
@@ -72,8 +73,7 @@ export function VoiceContent({ message, palette, next }: { message: Message; pal
   const player = useAudioPlayer(source, { updateInterval: 200 });
   const status = useAudioPlayerStatus(player);
   // L'avancement du transfert est lu ici : la bulle, elle, ne se redessine que si son message change.
-  useSyncExternalStore(chat.subscribe, chat.getVersion);
-  const progress = chat.getProgress(message.id);
+  const progress = useTransferProgress(message.id);
   const rate = useVoiceRate();
   const bars = decodeWave(parseMeta(message.meta).wave);
   const position = status.duration > 0 ? Math.min(1, status.currentTime / status.duration) : 0;

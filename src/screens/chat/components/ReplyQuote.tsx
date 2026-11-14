@@ -12,7 +12,12 @@ import { Thumbnail } from './ComposerModeCard';
 export function ReplyQuote({ message, name, palette, onJump }: { message: Message; name: string; palette: BubblePalette; onJump?: (id: string) => void }) {
   // La bulle ne se redessine plus à chaque changement de la conversation : la citation suit elle-même
   // son message d'origine (modifié, supprimé).
-  useSyncExternalStore(chat.subscribe, chat.getVersion);
+  // Seuls les champs affichés du message d'origine comptent : un autre changement ne la redessine pas.
+  useSyncExternalStore(chat.subscribe, () => {
+    if (!message.reply_to) return '';
+    const quoted = getMessage(message.reply_to, message.contact);
+    return quoted ? `${quoted.mine}|${quoted.kind}|${quoted.text}|${quoted.file_uri ?? ''}|${quoted.file_mime ?? ''}|${quoted.view_once ?? 0}|${quoted.meta ?? ''}` : 'absent';
+  });
   const original = message.reply_to ? getMessage(message.reply_to, message.contact) : null;
   if (!message.reply_to) return null;
   const author = original ? (original.mine === 1 ? t('chat.vous') : name) : '';

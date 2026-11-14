@@ -5,6 +5,9 @@ import { SessionTracker } from '../grouping';
 import { SentOnce } from '../sentOnce';
 
 // L'état partagé par les modules du manager. Seule la façade (index.ts) est utilisée par les écrans.
+// Une image à 60 Hz.
+const NOTIFY_FRAME_MS = 16;
+
 export class ChatCore {
   identity: Identity | null = null;
   links = new Map<string, Link>();
@@ -96,8 +99,18 @@ export class ChatCore {
     return this.sessions.current(contact, this.links.get(contact)?.status === 'connected' ? 'direct' : 'remote');
   }
 
+  // Les changements d'une même rafale (connexion qui s'ouvre, accusés de lecture, avancement d'un
+  // transfert…) ne réveillent les écrans qu'une fois par image : avant, chaque signal redessinait tous
+  // les abonnés tout de suite, des dizaines de fois à l'ouverture d'une conversation.
+  // La version, elle, change tout de suite : un écran qui se dessine entre-temps lit déjà la bonne.
+  private flushTimer: ReturnType<typeof setTimeout> | null = null;
+
   notify() {
     this.version += 1;
-    this.listeners.forEach((listener) => listener());
+    if (this.flushTimer) return;
+    this.flushTimer = setTimeout(() => {
+      this.flushTimer = null;
+      this.listeners.forEach((listener) => listener());
+    }, NOTIFY_FRAME_MS);
   }
 }

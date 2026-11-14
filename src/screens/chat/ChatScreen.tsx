@@ -214,10 +214,15 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
   // Les médias déchiffrés de la conversation sont effacés du cache quand on la quitte.
   useEffect(() => retainOpenedMedia(), []);
 
+  // La conversation devient « ouverte » (connexion directe, messages lus) une fois la page arrivée :
+  // ce travail ne se fait plus pendant son entrée, où il retenait la première image.
   useEffect(() => {
     if (preview) return;
-    chat.setOpenConversation(contactKey);
-    return () => chat.setOpenConversation(null);
+    const timer = setTimeout(() => chat.setOpenConversation(contactKey), motion.screen);
+    return () => {
+      clearTimeout(timer);
+      chat.setOpenConversation(null);
+    };
   }, [contactKey, preview]);
 
   const closeSelection = useRef(() => setSelection(null)).current;

@@ -1,4 +1,4 @@
-import { useRef, useSyncExternalStore } from 'react';
+import { useRef } from 'react';
 import { Image, ImageStyle, Pressable, StyleProp, Text, View } from 'react-native';
 import { FileText, Images, Mic, Play } from 'lucide-react-native';
 
@@ -17,6 +17,7 @@ import { isBareMedia, isMediaDeleted, isSticker } from '../format';
 import { useChatStyles } from '../styles';
 import { Rect, ViewRef } from '../types';
 import { t } from '../../../i18n';
+import { useTransferProgress } from '../hooks/useTransferProgress';
 
 // style : la taille d'une case d'album (lot 4.5), à la place du carré de 220 points.
 export function VideoPreview({ message, style }: { message: Message; style?: StyleProp<ImageStyle> }) {
@@ -85,8 +86,7 @@ export function FileContent({ message, palette, mediaHidden, onOpen, onLongPress
   const foreground = bare ? colors.text : palette.text;
   const secondary = bare ? colors.textMuted : palette.muted;
   // L'avancement du transfert est lu ici : la bulle, elle, ne se redessine que si son message change.
-  useSyncExternalStore(chat.subscribe, chat.getVersion);
-  const progress = chat.getProgress(message.id);
+  const progress = useTransferProgress(message.id);
   const open = () => media.current?.measureInWindow((x, y, width, height) => onOpen({ x, y, width, height }));
   // Photo ou vidéo pas encore arrivée (ou proposée) : sa miniature floue à la place de la ligne de fichier.
   const waiting = message.status === 'receiving' || message.status === 'offered';

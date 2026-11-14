@@ -1,4 +1,4 @@
-import { useRef, useSyncExternalStore } from 'react';
+import { useRef } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { Message } from '../../../chat/database';
@@ -10,6 +10,7 @@ import { LONG_PRESS_MS, MEDIA_WIDTH } from '../constants';
 import { useChatStyles } from '../styles';
 import { Rect, ViewRef } from '../types';
 import { BlurThumb, ImagePreview, VideoPreview } from './FileContent';
+import { useTransferProgress } from '../hooks/useTransferProgress';
 
 // Album (lot 4.5) : plusieurs photos ou vidéos envoyées ensemble, en grille de deux colonnes. Un
 // nombre impair commence par une grande image sur toute la largeur.
@@ -39,8 +40,7 @@ function Cell({ message, width, height, hidden, onOpen, onLongPress, onPrepare }
   const colors = useColors();
   const view = useRef<ViewRef>(null);
   // L'avancement du transfert est lu ici : la bulle, elle, ne se redessine que si son message change.
-  useSyncExternalStore(chat.subscribe, chat.getVersion);
-  const progress = chat.getProgress(message.id);
+  const progress = useTransferProgress(message.id);
   const receiving = message.status === 'receiving';
   const thumb = parseMeta(message.meta).thumb;
   const size = { width, height, borderRadius: 6 };
