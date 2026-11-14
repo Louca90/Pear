@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, FlatList, Modal, PanResponder, Pressable, Text, View, useWindowDimensions } from 'react-native';
+import { FlatList, Modal, PanResponder, Pressable, Text, View, useWindowDimensions } from 'react-native';
+import Reanimated, { Easing, interpolate, interpolateColor, useAnimatedProps, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { ArrowUp } from 'lucide-react-native';
 import Svg, { Path } from 'react-native-svg';
 
@@ -20,27 +21,25 @@ const DRAG_CLOSE_SPEED = 0.8;
 const TAP_SLOP = 6;
 // Longueur du tracé de la coche (dans une grille de 24) : il se dessine de 0 à cette longueur.
 const CHECK_LENGTH = 16;
-const AnimatedPath = Animated.createAnimatedComponent(Path);
+const AnimatedPath = Reanimated.createAnimatedComponent(Path);
 
 // La case d'un contact : le cercle se remplit de la couleur d'accent en fondu et la coche se dessine
 // d'un trait, sans changement de taille. Décocher fait l'inverse.
 function CheckBox({ checked }: { checked: boolean }) {
   const colors = useColors();
   const styles = useStyles();
-  const on = useRef(new Animated.Value(checked ? 1 : 0)).current;
+  const on = useSharedValue(checked ? 1 : 0);
   useEffect(() => {
-    Animated.timing(on, { toValue: checked ? 1 : 0, duration: CHECK_MS, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+    on.set(withTiming(checked ? 1 : 0, { duration: CHECK_MS, easing: Easing.out(Easing.cubic) }));
   }, [checked, on]);
+  const { elevated, signatureStrong, border } = colors;
+  const boxStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(on.get(), [0, 1], [elevated, signatureStrong]),
+    borderColor: interpolateColor(on.get(), [0, 1], [border, signatureStrong]),
+  }));
+  const checkProps = useAnimatedProps(() => ({ strokeDashoffset: interpolate(on.get(), [0.25, 1], [CHECK_LENGTH * 1.5, 0], 'clamp') }));
   return (
-    <Animated.View
-      style={[
-        styles.box,
-        {
-          backgroundColor: on.interpolate({ inputRange: [0, 1], outputRange: [colors.elevated, colors.signatureStrong] }),
-          borderColor: on.interpolate({ inputRange: [0, 1], outputRange: [colors.border, colors.signatureStrong] }),
-        },
-      ]}
-    >
+    <Reanimated.View style={[styles.box, boxStyle]}>
       <Svg width={16} height={16} viewBox="0 0 24 24">
         <AnimatedPath
           d="M5 12.5l4.5 4.5L19 7.5"
@@ -50,10 +49,10 @@ function CheckBox({ checked }: { checked: boolean }) {
           strokeLinecap="round"
           strokeLinejoin="round"
           strokeDasharray={`${CHECK_LENGTH * 1.5} ${CHECK_LENGTH * 1.5}`}
-          strokeDashoffset={on.interpolate({ inputRange: [0.25, 1], outputRange: [CHECK_LENGTH * 1.5, 0], extrapolate: 'clamp' })}
+          animatedProps={checkProps}
         />
       </Svg>
-    </Animated.View>
+    </Reanimated.View>
   );
 }
 
@@ -70,23 +69,24 @@ export function ContactPickerSheet({ title, contacts, onSend, onClose }: Props) 
   const { height } = useWindowDimensions();
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
-  const progress = useRef(new Animated.Value(0)).current;
-  const drag = useRef(new Animated.Value(0)).current;
+  const progress = useSharedValue(0);
+  const drag = useSharedValue(0);
   const closing = useRef(false);
   // Hauteur réelle de la feuille : fermée, elle descend entièrement sous l'écran.
   const [sheetHeight, setSheetHeight] = useState(height);
 
   useEffect(() => {
-    Animated.timing(progress, { toValue: 1, duration: OPEN_MS, easing: EASING, useNativeDriver: true }).start();
+    progress.set(withTiming(1, { duration: OPEN_MS, easing: EASING }));
   }, [progress]);
 
   const close = (then?: () => void) => {
     if (closing.current) return;
     closing.current = true;
-    Animated.timing(progress, { toValue: 0, duration: CLOSE_MS, easing: EASING, useNativeDriver: true }).start(() => {
+    progress.set(withTiming(0, { duration: CLOSE_MS, easing: EASING }));
+    setTimeout(() => {
       onClose();
       then?.();
-    });
+    }, CLOSE_MS);
   };
   const latestClose = useRef(close);
   latestClose.current = close;
@@ -95,14 +95,17 @@ export function ContactPickerSheet({ title, contacts, onSend, onClose }: Props) 
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_event, gesture) => Math.abs(gesture.dy) > TAP_SLOP,
-      onPanResponderMove: (_event, gesture) => drag.setValue(Math.max(0, gesture.dy)),
+      onPanResponderMove: (_event, gesture) => drag.set(Math.max(0, gesture.dy)),
       onPanResponderRelease: (_event, gesture) => {
         if (Math.abs(gesture.dy) < TAP_SLOP || gesture.dy > DRAG_CLOSE_DISTANCE || gesture.vy > DRAG_CLOSE_SPEED) latestClose.current();
-        else Animated.timing(drag, { toValue: 0, duration: CLOSE_MS, easing: EASING, useNativeDriver: true }).start();
+        else drag.set(withTiming(0, { duration: CLOSE_MS, easing: EASING }));
       },
-      onPanResponderTerminate: () => Animated.timing(drag, { toValue: 0, duration: CLOSE_MS, easing: EASING, useNativeDriver: true }).start(),
+      onPanResponderTerminate: () => drag.set(withTiming(0, { duration: CLOSE_MS, easing: EASING })),
     }),
   ).current;
+
+  const backdropStyle = useAnimatedStyle(() => ({ opacity: progress.get() }));
+  const sheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: (sheetHeight + spacing.lg) * (1 - progress.get()) + drag.get() }] }));
 
   const search = query.trim().toLocaleLowerCase(dateLocale());
   const shown = contacts
@@ -114,15 +117,11 @@ export function ContactPickerSheet({ title, contacts, onSend, onClose }: Props) 
 
   return (
     <Modal visible transparent animationType="none" onRequestClose={() => close()} statusBarTranslucent navigationBarTranslucent>
-      <Animated.View style={[styles.backdrop, { opacity: progress }]}>
+      <Reanimated.View style={[styles.backdrop, backdropStyle]}>
         <Pressable style={styles.flex} onPress={() => close()} accessibilityLabel={t('commun.fermer')} />
-      </Animated.View>
-      <Animated.View
-        style={[
-          styles.sheet,
-          { maxHeight: height * 0.75, paddingBottom: bottom + spacing.md },
-          { transform: [{ translateY: Animated.add(progress.interpolate({ inputRange: [0, 1], outputRange: [sheetHeight + spacing.lg, 0] }), drag) }] },
-        ]}
+      </Reanimated.View>
+      <Reanimated.View
+        style={[styles.sheet, { maxHeight: height * 0.75, paddingBottom: bottom + spacing.md }, sheetStyle]}
         onLayout={(event) => setSheetHeight(event.nativeEvent.layout.height)}
       >
         <View {...handlePan.panHandlers} style={styles.header} accessibilityRole="button" accessibilityLabel={t('commun.fermer')}>
@@ -157,7 +156,7 @@ export function ContactPickerSheet({ title, contacts, onSend, onClose }: Props) 
           </Text>
           {selected.length > 0 && <ArrowUp size={18} color={colors.background} strokeWidth={2} />}
         </Pressable>
-      </Animated.View>
+      </Reanimated.View>
     </Modal>
   );
 }

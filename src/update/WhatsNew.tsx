@@ -1,6 +1,8 @@
-import { ComponentRef, useEffect, useRef, useState } from 'react';
-import { Animated, Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import Reanimated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import { ComponentRef, ReactNode, useEffect, useRef, useState } from 'react';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import Reanimated, { useAnimatedStyle, useSharedValue, interpolate, useAnimatedScrollHandler, withTiming, type SharedValue } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
+import { EASE } from '../motion';
 
 import { appVersionName } from '../../modules/pear-native';
 import { timing } from '../motion';
@@ -24,6 +26,16 @@ type Props = {
 
 // Pages « Quoi de neuf » au style de la prise en main : la poire, un titre, une phrase, une démo.
 // Glisser ou « Suivant » ; « Passer » est toujours visible et le retour d'Android fait comme lui.
+// Une page : elle arrive de la droite en fondu (28 points), celle qui part s'efface.
+function Page({ x, index, width, children }: { x: SharedValue<number>; index: number; width: number; children: ReactNode }) {
+  const styles = useStyles();
+  const style = useAnimatedStyle(() => {
+    const distance = (x.get() - index * width) / width;
+    return { opacity: interpolate(distance, [-1, 0, 1], [0, 1, 0], 'clamp'), transform: [{ translateX: interpolate(distance, [-1, 0, 1], [-28, 0, 28], 'clamp') }] };
+  });
+  return <Reanimated.View style={[styles.page, { width }, style]}>{children}</Reanimated.View>;
+}
+
 export function WhatsNew({ pages, initial = 0, kicker, onClose }: Props) {
   const colors = useColors();
   const styles = useStyles();
@@ -34,12 +46,22 @@ export function WhatsNew({ pages, initial = 0, kicker, onClose }: Props) {
   const bottom = useNavigationBarHeight();
   const [index, setIndex] = useState(initial);
   const scroll = useRef<ComponentRef<typeof ScrollView>>(null);
-  const x = useRef(new Animated.Value(initial * width)).current;
-  const appear = useRef(new Animated.Value(0)).current;
+  const x = useSharedValue(initial * width);
+  const appear = useSharedValue(0);
+  const onScroll = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      x.set(event.contentOffset.x);
+    },
+    onMomentumEnd: (event) => {
+      scheduleOnRN(setIndex, Math.round(event.contentOffset.x / width));
+    },
+  });
+  const scrimStyle = useAnimatedStyle(() => ({ opacity: appear.get() }));
+  const sheetStyle = useAnimatedStyle(() => ({ opacity: appear.get(), transform: [{ translateY: 60 * (1 - appear.get()) }] }));
   const last = index === pages.length - 1;
 
   useEffect(() => {
-    Animated.timing(appear, { toValue: 1, duration: motion.screen, easing: motion.easing, useNativeDriver: true }).start();
+    appear.set(withTiming(1, { duration: motion.screen, easing: EASE }));
     if (initial > 0) scroll.current?.scrollTo({ x: initial * width, animated: false });
   }, [appear, initial, width]);
 
@@ -53,12 +75,9 @@ export function WhatsNew({ pages, initial = 0, kicker, onClose }: Props) {
 
   return (
     <Modal visible transparent animationType="none" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
-      <Animated.View style={[styles.scrim, { opacity: appear }]} />
-      <Animated.View
-        style={[
-          styles.sheet,
-          { top: top + SHEET_TOP, bottom: bottom + SHEET_MARGIN, opacity: appear, transform: [{ translateY: appear.interpolate({ inputRange: [0, 1], outputRange: [60, 0] }) }] },
-        ]}
+      <Reanimated.View style={[styles.scrim, scrimStyle]} />
+      <Reanimated.View
+        style={[styles.sheet, { top: top + SHEET_TOP, bottom: bottom + SHEET_MARGIN }, sheetStyle]}
         accessibilityViewIsModal
       >
         <View style={styles.head}>
@@ -71,33 +90,20 @@ export function WhatsNew({ pages, initial = 0, kicker, onClose }: Props) {
             <Text style={styles.skipLabel}>{t('nouveautes.passer')}</Text>
           </Pressable>
         </View>
-        <Animated.ScrollView
+        <Reanimated.ScrollView
           ref={scroll}
           horizontal
           pagingEnabled
           showsHorizontalScrollIndicator={false}
-          onScroll={Animated.event([{ nativeEvent: { contentOffset: { x } } }], { useNativeDriver: true })}
-          onMomentumScrollEnd={(event) => setIndex(Math.round(event.nativeEvent.contentOffset.x / sheetWidth))}
+          onScroll={onScroll}
           scrollEventThrottle={16}
           style={styles.flex}
         >
           {pages.map((page, i) => {
             const Demo = page.demo ? DEMOS[page.demo] : undefined;
             const action = page.action ? ACTIONS[page.action.id] : undefined;
-            // La page arrive de la droite en fondu (28 points), celle qui part s'efface.
-            const distance = Animated.divide(Animated.subtract(x, i * sheetWidth), sheetWidth);
             return (
-              <Animated.View
-                key={i}
-                style={[
-                  styles.page,
-                  {
-                    width: sheetWidth,
-                    opacity: distance.interpolate({ inputRange: [-1, 0, 1], outputRange: [0, 1, 0] }),
-                    transform: [{ translateX: distance.interpolate({ inputRange: [-1, 0, 1], outputRange: [-28, 0, 28] }) }],
-                  },
-                ]}
-              >
+              <Page key={i} x={x} index={i} width={sheetWidth}>
                 <View style={styles.demo}>{Demo ? <Demo /> : <Pear height={120} color={colors.text} />}</View>
                 <Text style={styles.title}>{t(page.titre)}</Text>
                 <Text style={styles.text}>{t(page.texte)}</Text>
@@ -106,10 +112,10 @@ export function WhatsNew({ pages, initial = 0, kicker, onClose }: Props) {
                     <Button label={t(page.action.label)} icon={ChevronRight} variant="secondary" onPress={action} />
                   </View>
                 )}
-              </Animated.View>
+              </Page>
             );
           })}
-        </Animated.ScrollView>
+        </Reanimated.ScrollView>
         <View style={styles.footer}>
           <View style={styles.dots}>
             {pages.map((_, i) => (
@@ -120,7 +126,7 @@ export function WhatsNew({ pages, initial = 0, kicker, onClose }: Props) {
             <Text style={styles.ctaLabel}>{last ? t('nouveautes.cestParti') : t('nouveautes.suivant')}</Text>
           </Pressable>
         </View>
-      </Animated.View>
+      </Reanimated.View>
     </Modal>
   );
 }

@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import Reanimated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { EASE } from '../motion';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Camera } from 'lucide-react-native';
 
@@ -26,10 +28,12 @@ export function ScannerScreen({ onBack, onKeyReceived }: Props) {
   const colors = useColors();
   const [box, setBox] = useState(0);
   const [found, setFound] = useState(false);
-  const scale = useRef(new Animated.Value(1)).current;
-  const shiftX = useRef(new Animated.Value(0)).current;
-  const shiftY = useRef(new Animated.Value(0)).current;
-  const pearOpacity = useRef(new Animated.Value(0)).current;
+  const scale = useSharedValue(1);
+  const shiftX = useSharedValue(0);
+  const shiftY = useSharedValue(0);
+  const pearOpacity = useSharedValue(0);
+  const frameStyle = useAnimatedStyle(() => ({ transform: [{ translateX: shiftX.get() }, { translateY: shiftY.get() }, { scale: scale.get() }] }));
+  const pearStyle = useAnimatedStyle(() => ({ opacity: pearOpacity.get() }));
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
   const [permission, requestPermission] = useCameraPermissions();
@@ -60,13 +64,11 @@ export function ScannerScreen({ onBack, onKeyReceived }: Props) {
         dy = cy;
       }
     }
-    const config = { duration: motion.mascot, easing: motion.easing, useNativeDriver: true };
-    Animated.parallel([
-      Animated.timing(scale, { toValue: target / FRAME, ...config }),
-      Animated.timing(shiftX, { toValue: dx, ...config }),
-      Animated.timing(shiftY, { toValue: dy, ...config }),
-      Animated.timing(pearOpacity, { toValue: 1, duration: motion.small, easing: motion.easing, useNativeDriver: true }),
-    ]).start();
+    const config = { duration: motion.mascot, easing: EASE };
+    scale.set(withTiming(target / FRAME, config));
+    shiftX.set(withTiming(dx, config));
+    shiftY.set(withTiming(dy, config));
+    pearOpacity.set(withTiming(1, { duration: motion.small, easing: EASE }));
     timer.current = setTimeout(() => onKeyReceived(key), motion.reduced ? 0 : LINGER_MS);
   };
 
@@ -93,18 +95,14 @@ export function ScannerScreen({ onBack, onKeyReceived }: Props) {
           barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
           onBarcodeScanned={handleScan}
         />
-        <Animated.View
+        <Reanimated.View
           pointerEvents="none"
-          style={[
-            styles.frame,
-            { width: `${FRAME * 100}%`, height: `${FRAME * 100}%`, borderColor: found ? colors.signatureStrong : colors.onMedia },
-            { transform: [{ translateX: shiftX }, { translateY: shiftY }, { scale }] },
-          ]}
+          style={[styles.frame, { width: `${FRAME * 100}%`, height: `${FRAME * 100}%`, borderColor: found ? colors.signatureStrong : colors.onMedia }, frameStyle]}
         />
         {found && (
-          <Animated.View pointerEvents="none" style={[styles.pear, { opacity: pearOpacity }]}>
+          <Reanimated.View pointerEvents="none" style={[styles.pear, pearStyle]}>
             <Pear height={64} color={colors.onMedia} state="leaf" leafColor={colors.signatureStrong} />
-          </Animated.View>
+          </Reanimated.View>
         )}
       </View>
       <Text style={styles.text}>
