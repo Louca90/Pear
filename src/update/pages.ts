@@ -27,6 +27,14 @@ export function pagesFor(version: string): WhatsNewPage[] {
   return (PAGES[version] ?? []).slice(0, MAX_PAGES);
 }
 
+// La visite guidée de « Découvrir Pear » : ce que fait l'app, en quatre pages.
+export const DISCOVER_PAGES: WhatsNewPage[] = [
+  { theme: 'securite', titre: 'decouvrir.directTitre', texte: 'decouvrir.directTexte', demo: 'direct' },
+  { theme: 'securite', titre: 'decouvrir.faceTitre', texte: 'decouvrir.faceTexte', demo: 'faceAFace' },
+  { theme: 'conversation', titre: 'decouvrir.ephemereTitre', texte: 'decouvrir.ephemereTexte', demo: 'ephemere' },
+  { theme: 'camera', titre: 'decouvrir.outilsTitre', texte: 'decouvrir.outilsTexte', demo: 'outils' },
+];
+
 // Toutes les pages déjà sorties, rangées par thème, pour « Découvrir Pear ».
 export function pagesByTheme(): { theme: WhatsNewTheme; pages: WhatsNewPage[] }[] {
   const all = Object.values(PAGES).flat();

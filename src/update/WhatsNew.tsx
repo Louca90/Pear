@@ -17,12 +17,14 @@ type Props = {
   pages: WhatsNewPage[];
   // Page de départ (Découvrir Pear).
   initial?: number;
+  // Le titre en capitales en haut de la feuille (par défaut : « Nouveau dans Pear x »).
+  kicker?: string;
   onClose: () => void;
 };
 
 // Pages « Quoi de neuf » au style de la prise en main : la poire, un titre, une phrase, une démo.
 // Glisser ou « Suivant » ; « Passer » est toujours visible et le retour d'Android fait comme lui.
-export function WhatsNew({ pages, initial = 0, onClose }: Props) {
+export function WhatsNew({ pages, initial = 0, kicker, onClose }: Props) {
   const colors = useColors();
   const styles = useStyles();
   const { width: screenWidth } = useWindowDimensions();
@@ -62,7 +64,7 @@ export function WhatsNew({ pages, initial = 0, onClose }: Props) {
         <View style={styles.head}>
           <Pear height={22} color={colors.signatureStrong} />
           <Text style={styles.kicker} numberOfLines={1}>
-            {t('nouveautes.nouveauDans', { version }).toUpperCase()}
+            {(kicker ?? t('nouveautes.nouveauDans', { version })).toUpperCase()}
           </Text>
           <Text style={styles.counter}>{`${index + 1} / ${pages.length}`}</Text>
           <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" accessibilityLabel={t('nouveautes.passer')}>
