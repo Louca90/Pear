@@ -495,7 +495,7 @@ function App() {
       );
     }
     if (current.name === 'profile') {
-      return <ProfileScreen onSettings={() => setRoute({ name: 'settings' })} />;
+      return <ProfileScreen onSettings={() => setRoute({ name: 'settings' })} onStorage={() => setRoute({ name: 'storage' })} onServers={() => setRoute({ name: 'servers' })} />;
     }
     if (current.name === 'settings') {
       return (

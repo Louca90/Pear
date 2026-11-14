@@ -1,106 +1,175 @@
-import { useEffect, useRef, useState } from 'react';
-import { KeyboardAvoidingView, ScrollView, Text, TextInput, View } from 'react-native';
-import { Camera, Check, FileDown, FileUp, ImageMinus, Settings } from 'lucide-react-native';
+import { ComponentRef, useEffect, useRef, useState } from 'react';
+import { KeyboardAvoidingView, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import Reanimated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import { Bell, Camera, Check, Eye, FileDown, FileUp, HardDrive, Lock, Moon, Pencil, RefreshCw, Settings, ShieldCheck } from 'lucide-react-native';
 
+import { appVersionName } from '../../modules/pear-native';
+import { getSetting } from '../chat/database';
 import { chat, MAX_PROFILE_NAME_LENGTH } from '../chat/manager';
 import { BackupSheet } from '../components/BackupSheet';
 import { MediaPicker } from '../components/MediaPicker';
 import { ProfilePhotoCropper } from '../components/ProfilePhotoCropper';
 import { useBottomBarSpace } from '../components/BottomBar';
 import { showDialog } from '../components/dialog';
-import { Avatar, Button, Header, IconButton, Screen } from '../components/ui';
-import { createStyles, radius, spacing, useColors } from '../theme';
+import { SettingRow, SettingsGroup } from '../components/SettingsGroup';
+import { Avatar, Header, Screen, usePressFeedback } from '../components/ui';
+import { haptics } from '../haptics';
+import { DURATION, enterUp, timing } from '../motion';
+import { createStyles, radius, spacing, useColors, useThemePreference } from '../theme';
 import { t } from '../i18n';
 
-// Le libellé « Enregistré » reste affiché un instant après l'enregistrement.
-const SAVED_MS = 1600;
+const AVATAR = 72;
+// Les blocs de la page arrivent l'un après l'autre à l'ouverture.
+const STEP_MS = 40;
 
-// L'onglet Profil : ma photo et mon nom, tels que mes contacts les voient. Les réglages sont derrière
-// le bouton en haut à droite.
-export function ProfileScreen({ onSettings }: { onSettings: () => void }) {
+type Props = { onSettings: () => void; onStorage: () => void; onServers: () => void };
+
+// Le bouton rond à droite de la carte : un crayon, qui devient une coche pendant qu'on écrit le nom.
+function EditButton({ editing, onPress }: { editing: boolean; onPress: () => void }) {
+  const colors = useColors();
+  const styles = useStyles();
+  const feedback = usePressFeedback();
+  const progress = useSharedValue(editing ? 1 : 0);
+  useEffect(() => {
+    progress.set(timing(editing ? 1 : 0, DURATION.small));
+  }, [editing, progress]);
+  const pencil = useAnimatedStyle(() => ({ opacity: 1 - progress.get(), transform: [{ rotate: `${-30 * progress.get()}deg` }] }));
+  const check = useAnimatedStyle(() => ({ opacity: progress.get(), transform: [{ scale: 0.7 + 0.3 * progress.get() }] }));
+  return (
+    <Pressable onPress={onPress} onPressIn={feedback.onPressIn} onPressOut={feedback.onPressOut} accessibilityRole="button" accessibilityLabel={editing ? t('commun.enregistrer') : t('profil.modifierNom')} hitSlop={6}>
+      <Reanimated.View style={[styles.edit, editing && styles.editOn, feedback.style]}>
+        <Reanimated.View style={[StyleSheet.absoluteFill, styles.center, pencil]}>
+          <Pencil size={18} color={colors.text} strokeWidth={1.8} />
+        </Reanimated.View>
+        <Reanimated.View style={[StyleSheet.absoluteFill, styles.center, check]}>
+          <Check size={20} color={colors.onSignature} strokeWidth={2.2} />
+        </Reanimated.View>
+      </Reanimated.View>
+    </Pressable>
+  );
+}
+
+// L'onglet Profil : ma carte (photo et nom, tels que mes contacts les voient), puis les réglages
+// les plus utiles, rangés par groupes. « Tous les réglages » ouvre le reste.
+export function ProfileScreen({ onSettings, onStorage, onServers }: Props) {
   const colors = useColors();
   const styles = useStyles();
   const barSpace = useBottomBarSpace();
+  const theme = useThemePreference();
   const saved = chat.getMyProfile();
   const [name, setName] = useState(saved.name ?? '');
   const [photo, setPhoto] = useState(saved.photo);
-  const [state, setState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [editingName, setEditingName] = useState(false);
   const [backup, setBackup] = useState<'export' | 'import' | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  useEffect(() => () => clearTimeout(timer.current), []);
+  const input = useRef<ComponentRef<typeof TextInput>>(null);
+  const lockOn = getSetting('app_lock') === '1';
 
-  // La galerie de Pear, une seule photo : elle est réduite à l'enregistrement (saveProfile).
+  // La galerie de Pear, une seule photo : elle passe par le recadrage en carré, puis est gardée tout de suite.
   const [galleryOpen, setGalleryOpen] = useState(false);
-  // La photo choisie passe d'abord par le recadrage en carré, avant d'être gardée.
   const [cropping, setCropping] = useState<string | null>(null);
-  const pickPhoto = () => setGalleryOpen(true);
 
-  // La photo recadrée est enregistrée tout de suite (« Terminé » suffit) : sinon elle restait en
-  // attente et l'onglet gardait l'ancienne.
-  const save = async (nextPhoto: string | null = photo) => {
-    setState('saving');
+  const save = async (nextName: string, nextPhoto: string | null) => {
     try {
-      await chat.saveProfile(name.trim(), nextPhoto);
+      await chat.saveProfile(nextName.trim(), nextPhoto);
       setPhoto(chat.getMyProfile().photo);
-      setState('saved');
-      timer.current = setTimeout(() => setState('idle'), SAVED_MS);
     } catch (e) {
       showDialog(t('commun.enregistrementImpossible'), String(e));
-      setState('idle');
     }
   };
 
+  const toggleName = () => {
+    if (!editingName) {
+      setEditingName(true);
+      setTimeout(() => input.current?.focus(), 50);
+      return;
+    }
+    haptics.action();
+    setEditingName(false);
+    input.current?.blur();
+    if (name.trim() !== (saved.name ?? '')) save(name, photo);
+  };
+
+  const choosePhoto = () => {
+    if (!photo) return setGalleryOpen(true);
+    showDialog(t('profil.choisirPhoto'), undefined, [
+      { label: t('profil.choisirPhoto'), onPress: () => setGalleryOpen(true) },
+      {
+        label: t('profil.retirerPhoto'),
+        style: 'danger',
+        onPress: () => {
+          setPhoto(null);
+          save(name, null);
+        },
+      },
+      { label: t('commun.annuler'), style: 'cancel' },
+    ]);
+  };
+
+  const themeLabel = theme === 'light' ? t('profil.themeClair') : theme === 'dark' ? t('profil.themeSombre') : t('profil.themeAuto');
+
   return (
     <Screen>
-      <Header
-        title={t('profil.titre')}
-        action={
-          <IconButton onPress={onSettings} label={t('profil.parametres')}>
-            <Settings size={24} color={colors.text} strokeWidth={1.75} />
-          </IconButton>
-        }
-      />
+      <Header title={t('profil.titre')} />
       <KeyboardAvoidingView behavior="padding" style={styles.flex}>
-        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: barSpace }]} keyboardShouldPersistTaps="handled">
-          <IconButton onPress={pickPhoto} label={t('profil.choisirPhoto')} hitSlop={0} style={styles.photo}>
-            <Avatar uri={photo} size={112} />
-            <View style={styles.photoBadge}>
-              <Camera size={18} color={colors.onAccent} strokeWidth={1.75} />
-            </View>
-          </IconButton>
-          {photo && (
-            <IconButton onPress={() => setPhoto(null)} label={t('profil.retirerPhoto')} hitSlop={8} style={styles.removePhoto}>
-              <ImageMinus size={18} color={colors.textMuted} strokeWidth={1.75} />
-              <Text style={styles.removeLabel}>{t('profil.retirerPhoto')}</Text>
-            </IconButton>
-          )}
-
-          <Text style={styles.label}>{t('profil.votreNom')}</Text>
-          <TextInput
-            style={styles.input}
-            value={name}
-            onChangeText={setName}
-            placeholder={t('profil.commentPresenter')}
-            placeholderTextColor={colors.textMuted}
-            maxLength={MAX_PROFILE_NAME_LENGTH}
-          />
-          <Text style={styles.hint}>{t('profil.confidentialite')}</Text>
-
-          <Button
-            label={state === 'saving' ? t('profil.enregistrement') : state === 'saved' ? t('profil.enregistre') : t('commun.enregistrer')}
-            icon={Check}
-            onPress={() => save()}
-          />
-
-          <Text style={[styles.label, styles.section]}>{t('sauvegarde.titre')}</Text>
-          <View style={styles.backupRow}>
+        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: barSpace + spacing.lg }]} keyboardShouldPersistTaps="handled">
+          <Reanimated.View entering={enterUp(10, 260)} style={styles.card}>
+            <Pressable onPress={choosePhoto} accessibilityRole="button" accessibilityLabel={t('profil.choisirPhoto')}>
+              <Avatar uri={photo} size={AVATAR} />
+              <View style={styles.photoBadge}>
+                <Camera size={14} color={colors.background} strokeWidth={2.2} />
+              </View>
+            </Pressable>
             <View style={styles.flex}>
-              <Button label={t('sauvegarde.exporter')} icon={FileDown} variant="secondary" onPress={() => setBackup('export')} />
+              {editingName ? (
+                <TextInput
+                  ref={input}
+                  style={styles.nameInput}
+                  value={name}
+                  onChangeText={setName}
+                  onSubmitEditing={toggleName}
+                  placeholder={t('profil.commentPresenter')}
+                  placeholderTextColor={colors.textMuted}
+                  maxLength={MAX_PROFILE_NAME_LENGTH}
+                  returnKeyType="done"
+                />
+              ) : (
+                <Text style={styles.name} numberOfLines={1}>
+                  {name || t('profil.commentPresenter')}
+                </Text>
+              )}
+              <Text style={styles.visible}>{t('profil.visibleContacts')}</Text>
             </View>
-            <View style={styles.flex}>
-              <Button label={t('sauvegarde.charger')} icon={FileUp} variant="secondary" onPress={() => setBackup('import')} />
-            </View>
-          </View>
+            <EditButton editing={editingName} onPress={toggleName} />
+          </Reanimated.View>
+
+          <Reanimated.View entering={enterUp(10, 260, STEP_MS)} style={styles.secure} accessibilityRole="summary">
+            <ShieldCheck size={22} color={colors.onSignature} strokeWidth={1.8} />
+            <Text style={styles.secureText}>{t('profil.chiffre')}</Text>
+          </Reanimated.View>
+
+          <Reanimated.View entering={enterUp(10, 260, STEP_MS * 2)}>
+            <SettingsGroup title={t('profil.groupeGeneral')}>
+              <SettingRow icon={Moon} label={t('profil.apparence')} value={themeLabel} onPress={onSettings} />
+              <SettingRow icon={Bell} label={t('commun.notifications')} onPress={() => Linking.openSettings()} />
+              <SettingRow icon={HardDrive} label={t('stockage.titre')} onPress={onStorage} />
+            </SettingsGroup>
+          </Reanimated.View>
+
+          <Reanimated.View entering={enterUp(10, 260, STEP_MS * 3)}>
+            <SettingsGroup title={t('reglages.confidentialite')}>
+              <SettingRow icon={Lock} label={t('reglages.verrou')} value={lockOn ? t('profil.active') : t('profil.desactive')} onPress={onSettings} />
+              <SettingRow icon={Eye} label={t('reglages.serveurs')} onPress={onServers} />
+            </SettingsGroup>
+          </Reanimated.View>
+
+          <Reanimated.View entering={enterUp(10, 260, STEP_MS * 4)}>
+            <SettingsGroup title="Pear">
+              <SettingRow icon={FileDown} label={t('sauvegarde.exporter')} onPress={() => setBackup('export')} />
+              <SettingRow icon={FileUp} label={t('sauvegarde.charger')} onPress={() => setBackup('import')} />
+              <SettingRow icon={RefreshCw} label={t('profil.misesAJour')} value={appVersionName() ?? ''} onPress={onSettings} />
+              <SettingRow icon={Settings} label={t('profil.tousReglages')} onPress={onSettings} />
+            </SettingsGroup>
+          </Reanimated.View>
         </ScrollView>
       </KeyboardAvoidingView>
       {backup && <BackupSheet mode={backup} onClose={() => setBackup(null)} />}
@@ -119,7 +188,7 @@ export function ProfileScreen({ onSettings }: { onSettings: () => void }) {
           uri={cropping}
           onDone={(uri) => {
             setPhoto(uri);
-            save(uri);
+            save(name, uri);
           }}
           onClose={() => setCropping(null)}
         />
@@ -132,62 +201,76 @@ const useStyles = createStyles((colors) => ({
   flex: {
     flex: 1,
   },
-  content: {
-    padding: spacing.lg,
-    paddingTop: spacing.sm,
-  },
-  photo: {
-    alignSelf: 'center',
-    marginBottom: spacing.md,
-  },
-  photoBadge: {
-    position: 'absolute',
-    right: 0,
-    bottom: 0,
-    width: 36,
-    height: 36,
-    borderRadius: radius.full,
-    backgroundColor: colors.accent,
+  center: {
     alignItems: 'center',
     justifyContent: 'center',
   },
-  removePhoto: {
+  content: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    gap: 18,
+  },
+  card: {
     flexDirection: 'row',
-    alignSelf: 'center',
     alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
+    gap: spacing.md,
+    padding: 18,
+    borderRadius: 22,
+    backgroundColor: colors.surface,
   },
-  removeLabel: {
-    fontSize: 14,
-    color: colors.textMuted,
+  photoBadge: {
+    position: 'absolute',
+    right: -4,
+    bottom: -4,
+    width: 30,
+    height: 30,
+    borderRadius: radius.full,
+    borderWidth: 3,
+    borderColor: colors.surface,
+    backgroundColor: colors.text,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  label: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.textMuted,
-    marginBottom: spacing.sm,
-  },
-  input: {
-    height: 52,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: spacing.md,
-    fontSize: 16,
+  name: {
+    fontSize: 20,
+    fontWeight: '600',
     color: colors.text,
-    marginBottom: spacing.sm,
   },
-  hint: {
-    fontSize: 14,
+  nameInput: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: colors.text,
+    padding: 0,
+    borderBottomWidth: 1.5,
+    borderBottomColor: colors.signatureStrong,
+  },
+  visible: {
+    fontSize: 13,
     color: colors.textMuted,
-    marginBottom: spacing.lg,
+    marginTop: 3,
   },
-  section: {
-    marginTop: spacing.lg,
+  edit: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.full,
+    backgroundColor: colors.elevated,
   },
-  backupRow: {
+  editOn: {
+    backgroundColor: colors.signature,
+  },
+  secure: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: spacing.md,
+    borderRadius: 18,
+    backgroundColor: colors.signature,
+  },
+  secureText: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 19,
+    color: colors.onSignature,
   },
 }));

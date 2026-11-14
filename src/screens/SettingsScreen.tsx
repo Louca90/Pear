@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { AppState, Linking, Pressable, ScrollView, Text, View } from 'react-native';
-import { Ban, Bell, ChevronRight, Download, Eye, HardDrive, Languages, Link2, Lock, Sparkles, RefreshCw, Share2, ShieldCheck, Stethoscope, Volume2 } from 'lucide-react-native';
+import { AppState, Linking, ScrollView, Text } from 'react-native';
+import { Ban, Bell, Download, Eye, HardDrive, Languages, Link2, Lock, Sparkles, RefreshCw, Share2, ShieldCheck, Stethoscope, Volume2 } from 'lucide-react-native';
 import { linkPreviewsEnabled, setLinkPreviewsEnabled } from '../chat/linkPreview';
 
 import { getSetting, setSetting } from '../chat/database';
@@ -9,13 +9,14 @@ import { appVersionCode, appVersionName, authenticate } from '../../modules/pear
 import { showDialog } from '../components/dialog';
 
 import { SegmentedControl } from '../components/SegmentedControl';
+import { SettingRow, SettingsGroup } from '../components/SettingsGroup';
 import { Header, Screen } from '../components/ui';
 import { Toggle } from '../components/Toggle';
 import { WhatsNew } from '../update/WhatsNew';
 import { pagesFor } from '../update/pages';
 import { currentLanguage, languageChoice, LANGUAGES, t } from '../i18n';
 import { LanguageSheet } from '../components/LanguageSheet';
-import { createStyles, radius, setTextScaleIndex, setThemePreference, spacing, TEXT_SCALES, ThemePreference, useColors, useTextScaleIndex, useThemePreference } from '../theme';
+import { createStyles, setTextScaleIndex, setThemePreference, spacing, TEXT_SCALES, ThemePreference, useTextScaleIndex, useThemePreference } from '../theme';
 import { haptics } from '../haptics';
 import { checkForUpdate, getInstallPermission, previewUpdateScreen, requestInstallPermission, useUpdateState } from '../update/updates';
 
@@ -29,7 +30,6 @@ type Props = { onBack: () => void; onDiagnostic: () => void; onBlocked: () => vo
 
 // Les réglages de l'app, ouverts depuis le bouton en haut à droite du Profil.
 export function SettingsScreen({ onBack, onDiagnostic, onBlocked, onStorage, onServers, onDiscover, onReplayOnboarding }: Props) {
-  const colors = useColors();
   const styles = useStyles();
   const [whatsNewOpen, setWhatsNewOpen] = useState(false);
   const currentPages = pagesFor(appVersionName() ?? '');
@@ -77,214 +77,118 @@ export function SettingsScreen({ onBack, onDiagnostic, onBlocked, onStorage, onS
     <Screen>
       <Header title={t('profil.parametres')} onBack={onBack} />
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.label}>{t('profil.apparence')}</Text>
-        <SegmentedControl options={THEMES} value={theme} onChange={setThemePreference} />
-        <Pressable onPress={() => setLanguageOpen(true)} style={({ pressed }) => [styles.setting, styles.languageRow, pressed && styles.pressed]}>
-          <Languages size={20} color={colors.text} strokeWidth={1.75} />
-          <View style={styles.settingText}>
-            <Text style={styles.settingLabel}>{t('langue.titre')}</Text>
-            <Text style={styles.settingDetail}>{languageChoice() === 'auto' ? t('langue.auto') : LANGUAGES.find(({ code }) => code === currentLanguage())?.name}</Text>
-          </View>
-          <ChevronRight size={20} color={colors.textMuted} strokeWidth={1.75} />
-        </Pressable>
+        <SettingsGroup title={t('profil.apparence')} before={<SegmentedControl options={THEMES} value={theme} onChange={setThemePreference} />}>
+          <SettingRow
+            icon={Languages}
+            label={t('langue.titre')}
+            value={languageChoice() === 'auto' ? t('langue.auto') : LANGUAGES.find(({ code }) => code === currentLanguage())?.name}
+            onPress={() => setLanguageOpen(true)}
+          />
+        </SettingsGroup>
 
-        <Text style={[styles.label, styles.section]}>{t('reglages.tailleTexte')}</Text>
-        <SegmentedControl
-          options={TEXT_SCALES.map((_, i) => ({ value: String(i), label: 'A'.repeat(1) + ['', '+', '++', '+++'][i] }))}
-          value={String(textSize)}
-          onChange={(value) => {
-            haptics.select();
-            setTextScaleIndex(Number(value));
-          }}
+        <SettingsGroup
+          title={t('reglages.tailleTexte')}
+          before={
+            <>
+              <SegmentedControl
+                options={TEXT_SCALES.map((_, i) => ({ value: String(i), label: 'A' + ['', '+', '++', '+++'][i] }))}
+                value={String(textSize)}
+                onChange={(value) => {
+                  haptics.select();
+                  setTextScaleIndex(Number(value));
+                }}
+              />
+              <Text style={styles.sizeSample}>{t('reglages.tailleTexteAide')}</Text>
+            </>
+          }
         />
-        <Text style={[styles.settingDetail, styles.sizeSample]}>{t('reglages.tailleTexteAide')}</Text>
 
-        <Text style={[styles.label, styles.section]}>{t('reglages.notifications')}</Text>
-        <View style={styles.rows}>
-          <Pressable onPress={() => Linking.openSettings()} style={({ pressed }) => [styles.setting, pressed && styles.pressed]}>
-            <Bell size={20} color={colors.text} strokeWidth={1.75} />
-            <Text style={styles.settingLabel}>{t('commun.notifications')}</Text>
-            <ChevronRight size={20} color={colors.textMuted} strokeWidth={1.75} />
-          </Pressable>
-          <View style={styles.setting}>
-            <Volume2 size={20} color={colors.text} strokeWidth={1.75} />
-            <View style={styles.settingText}>
-              <Text style={styles.settingLabel}>{t('reglages.sons')}</Text>
-              <Text style={styles.settingDetail}>{t('reglages.sonsAide')}</Text>
-            </View>
-            <Toggle
-              value={sounds}
-              label={t('reglages.sons')}
-              onChange={(value) => {
-                setSounds(value);
-                setSoundsEnabled(value);
-              }}
-            />
-          </View>
-          <Pressable onPress={onStorage} style={({ pressed }) => [styles.setting, pressed && styles.pressed]}>
-            <HardDrive size={20} color={colors.text} strokeWidth={1.75} />
-            <Text style={styles.settingLabel}>{t('stockage.titre')}</Text>
-            <ChevronRight size={20} color={colors.textMuted} strokeWidth={1.75} />
-          </Pressable>
-          <Pressable onPress={onDiagnostic} style={({ pressed }) => [styles.setting, pressed && styles.pressed]}>
-            <Stethoscope size={20} color={colors.text} strokeWidth={1.75} />
-            <Text style={styles.settingLabel}>{t('diag.ouvrir')}</Text>
-            <ChevronRight size={20} color={colors.textMuted} strokeWidth={1.75} />
-          </Pressable>
-        </View>
+        <SettingsGroup title={t('reglages.notifications')}>
+          <SettingRow icon={Bell} label={t('commun.notifications')} onPress={() => Linking.openSettings()} />
+          <SettingRow
+            icon={Volume2}
+            label={t('reglages.sons')}
+            detail={t('reglages.sonsAide')}
+            right={
+              <Toggle
+                value={sounds}
+                label={t('reglages.sons')}
+                onChange={(value) => {
+                  setSounds(value);
+                  setSoundsEnabled(value);
+                }}
+              />
+            }
+          />
+          <SettingRow icon={HardDrive} label={t('stockage.titre')} onPress={onStorage} />
+          <SettingRow icon={Stethoscope} label={t('diag.ouvrir')} onPress={onDiagnostic} />
+        </SettingsGroup>
 
-        <Text style={[styles.label, styles.section]}>{t('reglages.confidentialite')}</Text>
-        <View style={[styles.setting, styles.relayRow]}>
-          <Share2 size={20} color={colors.text} strokeWidth={1.75} />
-          <View style={styles.settingText}>
-            <Text style={styles.settingLabel}>{t('reglages.relais')}</Text>
-            <Text style={styles.settingDetail}>{t('reglages.relaisAide')}</Text>
-          </View>
-          <Toggle
-            value={relay}
+        <SettingsGroup title={t('reglages.confidentialite')}>
+          <SettingRow
+            icon={Share2}
             label={t('reglages.relais')}
-            onChange={(value) => {
-              setRelay(value);
-              setSetting('relay_enabled', value ? null : '0');
-            }}
+            detail={t('reglages.relaisAide')}
+            right={
+              <Toggle
+                value={relay}
+                label={t('reglages.relais')}
+                onChange={(value) => {
+                  setRelay(value);
+                  setSetting('relay_enabled', value ? null : '0');
+                }}
+              />
+            }
           />
-        </View>
-        <View style={[styles.setting, styles.relayRow]}>
-          <Link2 size={20} color={colors.text} strokeWidth={1.75} />
-          <View style={styles.settingText}>
-            <Text style={styles.settingLabel}>{t('reglages.apercuLiens')}</Text>
-            <Text style={styles.settingDetail}>{t('reglages.apercuLiensAide')}</Text>
-          </View>
-          <Toggle
-            value={linkPreviews}
+          <SettingRow
+            icon={Link2}
             label={t('reglages.apercuLiens')}
-            onChange={(value) => {
-              setLinkPreviews(value);
-              setLinkPreviewsEnabled(value);
-            }}
+            detail={t('reglages.apercuLiensAide')}
+            right={
+              <Toggle
+                value={linkPreviews}
+                label={t('reglages.apercuLiens')}
+                onChange={(value) => {
+                  setLinkPreviews(value);
+                  setLinkPreviewsEnabled(value);
+                }}
+              />
+            }
           />
-        </View>
-        <View style={[styles.setting, styles.relayRow]}>
-          <Lock size={20} color={colors.text} strokeWidth={1.75} />
-          <View style={styles.settingText}>
-            <Text style={styles.settingLabel}>{t('reglages.verrou')}</Text>
-            <Text style={styles.settingDetail}>{t('reglages.verrouAide')}</Text>
-          </View>
-          <Toggle value={lock} onChange={changeLock} label={t('reglages.verrou')} />
-        </View>
-        <Pressable onPress={onServers} style={({ pressed }) => [styles.setting, styles.relayRow, pressed && styles.pressed]}>
-          <Eye size={20} color={colors.text} strokeWidth={1.75} />
-          <View style={styles.settingText}>
-            <Text style={styles.settingLabel}>{t('reglages.serveurs')}</Text>
-            <Text style={styles.settingDetail}>{t('reglages.serveursAide')}</Text>
-          </View>
-          <ChevronRight size={20} color={colors.textMuted} strokeWidth={1.75} />
-        </Pressable>
-        <Pressable onPress={onBlocked} style={({ pressed }) => [styles.setting, pressed && styles.pressed]}>
-          <Ban size={20} color={colors.text} strokeWidth={1.75} />
-          <Text style={styles.settingLabel}>{t('reglages.bloques')}</Text>
-          <ChevronRight size={20} color={colors.textMuted} strokeWidth={1.75} />
-        </Pressable>
+          <SettingRow icon={Lock} label={t('reglages.verrou')} detail={t('reglages.verrouAide')} right={<Toggle value={lock} onChange={changeLock} label={t('reglages.verrou')} />} />
+          <SettingRow icon={Eye} label={t('reglages.serveurs')} detail={t('reglages.serveursAide')} onPress={onServers} />
+          <SettingRow icon={Ban} label={t('reglages.bloques')} onPress={onBlocked} />
+        </SettingsGroup>
 
-        <Text style={[styles.label, styles.section]}>{t('profil.misesAJour')}</Text>
-        <View style={styles.rows}>
-          <Pressable onPress={() => checkForUpdate(true)} style={({ pressed }) => [styles.setting, pressed && styles.pressed]}>
-            <RefreshCw size={20} color={colors.text} strokeWidth={1.75} />
-            <View style={styles.settingText}>
-              <Text style={styles.settingLabel}>{t('profil.rechercherMaj')}</Text>
-              <Text style={styles.settingDetail}>
-                {t('commun.version')} {appVersionName() ?? '?'} ({appVersionCode() ?? '?'}){updateStatus ? ` · ${updateStatus}` : ''}
-              </Text>
-            </View>
-          </Pressable>
-          <Pressable onPress={requestInstallPermission} style={({ pressed }) => [styles.setting, pressed && styles.pressed]}>
-            <ShieldCheck size={20} color={colors.text} strokeWidth={1.75} />
-            <View style={styles.settingText}>
-              <Text style={styles.settingLabel}>{t('profil.installationMaj')}</Text>
-              <Text style={styles.settingDetail}>{canInstall ? t('profil.autorisee') : t('profil.aAutoriser')}</Text>
-            </View>
-            <ChevronRight size={20} color={colors.textMuted} strokeWidth={1.75} />
-          </Pressable>
-          {__DEV__ && update.status === 'available' && (
-            <Pressable onPress={() => previewUpdateScreen(true)} style={({ pressed }) => [styles.setting, pressed && styles.pressed]}>
-              <Download size={20} color={colors.text} strokeWidth={1.75} />
-              <Text style={styles.settingLabel}>{t('profil.apercuMaj')}</Text>
-            </Pressable>
-          )}
-          {currentPages.length > 0 && (
-            <Pressable onPress={() => setWhatsNewOpen(true)} style={({ pressed }) => [styles.setting, pressed && styles.pressed]}>
-              <Sparkles size={20} color={colors.text} strokeWidth={1.75} />
-              <Text style={styles.settingLabel}>{t('nouveautes.version', { version: appVersionName() ?? '?' })}</Text>
-            </Pressable>
-          )}
-          <Pressable onPress={onDiscover} style={({ pressed }) => [styles.setting, pressed && styles.pressed]}>
-            <Sparkles size={20} color={colors.text} strokeWidth={1.75} />
-            <Text style={styles.settingLabel}>{t('nouveautes.decouvrir')}</Text>
-            <ChevronRight size={20} color={colors.textMuted} strokeWidth={1.75} />
-          </Pressable>
-          {__DEV__ && (
-            <Pressable onPress={onReplayOnboarding} style={({ pressed }) => [styles.setting, pressed && styles.pressed]}>
-              <RefreshCw size={20} color={colors.text} strokeWidth={1.75} />
-              <Text style={styles.settingLabel}>{t('reglages.revoirPriseEnMain')}</Text>
-            </Pressable>
-          )}
-        </View>
-      </ScrollView>
-      {whatsNewOpen && <WhatsNew pages={currentPages} onClose={() => setWhatsNewOpen(false)} />}
+        <SettingsGroup title={t('profil.misesAJour')}>
+          <SettingRow
+            icon={RefreshCw}
+            label={t('profil.rechercherMaj')}
+            detail={`${t('commun.version')} ${appVersionName() ?? '?'} (${appVersionCode() ?? '?'})${updateStatus ? ` · ${updateStatus}` : ''}`}
+            onPress={() => checkForUpdate(true)}
+            chevron={false}
+          />
+          <SettingRow icon={ShieldCheck} label={t('profil.installationMaj')} detail={canInstall ? t('profil.autorisee') : t('profil.aAutoriser')} onPress={requestInstallPermission} />
+          {__DEV__ && update.status === 'available' && <SettingRow icon={Download} label={t('profil.apercuMaj')} onPress={() => previewUpdateScreen(true)} chevron={false} />}
+          {currentPages.length > 0 && <SettingRow icon={Sparkles} label={t('nouveautes.version', { version: appVersionName() ?? '?' })} onPress={() => setWhatsNewOpen(true)} chevron={false} />}
+          <SettingRow icon={Sparkles} label={t('nouveautes.decouvrir')} onPress={onDiscover} />
+          {__DEV__ && <SettingRow icon={RefreshCw} label={t('reglages.revoirPriseEnMain')} onPress={onReplayOnboarding} chevron={false} />}
+        </SettingsGroup>
+      </ScrollView>      {whatsNewOpen && <WhatsNew pages={currentPages} onClose={() => setWhatsNewOpen(false)} />}
       {languageOpen && <LanguageSheet onClose={() => setLanguageOpen(false)} />}
     </Screen>
   );
 }
 
 const useStyles = createStyles((colors) => ({
-  relayRow: {
-    marginBottom: spacing.sm,
-  },
-  sizeSample: {
-    marginTop: spacing.sm,
-  },
-  languageRow: {
-    marginTop: spacing.md,
-  },
   content: {
     padding: spacing.lg,
     paddingTop: spacing.sm,
+    gap: 22,
   },
-  label: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.textMuted,
-    marginBottom: spacing.sm,
-  },
-  section: {
-    marginTop: spacing.lg,
-  },
-  rows: {
-    gap: spacing.sm,
-  },
-  setting: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    minHeight: 52,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-  },
-  settingLabel: {
-    flex: 1,
-    fontSize: 16,
-    color: colors.text,
-  },
-  settingText: {
-    flex: 1,
-  },
-  settingDetail: {
+  sizeSample: {
+    marginHorizontal: 4,
     fontSize: 13,
     color: colors.textMuted,
-  },
-  pressed: {
-    opacity: 0.6,
   },
 }));
