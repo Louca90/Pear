@@ -1,16 +1,14 @@
-import { useEffect, useRef } from 'react';
-import { Animated, Easing, Modal, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
+import Reanimated, { ReduceMotion, withDelay, withTiming, type EntryExitAnimationFunction } from 'react-native-reanimated';
 
 import { Message } from '../../../chat/database';
 import { chat } from '../../../chat/manager';
-import { Avatar, useNavigationBarHeight } from '../../../components/ui';
+import { Sheet } from '../../../components/Sheet';
+import { Avatar } from '../../../components/ui';
 import { dateLocale, t } from '../../../i18n';
-import { createStyles, radius, spacing } from '../../../theme';
+import { EASE } from '../../../motion';
+import { createStyles } from '../../../theme';
 import { formatTime } from '../format';
-
-const OPEN_MS = 240;
-const CLOSE_MS = 180;
-const EASING = Easing.bezier(0.2, 0.8, 0.2, 1);
 
 function when(at: number | null | undefined) {
   if (!at) return '';
@@ -19,25 +17,26 @@ function when(at: number | null | undefined) {
   return today ? formatTime(at) : `${date.toLocaleDateString(dateLocale(), { day: 'numeric', month: 'short' })} · ${formatTime(at)}`;
 }
 
-// Qui a réagi, avec quoi et quand. Toucher sa propre réaction la retire.
+// Chaque ligne arrive un peu après la précédente ; l'émoji se pose en grandissant à peine.
+function rowIn(index: number): EntryExitAnimationFunction {
+  return () => {
+    'worklet';
+    const config = { duration: 240, easing: EASE, reduceMotion: ReduceMotion.System };
+    const run = (value: number) => withDelay(80 + index * 40, withTiming(value, config));
+    return { initialValues: { opacity: 0, transform: [{ translateY: 8 }] }, animations: { opacity: run(1), transform: [{ translateY: run(0) }] } };
+  };
+}
+function emojiIn(index: number): EntryExitAnimationFunction {
+  return () => {
+    'worklet';
+    const config = { duration: 280, easing: EASE, reduceMotion: ReduceMotion.System };
+    return { initialValues: { transform: [{ scale: 0.6 }] }, animations: { transform: [{ scale: withDelay(160 + index * 40, withTiming(1, config)) }] } };
+  };
+}
+
+// Qui a réagi, avec quoi et quand (feuille du bas commune). Toucher sa propre réaction la retire.
 export function ReactionsSheet({ message, name, avatar, onClose }: { message: Message; name: string; avatar: string | null; onClose: () => void }) {
   const styles = useStyles();
-  const bottom = useNavigationBarHeight();
-  const progress = useRef(new Animated.Value(0)).current;
-  const closing = useRef(false);
-
-  useEffect(() => {
-    Animated.timing(progress, { toValue: 1, duration: OPEN_MS, easing: EASING, useNativeDriver: true }).start();
-  }, [progress]);
-
-  const close = (then?: () => void) => {
-    if (closing.current) return;
-    closing.current = true;
-    Animated.timing(progress, { toValue: 0, duration: CLOSE_MS, easing: EASING, useNativeDriver: true }).start(() => {
-      onClose();
-      then?.();
-    });
-  };
 
   const rows = [
     message.my_reaction && { mine: true, emoji: message.my_reaction, at: message.my_reaction_at, who: t('chat.vous'), photo: chat.getMyProfile().photo },
@@ -45,108 +44,57 @@ export function ReactionsSheet({ message, name, avatar, onClose }: { message: Me
   ].filter(Boolean) as { mine: boolean; emoji: string; at?: number | null; who: string; photo: string | null }[];
 
   return (
-    <Modal visible transparent animationType="none" onRequestClose={() => close()} statusBarTranslucent navigationBarTranslucent>
-      <Animated.View style={[styles.backdrop, { opacity: progress }]}>
-        <Pressable style={styles.flex} onPress={() => close()} accessibilityLabel={t('commun.fermer')} />
-      </Animated.View>
-      <Animated.View
-        style={[
-          styles.sheet,
-          { paddingBottom: bottom + spacing.md },
-          { transform: [{ translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [320, 0] }) }] },
-        ]}
-      >
-        <Pressable onPress={() => close()} style={styles.header} accessibilityLabel={t('commun.fermer')}>
-          <View style={styles.handle} />
-          <Text style={styles.title}>{t('reactions.titre')}</Text>
-        </Pressable>
-        {rows.map((row) => (
-          <Pressable
-            key={row.mine ? 'mine' : 'theirs'}
-            disabled={!row.mine}
-            onPress={() => close(() => chat.react(message.contact, message.id, row.emoji))}
-            style={({ pressed }) => [styles.row, pressed && styles.pressed]}
-          >
-            <Avatar uri={row.photo} size={40} />
-            <View style={styles.text}>
-              <Text style={styles.who}>{row.who}</Text>
-              <Text style={styles.meta}>{row.mine ? t('reactions.retirer') : when(row.at)}</Text>
-            </View>
-            <View style={styles.side}>
-              <Text style={styles.emoji}>{row.emoji}</Text>
-              {row.mine && !!row.at && <Text style={styles.meta}>{when(row.at)}</Text>}
-            </View>
-          </Pressable>
-        ))}
-      </Animated.View>
-    </Modal>
+    <Sheet title={t('reactions.titre')} onClose={onClose}>
+      {(close) => (
+        <View style={styles.list}>
+          {rows.map((row, index) => (
+            <Reanimated.View key={row.mine ? 'mine' : 'theirs'} entering={rowIn(index)}>
+              <Pressable
+                disabled={!row.mine}
+                onPress={() => close(() => chat.react(message.contact, message.id, row.emoji))}
+                accessibilityRole={row.mine ? 'button' : undefined}
+                style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+              >
+                <Avatar uri={row.photo} size={44} />
+                <View style={styles.text}>
+                  <Text style={styles.who} numberOfLines={1}>
+                    {row.who}
+                  </Text>
+                  <Text style={[styles.meta, row.mine && styles.remove]}>{row.mine ? t('reactions.retirer') : when(row.at)}</Text>
+                </View>
+                <View style={styles.side}>
+                  <Reanimated.View entering={emojiIn(index)} style={styles.emojiBubble}>
+                    <Text style={styles.emoji}>{row.emoji}</Text>
+                  </Reanimated.View>
+                  {row.mine && !!row.at && <Text style={styles.meta}>{when(row.at)}</Text>}
+                </View>
+              </Pressable>
+            </Reanimated.View>
+          ))}
+        </View>
+      )}
+    </Sheet>
   );
 }
 
 const useStyles = createStyles((colors) => ({
-  flex: {
-    flex: 1,
-  },
-  backdrop: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
-  },
-  sheet: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    backgroundColor: colors.background,
-  },
-  header: {
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
-  },
-  handle: {
-    alignSelf: 'center',
-    width: 36,
-    height: 4,
-    borderRadius: radius.full,
-    backgroundColor: colors.border,
-    marginBottom: spacing.md,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
-    paddingHorizontal: spacing.lg,
-  },
+  list: { gap: 8 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    gap: 12,
+    minHeight: 64,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 18,
+    backgroundColor: colors.surface,
   },
-  pressed: {
-    opacity: 0.6,
-  },
-  text: {
-    flex: 1,
-  },
-  who: {
-    fontSize: 16,
-    color: colors.text,
-  },
-  meta: {
-    fontSize: 13,
-    color: colors.textMuted,
-  },
-  side: {
-    alignItems: 'flex-end',
-  },
-  emoji: {
-    fontSize: 26,
-  },
+  pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
+  text: { flex: 1 },
+  who: { fontSize: 15, fontWeight: '600', color: colors.text },
+  meta: { fontSize: 12, marginTop: 2, color: colors.textMuted },
+  remove: { color: colors.danger, fontWeight: '600' },
+  side: { alignItems: 'flex-end', gap: 2 },
+  emojiBubble: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.elevated },
+  emoji: { fontSize: 24 },
 }));

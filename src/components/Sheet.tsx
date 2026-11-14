@@ -1,5 +1,5 @@
 import { ReactNode, useEffect, useRef } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import Reanimated, { Easing, ReduceMotion, useAnimatedProps, useAnimatedStyle, useSharedValue, withDelay, withTiming, type EntryExitAnimationFunction } from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
 import { X } from 'lucide-react-native';
@@ -24,9 +24,13 @@ type Props = {
   children: (close: (after?: () => void) => void) => ReactNode;
   // Hauteur fixe (liste qui défile dedans) ; sinon la feuille prend la hauteur de son contenu.
   height?: number;
+  // Feuille avec des champs : elle remonte au-dessus du clavier.
+  keyboard?: boolean;
+  // Travail en cours : le voile, le retour et le bouton fermer ne ferment pas.
+  locked?: boolean;
 };
 
-export function Sheet({ title, onClose, children, height }: Props) {
+export function Sheet({ title, onClose, children, height, keyboard, locked }: Props) {
   const colors = useColors();
   const styles = useStyles();
   const bottom = useNavigationBarHeight();
@@ -38,7 +42,7 @@ export function Sheet({ title, onClose, children, height }: Props) {
   }, [shown]);
 
   const close = (after?: () => void) => {
-    if (closing.current) return;
+    if (closing.current || locked) return;
     closing.current = true;
     shown.set(withTiming(0, { duration: CLOSE_MS, easing: EASE, reduceMotion: ReduceMotion.System }));
     setTimeout(() => {
@@ -55,18 +59,20 @@ export function Sheet({ title, onClose, children, height }: Props) {
       <Reanimated.View style={[StyleSheet.absoluteFill, styles.scrim, scrim]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={() => close()} accessibilityLabel={t('commun.fermer')} />
       </Reanimated.View>
-      <Reanimated.View style={[styles.sheet, { paddingBottom: bottom + spacing.lg }, height !== undefined && { height: height + bottom }, sheet]} accessibilityViewIsModal>
-        <View style={styles.handle} />
-        <View style={styles.header}>
-          <Text style={styles.title} accessibilityRole="header">
-            {title}
-          </Text>
-          <Pressable onPress={() => close()} hitSlop={8} accessibilityRole="button" accessibilityLabel={t('commun.fermer')} style={({ pressed }) => [styles.closeButton, pressed && styles.pressed]}>
-            <X size={16} color={colors.text} strokeWidth={2.2} />
-          </Pressable>
-        </View>
-        {children(close)}
-      </Reanimated.View>
+      <KeyboardAvoidingView enabled={!!keyboard} behavior="padding" style={styles.dock} pointerEvents="box-none">
+        <Reanimated.View style={[styles.sheet, { paddingBottom: bottom + spacing.lg }, height !== undefined && { height: height + bottom }, sheet]} accessibilityViewIsModal>
+          <View style={styles.handle} />
+          <View style={styles.header}>
+            <Text style={styles.title} accessibilityRole="header">
+              {title}
+            </Text>
+            <Pressable onPress={() => close()} disabled={locked} hitSlop={8} accessibilityRole="button" accessibilityLabel={t('commun.fermer')} style={({ pressed }) => [styles.closeButton, locked && styles.dim, pressed && styles.pressed]}>
+              <X size={16} color={colors.text} strokeWidth={2.2} />
+            </Pressable>
+          </View>
+          {children(close)}
+        </Reanimated.View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -120,11 +126,10 @@ export function SheetChoice({ label, detail, selected, index, multiple, left, on
 const useStyles = createStyles((colors) => ({
   flex: { flex: 1 },
   scrim: { backgroundColor: colors.overlay },
+  dock: { flex: 1, justifyContent: 'flex-end' },
+  dim: { opacity: 0.35 },
   sheet: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
+    maxHeight: '92%',
     paddingTop: 10,
     paddingHorizontal: 18,
     gap: 12,
