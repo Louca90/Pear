@@ -1,5 +1,7 @@
 import { memo, ReactNode, useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, Text, View } from 'react-native';
+import { Animated, Pressable, Text, View } from 'react-native';
+import Reanimated, { Easing, interpolate, ReduceMotion, useAnimatedStyle, useSharedValue, withSequence, withTiming, type SharedValue } from 'react-native-reanimated';
+import { GestureDetector } from 'react-native-gesture-handler';
 import { Forward, Reply } from 'lucide-react-native';
 
 import { Message } from '../../../chat/database';
@@ -56,7 +58,7 @@ type BubbleProps = {
   onShowReactions?: (message: Message) => void;
   // Sélection : l'heure et les coches d'un message qui n'en montre pas (milieu d'un groupe) s'ouvrent
   // avec cette valeur (0 → 1), au lieu d'apparaître d'un coup.
-  metaReveal?: Animated.Value;
+  metaReveal?: SharedValue<number>;
   // Vocal à lancer quand celui-ci se termine (vocaux enchaînés).
   nextVoice?: string;
   // Album (lot 4.5) : le message le plus récent (lead) dessine la grille de tous, les autres rien.
@@ -66,14 +68,17 @@ type BubbleProps = {
 };
 
 // La ligne heure/coches qui s'ouvre : sa hauteur passe de 0 à sa taille réelle, en fondu.
-function RevealMeta({ value, children }: { value: Animated.Value; children: ReactNode }) {
+// La ligne descend aussi de quelques points pendant qu'elle s'ouvre.
+function RevealMeta({ value, children }: { value: SharedValue<number>; children: ReactNode }) {
   const [height, setHeight] = useState(0);
+  const box = useAnimatedStyle(() => ({ height: interpolate(value.get(), [0, 1], [0, height]), opacity: interpolate(value.get(), [0.3, 1], [0, 1], 'clamp') }));
+  const line = useAnimatedStyle(() => ({ transform: [{ translateY: interpolate(value.get(), [0, 1], [-4, 0]) }] }));
   return (
-    <Animated.View style={{ height: value.interpolate({ inputRange: [0, 1], outputRange: [0, height] }), opacity: value, overflow: 'hidden' }}>
-      <View style={{ position: 'absolute', left: 0, right: 0 }} onLayout={(event) => setHeight(event.nativeEvent.layout.height)}>
+    <Reanimated.View style={[{ overflow: 'hidden' }, box]}>
+      <Reanimated.View style={[{ position: 'absolute', left: 0, right: 0 }, line]} onLayout={(event) => setHeight(event.nativeEvent.layout.height)}>
         {children}
-      </View>
-    </Animated.View>
+      </Reanimated.View>
+    </Reanimated.View>
   );
 }
 
@@ -98,6 +103,7 @@ function groupCorners(position: GroupPosition, mine: boolean) {
 // (envoyés ou reçus) font leur entrée, pas ceux qu'on retrouve en défilant.
 const shownIds = new Set<string>();
 const POP_MS = 240;
+const config = (duration: number, easing = Easing.out(Easing.cubic)) => ({ duration, easing, reduceMotion: ReduceMotion.System });
 
 export function markMessagesShown(ids: string[]) {
   for (const id of ids) shownIds.add(id);
@@ -145,28 +151,32 @@ function BubbleView({ message, name, palettes, hidden, mediaHidden, pulse, onOpe
   // Un album montre les réactions de tous ses médias.
   const reactions = (album ? album.members : [message]).flatMap((member) => [member.their_reaction, member.my_reaction]).filter(Boolean);
   const linkPreview = message.kind === 'text' && message.meta ? parseMeta(message.meta).preview : undefined;
-  const scale = useRef(new Animated.Value(1)).current;
-  const pop = useRef(new Animated.Value(shownIds.has(message.id) ? 1 : 0)).current;
+  const scale = useSharedValue(1);
+  const pop = useSharedValue(shownIds.has(message.id) ? 1 : 0);
 
   // Arrivée : fondu, légère montée et zoom de 96 % à 100 %, sans rebond.
   useEffect(() => {
     if (shownIds.has(message.id)) return;
     shownIds.add(message.id);
-    Animated.timing(pop, { toValue: 1, duration: POP_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    pop.set(withTiming(1, config(POP_MS)));
   }, [message.id, pop]);
 
   // Message rejoint (citation, épinglé) : il grossit un peu puis revient doucement.
   useEffect(() => {
     if (!pulse) return;
-    Animated.sequence([
-      Animated.timing(scale, { toValue: 1.06, duration: 160, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-      Animated.timing(scale, { toValue: 1, duration: 260, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
-    ]).start();
+    scale.set(withSequence(withTiming(1.06, config(160)), withTiming(1, config(260, Easing.inOut(Easing.cubic)))));
   }, [pulse, scale]);
 
-  const { swipe, panHandlers: swipeHandlers } = useSwipeReply(message, mine, onReply);
-  const iconRange = mine ? [-SWIPE_REPLY, -SWIPE_START] : [SWIPE_START, SWIPE_REPLY];
-  const iconOutput = (hiddenValue: number, shownValue: number) => (mine ? [shownValue, hiddenValue] : [hiddenValue, shownValue]);
+  const { swipe, gesture: swipeGesture } = useSwipeReply(message, mine, onReply);
+  // L'icône de réponse apparaît, grandit et tourne pendant le glissement.
+  const iconStyle = useAnimatedStyle(() => {
+    const amount = interpolate(swipe.get() * (mine ? -1 : 1), [SWIPE_START, SWIPE_REPLY], [0, 1], 'clamp');
+    return { opacity: amount, transform: [{ scale: 0.4 + 0.6 * amount }, { rotate: `${(mine ? -60 : 60) * (1 - amount)}deg` }] };
+  });
+  const bubbleStyle = useAnimatedStyle(() => ({
+    opacity: pop.get(),
+    transform: [{ translateX: swipe.get() }, { translateY: 10 * (1 - pop.get()) }, { scale: scale.get() * (0.96 + 0.04 * pop.get()) }],
+  }));
 
   const select = () => {
     onSelect?.(message, (done) => container.current?.measureInWindow((x, y, width, height) => done({ x, y, width, height })));
@@ -216,45 +226,19 @@ function BubbleView({ message, name, palettes, hidden, mediaHidden, pulse, onOpe
   // Espace avec la bulle du dessus : collée dans un groupe, aérée entre deux groupes.
   const spacingTop = position && spaced ? { marginTop: place === 'middle' || place === 'last' ? GROUP_GAP : BETWEEN_GROUPS } : null;
 
-  return (
+  const row = (
     <View
       ref={container}
       collapsable={false}
       style={[styles.row, mine ? styles.rowMine : [styles.rowTheirs, position && styles.withAvatar], spacingTop, hidden && styles.hidden]}
-      {...swipeHandlers}
     >
       {onReply && (
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            styles.swipeIcon,
-            mine ? styles.swipeIconMine : styles.swipeIconTheirs,
-            {
-              opacity: swipe.interpolate({ inputRange: iconRange, outputRange: iconOutput(0, 1), extrapolate: 'clamp' }),
-              transform: [
-                { scale: swipe.interpolate({ inputRange: iconRange, outputRange: iconOutput(0.4, 1), extrapolate: 'clamp' }) },
-                { rotate: swipe.interpolate({ inputRange: iconRange, outputRange: mine ? ['0deg', '-60deg'] : ['60deg', '0deg'], extrapolate: 'clamp' }) },
-              ],
-            },
-          ]}
-        >
+        <Reanimated.View pointerEvents="none" style={[styles.swipeIcon, mine ? styles.swipeIconMine : styles.swipeIconTheirs, iconStyle]}>
           <Reply size={18} color={colors.text} strokeWidth={1.75} />
-        </Animated.View>
+        </Reanimated.View>
       )}
       {!mine && position && <View style={styles.avatarSlot}>{endsGroup && <Avatar uri={avatar} size={AVATAR_SIZE} />}</View>}
-      <Animated.View
-        style={[
-          mine ? styles.rowMine : styles.rowTheirs,
-          {
-            opacity: pop,
-            transform: [
-              { translateX: swipe },
-              { translateY: pop.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) },
-              { scale: Animated.multiply(scale, pop.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] })) },
-            ],
-          },
-        ]}
-      >
+      <Reanimated.View style={[mine ? styles.rowMine : styles.rowTheirs, bubbleStyle]}>
         <Pressable
           onPress={press}
           onLongPress={select}
@@ -298,9 +282,11 @@ function BubbleView({ message, name, palettes, hidden, mediaHidden, pulse, onOpe
           </Animated.View>
         )}
         <LikeBurst token={burst} style={mine ? styles.burstMine : styles.burstTheirs} />
-      </Animated.View>
+      </Reanimated.View>
     </View>
   );
+  // Sans « répondre » (sélection, aperçu), pas de geste à suivre.
+  return onReply ? <GestureDetector gesture={swipeGesture}>{row}</GestureDetector> : row;
 }
 
 const useLocalStyles = createStyles((colors) => ({

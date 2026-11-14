@@ -38,7 +38,7 @@ import { AttachScrim } from './components/AttachMenu';
 import { ComposerFade } from './components/ComposerFade';
 import { MediaViewer, Viewing } from './components/MediaViewer';
 import { Bubble, markMessagesShown } from './components/MessageBubble';
-import { MessageSelection, metaRoomFor, selectionLayout } from './components/MessageSelection';
+import { canFold, MessageSelection, metaRoomFor, selectionLayout } from './components/MessageSelection';
 import { NewMessagesButton } from './components/NewMessagesButton';
 import { PinnedBanner } from './components/PinnedBanner';
 import { ReactionsSheet } from './components/ReactionsSheet';
@@ -247,7 +247,8 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
               const clip = { top: listY, bottom: listY + listHeight };
               const origin = { y, height };
               const { tooLong } = selectionLayout(rect, origin, clip, actionsFor(message).length, metaRoomFor(position));
-              setSelection({ message, rect, origin, clip, position, keepOriginal: tooLong });
+              // Un texte trop long se replie en montant ; un média trop haut reste à sa place sous son aperçu.
+              setSelection({ message, rect, origin, clip, position, keepOriginal: tooLong && !canFold(message) });
             },
           ),
         ),
