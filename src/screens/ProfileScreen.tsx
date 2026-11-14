@@ -1,17 +1,17 @@
 import { ComponentRef, useEffect, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Reanimated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
-import { Bell, Camera, Check, Eye, FileDown, FileUp, HardDrive, Lock, Moon, Pencil, RefreshCw, Settings, ShieldCheck } from 'lucide-react-native';
+import { Bell, Camera, Check, Eye, FileDown, HardDrive, Lock, Moon, Pencil, RefreshCw, Settings, ShieldCheck } from 'lucide-react-native';
 
 import { appVersionName } from '../../modules/pear-native';
 import { getSetting } from '../chat/database';
 import { chat, MAX_PROFILE_NAME_LENGTH } from '../chat/manager';
-import { BackupSheet } from '../components/BackupSheet';
 import { MediaPicker } from '../components/MediaPicker';
 import { ProfilePhotoCropper } from '../components/ProfilePhotoCropper';
 import { useBottomBarSpace } from '../components/BottomBar';
 import { showDialog } from '../components/dialog';
 import { SettingRow, SettingsGroup } from '../components/SettingsGroup';
+import type { SettingsPage } from './settings/SettingsPages';
 import { Avatar, Header, Screen, usePressFeedback } from '../components/ui';
 import { haptics } from '../haptics';
 import { DURATION, enterUp, timing } from '../motion';
@@ -22,7 +22,7 @@ const AVATAR = 72;
 // Les blocs de la page arrivent l'un après l'autre à l'ouverture.
 const STEP_MS = 40;
 
-type Props = { onSettings: () => void; onStorage: () => void; onServers: () => void };
+type Props = { onSettings: () => void; onStorage: () => void; onPage: (page: SettingsPage) => void };
 
 // Le bouton rond à droite de la carte : un crayon, qui devient une coche pendant qu'on écrit le nom.
 function EditButton({ editing, onPress }: { editing: boolean; onPress: () => void }) {
@@ -51,7 +51,7 @@ function EditButton({ editing, onPress }: { editing: boolean; onPress: () => voi
 
 // L'onglet Profil : ma carte (photo et nom, tels que mes contacts les voient), puis les réglages
 // les plus utiles, rangés par groupes. « Tous les réglages » ouvre le reste.
-export function ProfileScreen({ onSettings, onStorage, onServers }: Props) {
+export function ProfileScreen({ onSettings, onStorage, onPage }: Props) {
   const colors = useColors();
   const styles = useStyles();
   const barSpace = useBottomBarSpace();
@@ -60,7 +60,6 @@ export function ProfileScreen({ onSettings, onStorage, onServers }: Props) {
   const [name, setName] = useState(saved.name ?? '');
   const [photo, setPhoto] = useState(saved.photo);
   const [editingName, setEditingName] = useState(false);
-  const [backup, setBackup] = useState<'export' | 'import' | null>(null);
   const input = useRef<ComponentRef<typeof TextInput>>(null);
   const lockOn = getSetting('app_lock') === '1';
 
@@ -149,30 +148,28 @@ export function ProfileScreen({ onSettings, onStorage, onServers }: Props) {
 
           <Reanimated.View entering={enterUp(10, 260, STEP_MS * 2)}>
             <SettingsGroup title={t('profil.groupeGeneral')}>
-              <SettingRow icon={Moon} label={t('profil.apparence')} value={themeLabel} onPress={onSettings} />
-              <SettingRow icon={Bell} label={t('commun.notifications')} onPress={() => Linking.openSettings()} />
+              <SettingRow icon={Moon} label={t('profil.apparence')} value={themeLabel} onPress={() => onPage('appearance')} />
+              <SettingRow icon={Bell} label={t('commun.notifications')} onPress={() => onPage('notifications')} />
               <SettingRow icon={HardDrive} label={t('stockage.titre')} onPress={onStorage} />
             </SettingsGroup>
           </Reanimated.View>
 
           <Reanimated.View entering={enterUp(10, 260, STEP_MS * 3)}>
             <SettingsGroup title={t('reglages.confidentialite')}>
-              <SettingRow icon={Lock} label={t('reglages.verrou')} value={lockOn ? t('profil.active') : t('profil.desactive')} onPress={onSettings} />
-              <SettingRow icon={Eye} label={t('reglages.serveurs')} onPress={onServers} />
+              <SettingRow icon={Lock} label={t('reglages.verrou')} value={lockOn ? t('profil.active') : t('profil.desactive')} onPress={() => onPage('privacy')} />
+              <SettingRow icon={Eye} label={t('reglages.confidentialite')} onPress={() => onPage('privacy')} />
             </SettingsGroup>
           </Reanimated.View>
 
           <Reanimated.View entering={enterUp(10, 260, STEP_MS * 4)}>
             <SettingsGroup title="Pear">
-              <SettingRow icon={FileDown} label={t('sauvegarde.exporter')} onPress={() => setBackup('export')} />
-              <SettingRow icon={FileUp} label={t('sauvegarde.charger')} onPress={() => setBackup('import')} />
-              <SettingRow icon={RefreshCw} label={t('profil.misesAJour')} value={appVersionName() ?? ''} onPress={onSettings} />
+              <SettingRow icon={FileDown} label={t('sauvegarde.chiffree')} onPress={() => onPage('backup')} />
+              <SettingRow icon={RefreshCw} label={t('profil.misesAJour')} value={appVersionName() ?? ''} onPress={() => onPage('updates')} />
               <SettingRow icon={Settings} label={t('profil.tousReglages')} onPress={onSettings} />
             </SettingsGroup>
           </Reanimated.View>
         </ScrollView>
       </KeyboardAvoidingView>
-      {backup && <BackupSheet mode={backup} onClose={() => setBackup(null)} />}
       {galleryOpen && (
         <MediaPicker
           single

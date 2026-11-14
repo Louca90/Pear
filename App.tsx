@@ -37,6 +37,7 @@ import { SettingsScreen } from './src/screens/SettingsScreen';
 import { ServersScreen } from './src/screens/ServersScreen';
 import { runAutoCleanup, StorageScreen } from './src/screens/StorageScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
+import { AppearancePage, BackupPage, NotificationsPage, PrivacyPage, SettingsPage, UpdatesPage } from './src/screens/settings/SettingsPages';
 import { ScannerScreen } from './src/screens/ScannerScreen';
 import { Contact, hasIdentity, loadContacts, loadOrCreateIdentity, saveContacts } from './src/storage';
 import { createStyles, fixed, loadTheme, motion, Palette, spacing, useColors } from './src/theme';
@@ -64,6 +65,8 @@ type Route =
   | { name: 'servers' }
   | { name: 'discover' }
   | { name: 'settings' }
+  // Une catégorie des réglages, ouverte depuis le Profil.
+  | { name: 'settingsPage'; page: SettingsPage }
   | { name: 'blocked' }
   | { name: 'requests' }
   | { name: 'customize'; publicKey: string }
@@ -283,8 +286,10 @@ function App() {
   const parentOf = (current: Route): Route | null => {
     if (current.name === 'home') return null;
     if (current.name === 'scan') return { name: 'contacts' };
-    if (current.name === 'diagnostic' || current.name === 'blocked' || current.name === 'storage' || current.name === 'servers' || current.name === 'discover') return { name: 'settings' };
-    if (current.name === 'settings') return { name: 'profile' };
+    // Ouverts depuis une page des réglages (ou depuis Tous les réglages, qui y ramène aussi).
+    if (current.name === 'servers' || current.name === 'blocked') return { name: 'settingsPage', page: 'privacy' };
+    if (current.name === 'diagnostic' || current.name === 'discover') return { name: 'settingsPage', page: 'updates' };
+    if (current.name === 'storage' || current.name === 'settings' || current.name === 'settingsPage') return { name: 'profile' };
     if (current.name === 'customize') return { name: 'chat', publicKey: current.publicKey };
     if (current.name === 'notifications') return { name: 'customize', publicKey: current.publicKey };
     if (current.name === 'contact' && isSaved(current.publicKey)) return { name: 'chat', publicKey: current.publicKey };
@@ -495,7 +500,7 @@ function App() {
       );
     }
     if (current.name === 'profile') {
-      return <ProfileScreen onSettings={() => setRoute({ name: 'settings' })} onStorage={() => setRoute({ name: 'storage' })} onServers={() => setRoute({ name: 'servers' })} />;
+      return <ProfileScreen onSettings={() => setRoute({ name: 'settings' })} onStorage={() => setRoute({ name: 'storage' })} onPage={(page) => setRoute({ name: 'settingsPage', page })} />;
     }
     if (current.name === 'settings') {
       return (
@@ -510,20 +515,28 @@ function App() {
         />
       );
     }
+    if (current.name === 'settingsPage') {
+      const back = () => setRoute({ name: 'profile' });
+      if (current.page === 'appearance') return <AppearancePage onBack={back} />;
+      if (current.page === 'notifications') return <NotificationsPage onBack={back} />;
+      if (current.page === 'privacy') return <PrivacyPage onBack={back} onServers={() => setRoute({ name: 'servers' })} onBlocked={() => setRoute({ name: 'blocked' })} />;
+      if (current.page === 'backup') return <BackupPage onBack={back} />;
+      return <UpdatesPage onBack={back} onDiscover={() => setRoute({ name: 'discover' })} onDiagnostic={() => setRoute({ name: 'diagnostic' })} />;
+    }
     if (current.name === 'storage') {
-      return <StorageScreen contacts={contacts} onBack={() => setRoute({ name: 'settings' })} />;
+      return <StorageScreen contacts={contacts} onBack={() => setRoute(parentOf(current) ?? { name: 'profile' })} />;
     }
     if (current.name === 'discover') {
-      return <DiscoverScreen onBack={() => setRoute({ name: 'settings' })} />;
+      return <DiscoverScreen onBack={() => setRoute(parentOf(current) ?? { name: 'profile' })} />;
     }
     if (current.name === 'servers') {
-      return <ServersScreen onBack={() => setRoute({ name: 'settings' })} />;
+      return <ServersScreen onBack={() => setRoute(parentOf(current) ?? { name: 'profile' })} />;
     }
     if (current.name === 'diagnostic') {
-      return <DiagnosticScreen onBack={() => setRoute({ name: 'settings' })} />;
+      return <DiagnosticScreen onBack={() => setRoute(parentOf(current) ?? { name: 'profile' })} />;
     }
     if (current.name === 'blocked') {
-      return <BlockedScreen onBack={() => setRoute({ name: 'settings' })} />;
+      return <BlockedScreen onBack={() => setRoute(parentOf(current) ?? { name: 'profile' })} />;
     }
     if (current.name === 'requests') {
       return (

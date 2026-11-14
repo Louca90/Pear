@@ -5,6 +5,7 @@ import * as Sharing from 'expo-sharing';
 import { Archive, FileDown, FileUp, Lock, ShieldAlert, User } from 'lucide-react-native';
 
 import { reloadApp } from '../../modules/pear-native';
+import { setSetting } from '../chat/database';
 import { exportBackup, importBackup, inspectBackup } from '../backup/backup';
 import { BackupError, BackupKind } from '../backup/format';
 import { t } from '../i18n';
@@ -83,6 +84,8 @@ export function BackupSheet({ mode, onClose }: { mode: 'export' | 'import'; onCl
     try {
       const uri = await exportBackup(kind, password, media, onProgress);
       setExported(uri);
+      // Pour la page Sauvegarde : « Dernière sauvegarde : … ».
+      setSetting('last_backup', String(Date.now()));
       setStep('done');
       share(uri);
     } catch (e) {
