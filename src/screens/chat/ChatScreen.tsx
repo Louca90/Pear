@@ -671,7 +671,7 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
             </View>
           )}
           </PullView>
-          <NewMessagesButton count={scroll.newCount} onPress={scroll.scrollToBottom} />
+          <NewMessagesButton count={scroll.newCount} far={scroll.far} onPress={scroll.scrollToBottom} />
           {/* Menu des pièces jointes ouvert : un appui dans la conversation le referme seulement. */}
           {attachOpen && <AttachScrim onClose={() => setAttachOpen(false)} />}
           {toast && <Toast text={toast.text} token={toast.token} />}

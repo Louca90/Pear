@@ -44,6 +44,7 @@ export const fr = {
     exporterJournal: 'Exporter le journal',
   },
   chat: {
+    revenirEnBas: 'Revenir en bas de la conversation',
     appareil: 'Appareil',
     uneFois: 'Une fois',
     plusOptions: 'Plus d’options',

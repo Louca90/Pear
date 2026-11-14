@@ -45,6 +45,7 @@ export const en: Dictionary = {
     exporterJournal: 'Export the log',
   },
   chat: {
+    revenirEnBas: 'Back to the latest messages',
     appareil: 'Camera',
     uneFois: 'View once',
     plusOptions: 'More options',
