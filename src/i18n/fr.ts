@@ -397,6 +397,7 @@ export const fr = {
     majPourTextes: 'Mets Pear à jour pour enregistrer les textes et les dessins.',
     ambiance: 'Ambiance',
     outils: 'Outils',
+    redresser: 'Redresser',
     annulerAction: 'Annuler la dernière action',
     fermer: 'Fermer',
     envoyer: 'Envoyer',

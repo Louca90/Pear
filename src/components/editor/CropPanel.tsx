@@ -5,9 +5,9 @@ import { RotateCw } from 'lucide-react-native';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
 
 import { t } from '../../i18n';
-import { createMediaStyles, radius, spacing, useMediaColors } from '../../theme';
+import { createMediaStyles, fixed, radius, spacing, useMediaColors } from '../../theme';
 import { IconButton, useInsets } from '../ui';
-import { Aspect, ASPECTS, Crop, fullRect, nextRotation, NO_CROP, Rect, rotatedSize } from './crop';
+import { Aspect, ASPECTS, Crop, fullRect, nextRotation, NO_CROP, Rect, rotatedSize, STRAIGHTEN_MAX, straightenScale } from './crop';
 import { clamp } from './layers';
 
 const OPEN_MS = 180;
@@ -25,36 +25,62 @@ function aspectLabel(id: Aspect) {
   return id === 'free' ? t('editeur.formatLibre') : id;
 }
 
-// L'icône d'un format : un cadre à ses proportions. Le format libre : les quatre équerres d'un
-// recadrage, sans cadre fermé.
-const ICON_BOX = 22;
+// La règle « Redresser » : une graduation par degré, qui défile sous un repère vert fixe. Glisser vers la
+// gauche penche la photo vers la droite. Près de 0°, elle s'y pose (et vibre une fois).
+const TICK_GAP = 9;
+const SNAP = 0.8;
 
-function AspectIcon({ id, ratio, color }: { id: Aspect; ratio: number | null; color: string }) {
-  if (id === 'free' || !ratio) {
-    const arm = 7;
-    const corner = (vertical: 'top' | 'bottom', horizontal: 'left' | 'right') => ({
-      position: 'absolute' as const,
-      width: arm,
-      height: arm,
-      [vertical]: 0,
-      [horizontal]: 0,
-      borderColor: color,
-      [vertical === 'top' ? 'borderTopWidth' : 'borderBottomWidth']: 2,
-      [horizontal === 'left' ? 'borderLeftWidth' : 'borderRightWidth']: 2,
-      [`border${vertical === 'top' ? 'Top' : 'Bottom'}${horizontal === 'left' ? 'Left' : 'Right'}Radius`]: 2,
-    });
-    return (
-      <View style={{ width: ICON_BOX - 2, height: ICON_BOX - 6 }}>
-        <View style={corner('top', 'left')} />
-        <View style={corner('top', 'right')} />
-        <View style={corner('bottom', 'left')} />
-        <View style={corner('bottom', 'right')} />
-      </View>
-    );
+function StraightenRuler({ angle, onChange, onEnd }: { angle: number; onChange: (angle: number) => void; onEnd: () => void }) {
+  const colors = useMediaColors();
+  const styles = useStyles();
+  const [width, setWidth] = useState(0);
+  const start = useRef(0);
+  const latest = useRef({ angle, onChange, onEnd });
+  latest.current = { angle, onChange, onEnd };
+  const pan = usePanGesture({
+    runOnJS: true,
+    disableReanimated: true,
+    minDistance: 2,
+    onBegin: () => {
+      start.current = latest.current.angle;
+    },
+    onUpdate: (event) => {
+      let next = clamp(start.current - event.translationX / TICK_GAP, -STRAIGHTEN_MAX, STRAIGHTEN_MAX);
+      if (Math.abs(next) < SNAP) next = 0;
+      const previous = latest.current.angle;
+      if (next !== previous && (next === 0 || Math.trunc(next / 5) !== Math.trunc(previous / 5))) haptics.select();
+      latest.current.onChange(next);
+    },
+    onFinalize: () => latest.current.onEnd(),
+  });
+  const center = width / 2;
+  const ticks = [];
+  for (let degree = -STRAIGHTEN_MAX; degree <= STRAIGHTEN_MAX; degree += 1) {
+    const x = center + (degree - angle) * TICK_GAP;
+    if (x < -2 || x > width + 2) continue;
+    const major = degree % 5 === 0;
+    ticks.push(<View key={degree} style={[styles.tick, { left: x - 1, height: major ? 18 : 10, backgroundColor: degree === 0 ? colors.background : colors.onDarkTrack }]} />);
   }
-  const width = ratio >= 1 ? ICON_BOX : ICON_BOX * ratio;
-  const height = ratio >= 1 ? ICON_BOX / ratio : ICON_BOX;
-  return <View style={{ width, height, borderWidth: 2, borderRadius: 3, borderColor: color }} />;
+  return (
+    <View style={styles.ruler}>
+      <Text style={[styles.angle, angle !== 0 && { color: colors.signature }]}>{`${Math.round(angle)}°`}</Text>
+      <GestureDetector gesture={pan}>
+        <View
+          collapsable={false}
+          onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
+          style={styles.rulerTrack}
+          accessibilityRole="adjustable"
+          accessibilityLabel={t('editeur.redresser')}
+          accessibilityValue={{ text: `${Math.round(angle)}°` }}
+          accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+          onAccessibilityAction={({ nativeEvent }) => onChange(clamp(angle + (nativeEvent.actionName === 'increment' ? 1 : -1), -STRAIGHTEN_MAX, STRAIGHTEN_MAX))}
+        >
+          {ticks}
+          <View pointerEvents="none" style={[styles.tickCenter, { left: center - 1 }]} />
+        </View>
+      </GestureDetector>
+    </View>
+  );
 }
 
 type Mode = 'move' | 'tl' | 'tr' | 'bl' | 'br' | 't' | 'b' | 'l' | 'r' | null;
@@ -194,14 +220,22 @@ export function CropPanel({ uri, image, crop: initial, bottom, onDone, lockedAsp
     onFinalize: () => latestRef.current.end(),
   });
 
+  // Redressée, la photo grandit juste assez pour remplir le cadre de la photo tournée.
+  const angle = crop.angle ?? 0;
+  const grow = straightenScale(turned, angle);
   const imageStyle = {
     position: 'absolute' as const,
-    left: origin.x + (shown.width - image.width * fit) / 2,
-    top: origin.y + (shown.height - image.height * fit) / 2,
-    width: image.width * fit,
-    height: image.height * fit,
-    transform: [{ rotate: `${crop.rotation}deg` }],
+    left: origin.x + (shown.width - image.width * fit * grow) / 2,
+    top: origin.y + (shown.height - image.height * fit * grow) / 2,
+    width: image.width * fit * grow,
+    height: image.height * fit * grow,
+    transform: [{ rotate: `${crop.rotation + angle}deg` }],
   };
+  const straighten = (next: number) => {
+    setCrop((current) => ({ ...current, angle: next }));
+    Animated.timing(grid, { toValue: 1, duration: 120, easing: EASING, useNativeDriver: true }).start();
+  };
+  const straightenEnd = () => Animated.timing(grid, { toValue: 0, duration: 220, easing: EASING, useNativeDriver: true }).start();
   const frame = { left: origin.x + box.x, top: origin.y + box.y, width: box.width, height: box.height };
 
   return (
@@ -215,7 +249,7 @@ export function CropPanel({ uri, image, crop: initial, bottom, onDone, lockedAsp
         <View style={[styles.shade, { left: frame.left + frame.width, top: frame.top, width: shown.width - box.x - box.width, height: frame.height }]} />
         <View style={[styles.frame, frame]}>
           {lockedAspect === '1:1' && <View style={styles.circle} />}
-          <Animated.View style={[StyleSheet.absoluteFill, { opacity: grid }]}>
+          <Animated.View style={[StyleSheet.absoluteFill, { opacity: grid.interpolate({ inputRange: [0, 1], outputRange: [0.45, 1] }) }]}>
             <View style={[styles.gridLine, { left: '33.33%', top: 0, bottom: 0, width: StyleSheet.hairlineWidth }]} />
             <View style={[styles.gridLine, { left: '66.66%', top: 0, bottom: 0, width: StyleSheet.hairlineWidth }]} />
             <View style={[styles.gridLine, { top: '33.33%', left: 0, right: 0, height: StyleSheet.hairlineWidth }]} />
@@ -226,9 +260,9 @@ export function CropPanel({ uri, image, crop: initial, bottom, onDone, lockedAsp
               key={corner}
               style={[
                 styles.handle,
-                corner.includes('t') ? { top: -3 } : { bottom: -3 },
-                corner.includes('l') ? { left: -3, borderLeftWidth: 3 } : { right: -3, borderRightWidth: 3 },
-                corner.includes('t') ? { borderTopWidth: 3 } : { borderBottomWidth: 3 },
+                corner.includes('t') ? { top: -4 } : { bottom: -4 },
+                corner.includes('l') ? { left: -4, borderLeftWidth: 4 } : { right: -4, borderRightWidth: 4 },
+                corner.includes('t') ? { borderTopWidth: 4 } : { borderBottomWidth: 4 },
               ]}
             />
           ))}
@@ -248,9 +282,10 @@ export function CropPanel({ uri, image, crop: initial, bottom, onDone, lockedAsp
         </Pressable>
       </View>
 
-      <View style={[styles.bottomRow, { bottom: bottom + spacing.lg }]}>
+      {/* Le panneau du bas monte de 14 points en fondu, comme les autres outils. */}
+      <Animated.View style={[styles.bottomRow, { bottom: bottom + spacing.lg, transform: [{ translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }] }]}>
         <View style={styles.aspects}>
-          {ASPECTS.filter(({ id }) => !lockedAspect || id === lockedAspect).map(({ id, ratio: value }) => (
+          {ASPECTS.filter(({ id }) => !lockedAspect || id === lockedAspect).map(({ id }) => (
             <Pressable
               key={id}
               onPress={() => chooseAspect(id)}
@@ -259,13 +294,12 @@ export function CropPanel({ uri, image, crop: initial, bottom, onDone, lockedAsp
               accessibilityState={{ selected: aspect === id }}
               style={[styles.chip, aspect === id && styles.chipOn]}
             >
-              <View style={styles.chipIcon}>
-                <AspectIcon id={id} ratio={value} color={aspect === id ? colors.text : colors.background} />
-              </View>
               <Text style={[styles.chipLabel, aspect === id && { color: colors.text }]}>{aspectLabel(id)}</Text>
             </Pressable>
           ))}
         </View>
+        {/* Le redressement fin : pas pour la photo de profil, recadrée par le module natif sans angle. */}
+        {!lockedAspect && <StraightenRuler angle={angle} onChange={straighten} onEnd={straightenEnd} />}
         <Pressable
           onPress={() => {
             vibrate();
@@ -282,8 +316,7 @@ export function CropPanel({ uri, image, crop: initial, bottom, onDone, lockedAsp
         >
           <Text style={styles.resetLabel}>{t('editeur.reinitialiser')}</Text>
         </Pressable>
-      </View>
-    </Animated.View>
+      </Animated.View>    </Animated.View>
   );
 }
 
@@ -297,7 +330,7 @@ const useStyles = createMediaStyles((colors) => ({
   },
   frame: {
     position: 'absolute',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: 'rgba(255, 255, 255, 0.9)',
   },
   circle: {
@@ -363,21 +396,45 @@ const useStyles = createMediaStyles((colors) => ({
     gap: spacing.sm,
   },
   chip: {
-    width: 52,
-    height: 56,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.14)',
+    height: 36,
+    paddingHorizontal: 14,
+    borderRadius: 18,
+    backgroundColor: fixed.cameraSurface,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  ruler: {
+    alignSelf: 'stretch',
+    alignItems: 'center',
     gap: 4,
   },
-  chipIcon: {
-    height: ICON_BOX,
-    alignItems: 'center',
-    justifyContent: 'center',
+  angle: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
+    color: colors.onDarkMuted,
+  },
+  rulerTrack: {
+    alignSelf: 'stretch',
+    height: 34,
+    overflow: 'hidden',
+  },
+  tick: {
+    position: 'absolute',
+    bottom: 4,
+    width: 2,
+    borderRadius: 1,
+  },
+  tickCenter: {
+    position: 'absolute',
+    bottom: 2,
+    width: 2,
+    height: 26,
+    borderRadius: 1,
+    backgroundColor: colors.signatureStrong,
   },
   chipLabel: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '600',
     color: colors.background,
   },

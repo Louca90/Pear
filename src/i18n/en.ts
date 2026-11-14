@@ -398,6 +398,7 @@ export const en: Dictionary = {
     majPourTextes: 'Update Pear to save texts and drawings.',
     ambiance: 'Mood',
     outils: 'Tools',
+    redresser: 'Straighten',
     annulerAction: 'Undo last action',
     fermer: 'Close',
     envoyer: 'Send',

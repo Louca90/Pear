@@ -3,7 +3,11 @@
 
 export type Rotation = 0 | 90 | 180 | 270;
 export type Rect = { x: number; y: number; width: number; height: number };
-export type Crop = { rotation: Rotation; rect: Rect };
+// ngle : le redressement fin, en degrés (de -45 à 45), en plus des quarts de tour. La photo est alors
+// agrandie juste assez pour qu'aucun coin vide n'entre dans la photo tournée.
+export type Crop = { rotation: Rotation; rect: Rect; angle?: number };
+
+export const STRAIGHTEN_MAX = 45;
 export type Aspect = 'free' | '1:1' | '4:5' | '3:4' | '9:16' | '16:9';
 
 export const NO_CROP: Crop = { rotation: 0, rect: { x: 0, y: 0, width: 1, height: 1 } };
@@ -20,11 +24,21 @@ type Size = { width: number; height: number };
 
 export function isCropped(crop: Crop) {
   const { rect } = crop;
-  return crop.rotation !== 0 || rect.x > 1e-4 || rect.y > 1e-4 || rect.width < 1 - 1e-4 || rect.height < 1 - 1e-4;
+  return crop.rotation !== 0 || Math.abs(crop.angle ?? 0) > 0.05 || rect.x > 1e-4 || rect.y > 1e-4 || rect.width < 1 - 1e-4 || rect.height < 1 - 1e-4;
 }
 
 export function rotatedSize(size: Size, rotation: Rotation): Size {
   return rotation % 180 === 0 ? size : { width: size.height, height: size.width };
+}
+
+// L'agrandissement qui couvre le cadre de la photo tournée d'un quart de tour (largeur × hauteur)
+// quand on la penche en plus de ngle degrés.
+export function straightenScale(turned: Size, angle: number) {
+  const a = (Math.abs(angle) * Math.PI) / 180;
+  if (a === 0) return 1;
+  const cos = Math.cos(a);
+  const sin = Math.sin(a);
+  return Math.max(cos + (turned.height / turned.width) * sin, cos + (turned.width / turned.height) * sin);
 }
 
 // L'aperçu (la zone gardée, ajustée à l'écran) et la place de la photo dedans : la photo, à sa taille
@@ -36,8 +50,10 @@ export function cropGeometry(image: Size, crop: Crop, screen: Size) {
   const fit = Math.min(screen.width / keptWidth, screen.height / keptHeight);
   const turnedWidth = turned.width * fit;
   const turnedHeight = turned.height * fit;
-  const imageWidth = image.width * fit;
-  const imageHeight = image.height * fit;
+  const angle = crop.angle ?? 0;
+  const grow = straightenScale(turned, angle);
+  const imageWidth = image.width * fit * grow;
+  const imageHeight = image.height * fit * grow;
   return {
     width: keptWidth * fit,
     height: keptHeight * fit,
@@ -48,7 +64,7 @@ export function cropGeometry(image: Size, crop: Crop, screen: Size) {
       top: -crop.rect.y * turnedHeight + (turnedHeight - imageHeight) / 2,
       width: imageWidth,
       height: imageHeight,
-      rotation: crop.rotation,
+      rotation: crop.rotation + angle,
     },
   };
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from '@jest/globals';
 
-import { cropGeometry, fullRect, isCropped, NO_CROP, nextRotation, rotatedSize } from './crop';
+import { cropGeometry, fullRect, isCropped, NO_CROP, nextRotation, rotatedSize, straightenScale } from './crop';
 
 describe('recadrage', () => {
   const photo = { width: 4000, height: 3000 };
@@ -45,5 +45,19 @@ describe('recadrage', () => {
     expect(story.x).toBeCloseTo(0.125);
     expect(fullRect(photo, 0, null)).toEqual({ x: 0, y: 0, width: 1, height: 1 });
     expect(nextRotation(270)).toBe(0);
+  });
+
+  it('redressée, la photo grandit juste assez pour couvrir son cadre', () => {
+    expect(straightenScale(photo, 0)).toBe(1);
+    // Carrée, penchée de 45° : il faut la grandir de √2.
+    expect(straightenScale({ width: 100, height: 100 }, 45)).toBeCloseTo(Math.SQRT2);
+    const crop = { rotation: 0 as const, rect: { x: 0, y: 0, width: 1, height: 1 }, angle: 10 };
+    const geometry = cropGeometry(photo, crop, screen);
+    const grow = straightenScale(photo, 10);
+    expect(geometry.image.width).toBeCloseTo(400 * grow);
+    // Toujours centrée sur l'aperçu, et tournée de l'angle choisi.
+    expect(geometry.image.left).toBeCloseTo((400 - 400 * grow) / 2);
+    expect(geometry.image.rotation).toBe(10);
+    expect(isCropped(crop)).toBe(true);
   });
 });
