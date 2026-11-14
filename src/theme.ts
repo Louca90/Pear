@@ -23,6 +23,8 @@ export type Palette = {
   selectionDim: string;
   disabled: string;
   danger: string;
+  // Fond doux d'une action destructrice (pastille d'icône d'un dialogue).
+  dangerSoft: string;
   // Bouton principal : fond de la couleur du texte, libellé de la couleur du fond.
   accent: string;
   onAccent: string;
@@ -54,6 +56,7 @@ const light: Palette = {
   selectionDim: 'rgba(0, 0, 0, 0.12)',
   disabled: '#C4C4C4',
   danger: '#C62828',
+  dangerSoft: '#FCE8E6',
   accent: '#000000',
   onAccent: '#FFFFFF',
   signature: '#E6EFCB',
@@ -80,6 +83,7 @@ const dark: Palette = {
   selectionDim: 'rgba(0, 0, 0, 0.45)',
   disabled: '#4A4A4A',
   danger: '#EF5350',
+  dangerSoft: '#3A1F1C',
   accent: '#F5F5F7',
   onAccent: '#0B0B0C',
   signature: '#2B3420',
