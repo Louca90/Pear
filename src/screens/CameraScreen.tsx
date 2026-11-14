@@ -31,6 +31,7 @@ import { log } from '../log';
 import { VIDEO_BITRATE } from '../config';
 import { t } from '../i18n';
 import { logCameraStep } from './cameraTiming';
+import { useCameraLive, useCameraVisible } from './cameraStandby';
 import { activeLevel, ZoomBar, zoomLevels } from './camera/ZoomBar';
 import { RecordingTimer, SHUTTER_SIZE, ShutterFace } from './camera/Shutter';
 import { LastShot, PhotoFlash } from './camera/CaptureFeedback';
@@ -239,6 +240,9 @@ export function CameraScreen({ contacts, to, onSent, onRecordingChange }: Props)
   const [cameraPermission, requestCamera] = useCameraPermissions();
   const [microphonePermission, requestMicrophone] = useMicrophonePermissions();
   const cameraAllowed = cameraPermission?.granted ?? cameraKnown.granted;
+  // Écran construit d'avance et gardé caché : la caméra ne s'allume que quand l'onglet est demandé.
+  const live = useCameraLive();
+  const onScreen = useCameraVisible();
   useEffect(() => {
     if (cameraPermission) cameraKnown.granted = cameraPermission.granted;
   }, [cameraPermission]);
@@ -611,8 +615,9 @@ export function CameraScreen({ contacts, to, onSent, onRecordingChange }: Props)
 
   return (
     <View style={styles.screen}>
-      <StatusBar style="light" />
-      <NavigationBar style="light" />
+      {/* Seulement à l'écran : caché, l'écran ne doit pas imposer ses barres claires aux autres pages. */}
+      {onScreen && <StatusBar style="light" />}
+      {onScreen && <NavigationBar style="light" />}
       <View style={[styles.preview, { height: previewHeight }]}>
         {cameraAllowed && (
           <Reanimated.View style={[StyleSheet.absoluteFill, { opacity: previewOpacity }]}>
@@ -620,6 +625,7 @@ export function CameraScreen({ contacts, to, onSent, onRecordingChange }: Props)
               <PearCameraView
                 ref={camera}
                 style={StyleSheet.absoluteFill}
+                active={live}
                 facing={facing}
                 cameraId={facing === 'back' ? lensId : null}
                 zoom={zoom}

@@ -3,6 +3,7 @@ import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import Reanimated, { Easing, ReduceMotion, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
 import { haptics } from '../haptics';
 import { Camera, LucideIcon, MessageCircle, User, Users } from 'lucide-react-native';
+import { wakeCamera } from '../screens/cameraStandby';
 
 import { chat } from '../chat/manager';
 import { useMediaUri } from '../chat/media';
@@ -94,7 +95,8 @@ function TabButton({ tab, icon: Icon, filled: Filled, label, active, onPress }: 
   };
 
   return (
-    <Pressable onPress={press} accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected: active }} style={styles.slot}>
+    // Le doigt se pose sur l'appareil photo : la caméra commence à s'ouvrir avant même qu'il se lève.
+    <Pressable onPress={press} onPressIn={tab === 'camera' && !active ? wakeCamera : undefined} accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected: active }} style={styles.slot}>
       <View style={styles.icon}>
         {!Filled ? (
           <ProfileIcon draw={draw} />

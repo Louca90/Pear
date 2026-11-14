@@ -57,6 +57,7 @@ import { log } from './src/log';
 import { interceptBack } from './src/navigation/backInterceptors';
 import { isTabSwipeLocked } from './src/components/tabSwipeLock';
 import { markCameraRequested } from './src/screens/cameraTiming';
+import { isCameraLive, setCameraShown, wakeCamera } from './src/screens/cameraStandby';
 import { ShareReceiver } from './src/components/ShareReceiver';
 import { t } from './src/i18n';
 
@@ -412,6 +413,8 @@ function App() {
         // Pas d'onglet de ce côté : la page résiste un peu.
         tabDrag.set(next ? dx : dx * 0.2);
         setNeighbor((current) => (current?.name === next?.name ? current : next));
+        // Glissé vers l'appareil photo : la caméra s'allume pendant le geste.
+        if (next?.name === 'camera') wakeCamera();
       },
       onPanResponderRelease: (event, { dx, vx }) => {
         const next = neighborOf(dx);
@@ -714,12 +717,24 @@ function App() {
   // L'appareil photo reste monté et allumé un moment après qu'on l'a quitté (caché sous la page) : y
   // revenir est alors instantané. Au-delà, il est démonté et la caméra s'éteint.
   const [cameraWarm, setCameraWarm] = useState(false);
+  // L'écran de l'appareil photo est construit une fois, peu après le démarrage, puis gardé caché
+  // (caméra éteinte) : l'ouvrir n'a plus qu'à allumer la caméra.
+  const [cameraBuilt, setCameraBuilt] = useState(false);
+  useEffect(() => {
+    if (!identity || cameraBuilt) return;
+    const timer = setTimeout(() => setCameraBuilt(true), CAMERA_BUILD_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [identity, cameraBuilt]);
+  useEffect(() => {
+    setCameraShown(route.name === 'camera' || cameraWarm, route.name === 'camera');
+  }, [route.name, cameraWarm]);
   const lastRouteName = useRef(route.name);
   const cameraMarked = useRef(false);
   if (route.name !== 'camera') cameraMarked.current = false;
   else if (!cameraMarked.current) {
     cameraMarked.current = true;
-    if (!cameraWarm) markCameraRequested();
+    // Déjà allumée (réveillée par le doigt, ou encore chaude) : la mesure est déjà partie.
+    if (!cameraWarm && !isCameraLive()) markCameraRequested();
   }
   useEffect(() => {
     const left = lastRouteName.current === 'camera' && route.name !== 'camera';
@@ -765,7 +780,7 @@ function App() {
     return element;
   };
   const top = motionFor(currentKey);
-  const warmCamera = cameraWarm && !!identity && route.name !== 'camera' && !layers.some((layer) => layer.name === 'camera');
+  const warmCamera = (cameraWarm || cameraBuilt) && !!identity && route.name !== 'camera' && !layers.some((layer) => layer.name === 'camera');
 
   if (onboarding && identity && !blocked) {
     return (
@@ -857,6 +872,8 @@ function App() {
 
 const THEME_FADE_MS = 320;
 const CAMERA_WARM_MS = 15_000;
+// Après le démarrage, une fois l'accueil affiché : construire l'appareil photo ne retarde rien.
+const CAMERA_BUILD_DELAY_MS = 2500;
 const CAMERA_ROUTE = { name: 'camera' } as Route;
 
 // Voile de la couleur de l'ancien thème, qui s'efface pendant que le nouveau apparaît dessous.
