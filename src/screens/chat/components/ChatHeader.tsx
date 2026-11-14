@@ -22,6 +22,8 @@ type Props = {
   onInfo: () => void;
   onCustomize: () => void;
   onSearch: () => void;
+  // Le bouton « 3 points » ouvre le menu de la conversation.
+  onMenu: () => void;
   // Minuteur des messages éphémères (secondes), null si le mode est coupé. Un appui ouvre son réglage.
   ephemeral: number | null;
   onEphemeral: () => void;
@@ -38,7 +40,7 @@ function OnlineDot({ online }: { online: boolean }) {
   return <Reanimated.View pointerEvents="none" style={[styles.dot, style]} />;
 }
 
-export function ChatHeader({ contactKey, name, onBack, onInfo, onCustomize, onSearch, ephemeral, onEphemeral }: Props) {
+export function ChatHeader({ contactKey, name, onBack, onInfo, onCustomize, onSearch, onMenu, ephemeral, onEphemeral }: Props) {
   const colors = useColors();
   const styles = useStyles();
   const photo = getContactProfile(contactKey).photo_uri;
@@ -100,7 +102,7 @@ export function ChatHeader({ contactKey, name, onBack, onInfo, onCustomize, onSe
               <Search size={22} color={colors.text} strokeWidth={1.75} />
             </IconButton>
             {!notes && (
-              <IconButton onPress={onCustomize} label={t('chat.personnaliser')}>
+              <IconButton onPress={onMenu} label={t('chat.plusOptions')}>
                 <EllipsisVertical size={24} color={colors.text} strokeWidth={1.75} />
               </IconButton>
             )}

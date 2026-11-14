@@ -44,6 +44,7 @@ export const fr = {
     exporterJournal: 'Exporter le journal',
   },
   chat: {
+    plusOptions: 'Plus d’options',
     mediaIntrouvable: 'Média introuvable.',
     pourMoi: 'Pour moi',
     supprimerQuestion: 'Supprimer ce message ?',
@@ -198,6 +199,12 @@ export const fr = {
     galerie: 'Ta galerie',
   },
   contact: {
+    rechercher: 'Rechercher',
+    maPosition: 'Ma position',
+    couperSon: 'Couper le son',
+    silencieux: 'Silencieux',
+    vider: 'Vider la conversation',
+    viderAide: 'Sur ce téléphone seulement',
     supprimerQuestion: 'Supprimer ce contact ?',
     supprimerAide: 'Vos messages avec lui seront effacés de ce téléphone, et il faudra refaire le pairing.',
     nouveau: 'Nouveau contact',
@@ -844,5 +851,15 @@ export const fr = {
   lien: {
     chargement: 'Lecture de la page…',
     retirer: 'Envoyer sans aperçu',
+  },
+  menu: {
+    voirProfil: 'Voir le profil',
+    non: 'Non',
+    toutes: 'Toutes',
+    coupees: 'Coupées',
+    certaines: 'Certaines',
+    partagerPosition: 'Partager ma position',
+    medias: 'Médias et fichiers',
+    vider: 'Vider la conversation',
   },
 };

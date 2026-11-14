@@ -6,9 +6,9 @@ import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
 import { haptics } from '../../haptics';
 import * as Sharing from 'expo-sharing';
-import { Copy, Download, Forward, Pencil, Pin, PinOff, Reply, Send, Trash2 } from 'lucide-react-native';
+import { Ban, Bell, Copy, Download, Forward, Images, MapPin, Palette, Pencil, Pin, PinOff, Reply, Search, Send, Timer, Trash2, UserRound } from 'lucide-react-native';
 
-import { getContactProfile, getContactRows, getConversationSettings, getDraft, getMessagePosition, getMessages, getPeerState, getPinnedMessages, isBlocked, Message, setDraft as saveDraft } from '../../chat/database';
+import { deleteMessages, getContactProfile, getContactRows, getConversationSettings, getMutedKinds, getDraft, getMessagePosition, getMessages, getPeerState, getPinnedMessages, isBlocked, Message, setDraft as saveDraft } from '../../chat/database';
 import { formatSize, MAX_FILE_BYTES } from '../../chat/files';
 import { exportCopy, openMedia, retainOpenedMedia, saveToGallery, useMediaUri, videoThumbnail } from '../../chat/media';
 import { ALBUM_MAX, albumAt, GroupPosition, groupPosition } from '../../chat/grouping';
@@ -23,6 +23,7 @@ import { bubblePalette, createStyles, motion, radius, spacing, useColors } from 
 
 import { ChatHeader } from './components/ChatHeader';
 import { ChatSearch } from './components/ChatSearch';
+import { ChatMenu, ChatMenuItem } from './components/ChatMenu';
 import { DraftPreviewCard } from './components/LinkPreview';
 import { StickerSheet } from './components/StickerSheet';
 import { useDraftPreview } from '../../chat/linkPreview';
@@ -64,9 +65,15 @@ type Props = {
   preview?: boolean;
   // Message à rejoindre à l'ouverture (résultat de la recherche de l'accueil).
   jump?: string;
+  // Ouverte depuis le profil du contact pour une action précise.
+  intent?: ChatIntent;
+  onNotifications: () => void;
+  onMedia: () => void;
 };
 
-export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustomize, preview, jump }: Props) {
+export type ChatIntent = 'search' | 'location' | 'ephemeral';
+
+export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustomize, preview, jump, intent, onNotifications, onMedia }: Props) {
   const styles = useStyles();
   const colors = useColors();
   const [draft, setDraft] = useState(() => getDraft(contactKey));
@@ -77,6 +84,7 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
   const [showingReactions, setShowingReactions] = useState<Message | null>(null);
   const [scheduling, setScheduling] = useState(false);
   const [searching, setSearching] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [stickersOpen, setStickersOpen] = useState(false);
   const [viewing, setViewing] = useState<Viewing | null>(null);
   const [selection, setSelection] = useState<{ message: Message; rect: Rect; origin: { y: number; height: number }; clip: { top: number; bottom: number }; position: GroupPosition; keepOriginal: boolean } | null>(null);
@@ -315,6 +323,20 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
     return () => clearTimeout(timer);
   }, [jump, preview]);
 
+  // Ouverte depuis le profil du contact : l'action demandée part une fois l'écran installé.
+  const intended = useRef(false);
+  useEffect(() => {
+    if (!intent || intended.current || preview) return;
+    intended.current = true;
+    const timer = setTimeout(() => {
+      if (intent === 'search') setSearching(true);
+      else if (intent === 'location') shareLocation();
+      else chooseEphemeral();
+    }, JUMP_PULSE_DELAY_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [intent, preview]);
+
   // Double appui : met le cœur, ou l'enlève s'il y est déjà.
   const likeMessage = (message: Message) => chat.react(contactKey, message.id, LIKE);
 
@@ -530,12 +552,55 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
     onShowReactions: (message: Message) => setShowingReactions(message),
   }).current;
 
+  // Le menu « 3 points » : toutes les actions de la conversation, les destructrices à part, en rouge.
+  const blockedContact = isBlocked(contactKey);
+  const mutedKinds = getMutedKinds(contactKey).length;
+  const menuItems: ChatMenuItem[] = [
+    { icon: UserRound, label: t('menu.voirProfil'), onPress: onInfo },
+    { icon: Search, label: t('recherche.dansConversation'), onPress: () => setSearching(true) },
+    { icon: Palette, label: t('chat.personnaliser'), onPress: onCustomize },
+    { icon: Timer, label: t('contact.ephemeres'), value: ephemeral ? ephemeralLabel(ephemeral, true) : t('menu.non'), onPress: chooseEphemeral },
+    { icon: Bell, label: t('contact.notifications'), value: mutedKinds === 0 ? t('menu.toutes') : mutedKinds >= 5 ? t('menu.coupees') : t('menu.certaines'), onPress: onNotifications },
+    { icon: MapPin, label: t('menu.partagerPosition'), onPress: shareLocation },
+    { icon: Images, label: t('menu.medias'), onPress: onMedia },
+    {
+      icon: Trash2,
+      label: t('menu.vider'),
+      danger: true,
+      separated: true,
+      onPress: () =>
+        showDialog(t('liste.supprimerQuestion'), t('liste.supprimerAide', { nom: name }), [
+          {
+            label: t('commun.supprimer'),
+            style: 'danger',
+            onPress: () => {
+              deleteMessages(contactKey);
+              chat.refresh();
+            },
+          },
+          { label: t('commun.annuler'), style: 'cancel' },
+        ]),
+    },
+    {
+      icon: Ban,
+      label: blockedContact ? t('statut.debloquerContact') : t('statut.bloquerContact'),
+      danger: !blockedContact,
+      onPress: () =>
+        blockedContact
+          ? chat.unblockContact(contactKey)
+          : showDialog(t('statut.bloquerQuestion'), t('statut.bloquerAide'), [
+              { label: t('demandes.bloquer'), style: 'danger', onPress: () => chat.blockContact(contactKey) },
+              { label: t('commun.annuler'), style: 'cancel' },
+            ]),
+    },
+  ];
+
   return (
     <Screen edgeToEdgeBottom>
       <View ref={root} collapsable={false} pointerEvents="none" style={StyleSheet.absoluteFill} />
       <BlurTargetView ref={blurTarget} style={styles.flex}>
         {wallpaper && <Image source={{ uri: wallpaper }} style={styles.wallpaper} resizeMode="cover" />}
-        <ChatHeader contactKey={contactKey} name={name} onBack={onBack} onInfo={onInfo} onCustomize={onCustomize} onSearch={() => setSearching(true)} ephemeral={ephemeral} onEphemeral={chooseEphemeral} />
+        <ChatHeader contactKey={contactKey} name={name} onBack={onBack} onInfo={onInfo} onCustomize={onCustomize} onSearch={() => setSearching(true)} onMenu={() => setMenuOpen(true)} ephemeral={ephemeral} onEphemeral={chooseEphemeral} />
         {/* Le décalage compense la barre d'état, placée au-dessus de la zone floutée. */}
         <KeyboardAvoidingView behavior="padding" keyboardVerticalOffset={topInset} style={styles.flex}>
           <View ref={listArea} collapsable={false} style={styles.flex}>
@@ -722,6 +787,7 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
           onSend={(sticker) => sendPicked({ uri: sticker.uri, name: 'sticker.png', size: 0, mime: 'image/png', kind: 'image', keepSource: true, meta: { sticker: true } })}
         />
       )}
+      {menuOpen && <ChatMenu items={menuItems} onClose={() => setMenuOpen(false)} />}
       {searching && <ChatSearch contactKey={contactKey} name={name} onClose={() => setSearching(false)} onPick={jumpTo} />}
       {galleryOpen && <MediaPicker onPick={sendFromGallery} onClose={() => setGalleryOpen(false)} allowOnce={!isSelf(contactKey)} />}
     </Screen>

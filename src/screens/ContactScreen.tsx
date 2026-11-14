@@ -1,9 +1,11 @@
 import { ComponentType, useEffect, useState, useSyncExternalStore } from 'react';
 import { KeyboardAvoidingView, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import Reanimated, { interpolateColor, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
-import { Ban, Bell, Check, MessageCircle, ShieldCheck, Timer, Trash2 } from 'lucide-react-native';
+import { Ban, Bell, Check, ChevronRight, MapPin, MessageCircle, Palette, Search, ShieldCheck, Timer, Trash2, Volume2, VolumeX } from 'lucide-react-native';
 
-import { ContactProfile, getMediaMessages, getMutedKinds, MessageKind } from '../chat/database';
+import { ContactProfile, deleteMessages, getMediaMessages, getMutedKinds, MessageKind, setMutedKinds } from '../chat/database';
+import { haptics } from '../haptics';
+import type { ChatIntent } from './chat/ChatScreen';
 import { chat } from '../chat/manager';
 import { showDialog } from '../components/dialog';
 import { Avatar, Button, Header, Screen, usePressFeedback } from '../components/ui';
@@ -30,6 +32,11 @@ type Props = {
   code: string[];
   verified: boolean;
   onVerify: () => void;
+  initialTab?: Tab;
+  // Ouvre la conversation pour une action (recherche, position, éphémères), ou simplement pour écrire.
+  onOpen: (intent?: ChatIntent) => void;
+  onCustomize: () => void;
+  onNotifications: () => void;
 };
 
 type Tab = 'profile' | 'media';
@@ -55,15 +62,15 @@ function notificationsLabel(contactKey: string) {
 }
 
 // Une carte d'action sous l'avatar (Écrire…), avec l'effet d'appui commun.
-function ActionCard({ icon: Icon, label, onPress }: { icon: ComponentType<{ size: number; color: string; strokeWidth: number }>; label: string; onPress: () => void }) {
+function ActionCard({ icon: Icon, label, on, onPress }: { icon: ComponentType<{ size: number; color: string; strokeWidth: number }>; label: string; on?: boolean; onPress: () => void }) {
   const colors = useColors();
   const styles = useStyles();
   const feedback = usePressFeedback();
   return (
-    <Pressable style={styles.actionSlot} onPress={onPress} onPressIn={feedback.onPressIn} onPressOut={feedback.onPressOut} accessibilityRole="button" accessibilityLabel={label}>
-      <Reanimated.View style={[styles.action, feedback.style]}>
-        <Icon size={20} color={colors.text} strokeWidth={1.8} />
-        <Text style={styles.actionLabel}>{label}</Text>
+    <Pressable onPress={onPress} onPressIn={feedback.onPressIn} onPressOut={feedback.onPressOut} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ checked: on }}>
+      <Reanimated.View style={[styles.action, on && styles.actionOn, feedback.style]}>
+        <Icon size={20} color={on ? colors.onSignature : colors.text} strokeWidth={1.8} />
+        <Text style={[styles.actionLabel, on && { color: colors.onSignature }]} numberOfLines={1}>{label}</Text>
       </Reanimated.View>
     </Pressable>
   );
@@ -97,11 +104,19 @@ function Tabs({ tab, mediaCount, onChange }: { tab: Tab; mediaCount: number; onC
   );
 }
 
-export function ContactScreen({ initialName, profile, isNew, onBack, onSave, onRemove, blocked, onToggleBlock, contactKey, verified }: Props) {
+export function ContactScreen({ initialName, profile, isNew, initialTab = 'profile', onBack, onSave, onRemove, blocked, onToggleBlock, contactKey, verified, onOpen, onCustomize, onNotifications }: Props) {
   const colors = useColors();
   const styles = useStyles();
   const [name, setName] = useState(initialName);
-  const [tab, setTab] = useState<Tab>('profile');
+  const [tab, setTab] = useState<Tab>(initialTab);
+  // Couper le son = toutes les notifications de ce contact coupées d'un coup.
+  const [muted, setMuted] = useState(() => !isNew && getMutedKinds(contactKey).length === NOTIF_KINDS.length);
+  const toggleMute = () => {
+    haptics.action();
+    const next = !muted;
+    setMutedKinds(contactKey, next ? NOTIF_KINDS.map(({ kind }) => kind) : []);
+    setMuted(next);
+  };
   const [messages] = useState(() => (isNew ? [] : getMediaMessages(contactKey)));
   // Présence du contact : l'écran suit les changements de connexion.
   useSyncExternalStore(chat.subscribe, chat.getVersion);
@@ -129,6 +144,20 @@ export function ContactScreen({ initialName, profile, isNew, onBack, onSave, onR
   const confirmBlock = () => {
     showDialog(t('statut.bloquerQuestion'), t('statut.bloquerAide'), [
       { label: t('demandes.bloquer'), style: 'danger', onPress: onToggleBlock },
+      { label: t('commun.annuler'), style: 'cancel' },
+    ]);
+  };
+
+  const confirmClear = () => {
+    showDialog(t('liste.supprimerQuestion'), t('liste.supprimerAide', { nom: initialName }), [
+      {
+        label: t('commun.supprimer'),
+        style: 'danger',
+        onPress: () => {
+          deleteMessages(contactKey);
+          chat.refresh();
+        },
+      },
       { label: t('commun.annuler'), style: 'cancel' },
     ]);
   };
@@ -170,8 +199,9 @@ export function ContactScreen({ initialName, profile, isNew, onBack, onSave, onR
 
   const rows = [
     { icon: ShieldCheck, color: colors.signatureStrong, label: t('contact.chiffrement'), sub: verified ? t('contact.verifie') : t('contact.chiffrementAide') },
-    { icon: Timer, color: colors.text, label: t('contact.ephemeres'), sub: ephemeral ? ephemeralLabel(ephemeral) : t('contact.ephemeresCoupes') },
-    { icon: Bell, color: colors.text, label: t('contact.notifications'), sub: notificationsLabel(contactKey) },
+    { icon: Timer, color: colors.text, label: t('contact.ephemeres'), sub: ephemeral ? ephemeralLabel(ephemeral) : t('contact.ephemeresCoupes'), onPress: () => onOpen('ephemeral') },
+    { icon: Bell, color: colors.text, label: t('contact.notifications'), sub: notificationsLabel(contactKey), onPress: onNotifications },
+    { icon: Trash2, color: colors.text, label: t('contact.vider'), sub: t('contact.viderAide'), onPress: confirmClear },
   ];
 
   return (
@@ -191,10 +221,21 @@ export function ContactScreen({ initialName, profile, isNew, onBack, onSave, onR
             </Reanimated.Text>
           </View>
 
-          {/* Seules les actions qui existent déjà depuis cet écran : revenir écrire dans la conversation. */}
-          <Reanimated.View entering={enterUp(10, 240, 80)} style={styles.actions}>
-            <ActionCard icon={MessageCircle} label={t('contact.ecrire')} onPress={onBack} />
-          </Reanimated.View>
+          {/* Six actions, en deux rangées de trois ; elles arrivent l'une après l'autre. */}
+          <View style={styles.actions}>
+            {[
+              { icon: MessageCircle, label: t('contact.ecrire'), onPress: () => onOpen() },
+              { icon: Search, label: t('contact.rechercher'), onPress: () => onOpen('search') },
+              { icon: Palette, label: t('chat.personnaliser'), onPress: onCustomize },
+              { icon: MapPin, label: t('contact.maPosition'), onPress: () => onOpen('location') },
+              { icon: muted ? VolumeX : Volume2, label: muted ? t('contact.silencieux') : t('contact.couperSon'), on: muted, onPress: toggleMute },
+              { icon: Timer, label: t('contact.ephemeres'), on: !!ephemeral, onPress: () => onOpen('ephemeral') },
+            ].map((action, index) => (
+              <Reanimated.View key={index} entering={enterUp(10, 280, 60 + index * 35)} style={styles.actionSlot}>
+                <ActionCard icon={action.icon} label={action.label} on={action.on} onPress={action.onPress} />
+              </Reanimated.View>
+            ))}
+          </View>
 
           <Tabs tab={tab} mediaCount={messages.length} onChange={setTab} />
 
@@ -204,14 +245,15 @@ export function ContactScreen({ initialName, profile, isNew, onBack, onSave, onR
             ) : (
               <>
                 <View style={styles.card}>
-                  {rows.map(({ icon: Icon, color, label, sub }, index) => (
-                    <View key={label} style={[styles.row, index > 0 && styles.rowDivider]}>
+                  {rows.map(({ icon: Icon, color, label, sub, onPress }, index) => (
+                    <Pressable key={label} onPress={onPress} disabled={!onPress} accessibilityRole={onPress ? 'button' : undefined} style={({ pressed }) => [styles.row, index > 0 && styles.rowDivider, pressed && styles.rowPressed]}>
                       <Icon size={20} color={color} strokeWidth={1.8} />
                       <View style={styles.rowText}>
                         <Text style={styles.rowLabel}>{label}</Text>
                         <Text style={styles.rowSub}>{sub}</Text>
                       </View>
-                    </View>
+                      {onPress && <ChevronRight size={16} color={colors.textMuted} strokeWidth={2} />}
+                    </Pressable>
                   ))}
                 </View>
 
@@ -297,13 +339,19 @@ const useStyles = createStyles((colors) => ({
   presenceOnline: {
     color: colors.signatureStrong,
   },
+  // Deux rangées de trois.
   actions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.sm,
     marginTop: 18,
   },
   actionSlot: {
-    flex: 1,
+    flexBasis: '30%',
+    flexGrow: 1,
+  },
+  actionOn: {
+    backgroundColor: colors.signature,
   },
   action: {
     height: 64,
@@ -359,6 +407,9 @@ const useStyles = createStyles((colors) => ({
   rowDivider: {
     borderTopWidth: 1,
     borderTopColor: colors.border,
+  },
+  rowPressed: {
+    backgroundColor: colors.elevatedActive,
   },
   rowText: {
     flex: 1,

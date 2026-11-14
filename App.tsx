@@ -36,6 +36,7 @@ import { RequestsScreen } from './src/screens/RequestsScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { ServersScreen } from './src/screens/ServersScreen';
 import { runAutoCleanup, StorageScreen } from './src/screens/StorageScreen';
+import type { ChatIntent } from './src/screens/chat/ChatScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { AppearancePage, BackupPage, NotificationsPage, PrivacyPage, SettingsPage, UpdatesPage } from './src/screens/settings/SettingsPages';
 import { ScannerScreen } from './src/screens/ScannerScreen';
@@ -72,9 +73,9 @@ type Route =
   | { name: 'customize'; publicKey: string }
   | { name: 'notifications'; publicKey: string }
   // name : le pseudo lu dans le QR code ou le lien, proposé comme nom du contact.
-  | { name: 'contact'; publicKey: string; suggestedName?: string | null }
+  | { name: 'contact'; publicKey: string; suggestedName?: string | null; tab?: 'profile' | 'media' }
   // jump : message à rejoindre à l'ouverture (résultat de recherche).
-  | { name: 'chat'; publicKey: string; jump?: string };
+  | { name: 'chat'; publicKey: string; jump?: string; intent?: ChatIntent };
 
 // --- Navigation ---
 // Animations fixes, sans suivre le doigt. Chaque écran a deux valeurs : enter (0 → 1 à son arrivée)
@@ -586,6 +587,9 @@ function App() {
           onCustomize={() => setRoute({ name: 'customize', publicKey })}
           preview={preview}
           jump={current.jump}
+          intent={current.intent}
+          onNotifications={() => setRoute({ name: 'notifications', publicKey })}
+          onMedia={() => setRoute({ name: 'contact', publicKey, tab: 'media' })}
         />
       );
     }
@@ -600,7 +604,11 @@ function App() {
           initialName={saved?.name ?? current.suggestedName ?? ''}
           profile={getContactProfile(publicKey)}
           isNew={!saved}
+          initialTab={current.tab}
           onBack={() => backFromContact(publicKey)}
+          onOpen={(intent) => setRoute({ name: 'chat', publicKey, intent })}
+          onCustomize={() => setRoute({ name: 'customize', publicKey })}
+          onNotifications={() => setRoute({ name: 'notifications', publicKey })}
           onSave={(name) => {
             // Un nouveau contact attend que l'autre accepte la demande ; un contact connu reste tel quel.
             const pending = saved ? saved.pending : true;

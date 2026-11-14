@@ -45,6 +45,7 @@ export const en: Dictionary = {
     exporterJournal: 'Export the log',
   },
   chat: {
+    plusOptions: 'More options',
     mediaIntrouvable: 'Media not found.',
     pourMoi: 'For me',
     supprimerQuestion: 'Delete this message?',
@@ -199,6 +200,12 @@ export const en: Dictionary = {
     galerie: 'Your gallery',
   },
   contact: {
+    rechercher: 'Search',
+    maPosition: 'My location',
+    couperSon: 'Mute',
+    silencieux: 'Muted',
+    vider: 'Clear the conversation',
+    viderAide: 'On this phone only',
     supprimerQuestion: 'Delete this contact?',
     supprimerAide: 'Your messages with them will be erased from this phone, and you\'ll have to pair again.',
     nouveau: 'New contact',
@@ -845,5 +852,15 @@ export const en: Dictionary = {
   lien: {
     chargement: 'Reading the page…',
     retirer: 'Send without preview',
+  },
+  menu: {
+    voirProfil: 'View profile',
+    non: 'Off',
+    toutes: 'All',
+    coupees: 'Off',
+    certaines: 'Some',
+    partagerPosition: 'Share my location',
+    medias: 'Media and files',
+    vider: 'Clear the conversation',
   },
 };
