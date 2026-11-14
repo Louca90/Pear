@@ -15,19 +15,40 @@ import { haptics } from '../haptics';
 import { t } from '../i18n';
 import { log } from '../log';
 import { downloadRegion, keepMapOffline, MapRegion, REGION_RADIUS_KM, savedRegion } from '../map/offlineMap';
-import { MAP_COLORS, PEAR_MAP_STYLE } from '../map/pearStyle';
+import { MapColors, mapColorsOf, mapStyleOf } from '../map/pearStyle';
 import { EASE, enterUp, timing } from '../motion';
 import { Contact } from '../storage';
-import { createStyles, radius, spacing } from '../theme';
+import { createStyles, Palette, radius, spacing, useIsDark } from '../theme';
 
-// La carte garde l'allure de la planche « Carte » quel que soit le thème : sombre, verte, calme.
-const INK = '#F2F2F0';
-const MUTED = '#8E8E93';
-const SIGNATURE = '#B4CC68';
-const CHROME = 'rgba(11, 11, 12, 0.85)';
-const SHEET = 'rgba(20, 20, 22, 0.96)';
-const FACE = '#2A2A2E';
-const ENDED = '#5A5A60';
+// La carte suit le thème. Sombre : l'allure de la planche « Carte » (verte, calme). Clair : la même
+// carte en clair, pastilles et fiche blanches.
+type MapInk = { ink: string; muted: string; signature: string; chrome: string; sheet: string; face: string; ended: string; line: string; map: MapColors };
+const DARK_INK: MapInk = {
+  ink: '#F2F2F0',
+  muted: '#8E8E93',
+  signature: '#B4CC68',
+  chrome: 'rgba(11, 11, 12, 0.85)',
+  sheet: 'rgba(20, 20, 22, 0.96)',
+  face: '#2A2A2E',
+  ended: '#5A5A60',
+  line: '#222226',
+  map: mapColorsOf(true),
+};
+const LIGHT_INK: MapInk = {
+  ink: '#16181A',
+  muted: '#6E6E73',
+  signature: '#7E9A3A',
+  chrome: 'rgba(255, 255, 255, 0.92)',
+  sheet: 'rgba(255, 255, 255, 0.97)',
+  face: '#E4E6DF',
+  ended: '#A6A8A0',
+  line: '#E6E7E2',
+  map: mapColorsOf(false),
+};
+const darkPalette = (colors: Palette) => colors.scheme === 'dark';
+function useInk() {
+  return useIsDark() ? DARK_INK : LIGHT_INK;
+}
 
 // Une position terminée reste sur la carte (grisée) pendant ce temps.
 const ENDED_VISIBLE_MS = 24 * 3600 * 1000;
@@ -63,15 +84,17 @@ const initialOf = (name: string) => name.trim().charAt(0).toUpperCase() || '?';
 
 // Le visage d'un contact : sa photo si on l'a, sinon son initiale, sur le gris de la planche.
 function Face({ publicKey, name, size }: { publicKey: string; name: string; size: number }) {
+  const ink = useInk();
   const photo = useMediaUri(getContactProfile(publicKey).photo_uri, { scope: 'app' });
   if (photo) return <Image source={{ uri: photo }} style={{ width: size, height: size, borderRadius: size / 2 }} />;
-  return <Text style={{ fontSize: size * 0.38, fontWeight: '700', color: INK }}>{initialOf(name)}</Text>;
+  return <Text style={{ fontSize: size * 0.38, fontWeight: '700', color: ink.ink }}>{initialOf(name)}</Text>;
 }
 
 // Un contact sur la carte (planche) : il tombe à sa place, son halo vert pulse tant que le partage est
 // en direct et il dérive à peine ; choisi, son contour passe au vert et il grossit un peu.
 function ContactPin({ pin, selected, index }: { pin: Pin; selected: boolean; index: number }) {
   const styles = useStyles();
+  const ink = useInk();
   const reduced = useReducedMotion();
   const pulse = useSharedValue(0);
   const drift = useSharedValue(0);
@@ -95,7 +118,7 @@ function ContactPin({ pin, selected, index }: { pin: Pin; selected: boolean; ind
     <Reanimated.View entering={enterUp(-14, 420, 120 + index * 90)} style={styles.pin}>
       <Reanimated.View style={[styles.pinBody, body]}>
         {pin.live && <Reanimated.View style={[styles.halo, halo]} />}
-        <Reanimated.View style={[styles.face, { borderColor: selected ? SIGNATURE : pin.live ? INK : ENDED }, !pin.live && styles.faceEnded, face]}>
+        <Reanimated.View style={[styles.face, { borderColor: selected ? ink.signature : pin.live ? ink.ink : ink.ended }, !pin.live && styles.faceEnded, face]}>
           <Face publicKey={pin.contact.publicKey} name={pin.contact.name} size={PIN - 6} />
         </Reanimated.View>
         <View style={styles.tag}>
@@ -111,6 +134,7 @@ function ContactPin({ pin, selected, index }: { pin: Pin; selected: boolean; ind
 // Mon point : vert avec un halo qui pulse ; gris en mode discret.
 function MeDot({ hidden }: { hidden: boolean }) {
   const styles = useStyles();
+  const ink = useInk();
   const reduced = useReducedMotion();
   const pulse = useSharedValue(0);
   useEffect(() => {
@@ -122,7 +146,7 @@ function MeDot({ hidden }: { hidden: boolean }) {
   return (
     <View style={styles.me} accessibilityLabel={t('carte.toi')}>
       <Reanimated.View style={[styles.meHalo, halo]} />
-      <View style={[styles.meDot, { backgroundColor: hidden ? ENDED : SIGNATURE }]} />
+      <View style={[styles.meDot, { backgroundColor: hidden ? ink.ended : ink.signature }]} />
     </View>
   );
 }
@@ -171,6 +195,8 @@ type Props = { contacts: Contact[]; focus: string | null; onBack: () => void; on
 // sur le téléphone ; la fiche du bas rejoue son entrée quand on choisit un autre contact.
 export function MapScreen({ contacts, focus, onBack, onOpenChat }: Props) {
   const styles = useStyles();
+  const ink = useInk();
+  const dark = useIsDark();
   const { top } = useInsets();
   const bottom = useNavigationBarHeight();
   useSyncExternalStore(chat.subscribe, chat.getVersion);
@@ -256,7 +282,7 @@ export function MapScreen({ contacts, focus, onBack, onOpenChat }: Props) {
   return (
     <View style={styles.screen}>
       {region && start ? (
-        <Map style={StyleSheet.absoluteFill} mapStyle={PEAR_MAP_STYLE} logo={false} compass={false} attribution touchPitch={false} touchRotate={false}>
+        <Map style={StyleSheet.absoluteFill} mapStyle={mapStyleOf(dark)} logo={false} compass={false} attribution touchPitch={false} touchRotate={false}>
           <Camera ref={camera} initialViewState={{ center: [start.longitude, start.latitude], zoom: 13.5 }} />
           {me && (
             <Marker id="me" lngLat={[me.longitude, me.latitude]}>
@@ -275,13 +301,13 @@ export function MapScreen({ contacts, focus, onBack, onOpenChat }: Props) {
 
       <Reanimated.View entering={enterUp(-10, 300)} style={[styles.header, { top: top + spacing.sm }]}>
         <RoundButton onPress={onBack} label={t('commun.retour')}>
-          <ArrowLeft size={20} color={INK} strokeWidth={1.9} />
+          <ArrowLeft size={20} color={ink.ink} strokeWidth={1.9} />
         </RoundButton>
         <View style={styles.titlePill}>
           <Text style={styles.title}>{t('carte.titre')}</Text>
         </View>
         <RoundButton onPress={goDiscreet} label={hidden ? t('carte.discret') : t('carte.discret')} active={hidden}>
-          {hidden ? <EyeOff size={20} color={MAP_COLORS.background} strokeWidth={1.9} /> : <Eye size={20} color={INK} strokeWidth={1.9} />}
+          {hidden ? <EyeOff size={20} color={ink.map.background} strokeWidth={1.9} /> : <Eye size={20} color={ink.ink} strokeWidth={1.9} />}
         </RoundButton>
       </Reanimated.View>
 
@@ -292,7 +318,7 @@ export function MapScreen({ contacts, focus, onBack, onOpenChat }: Props) {
             <Text style={styles.cardText}>{t('carte.telechargerAide', { km: REGION_RADIUS_KM })}</Text>
             {progress === null ? (
               <Pressable onPress={download} accessibilityRole="button" style={({ pressed }) => [styles.primary, pressed && styles.pressed]}>
-                <Download size={18} color={MAP_COLORS.background} strokeWidth={1.9} />
+                <Download size={18} color={ink.map.background} strokeWidth={1.9} />
                 <Text style={styles.primaryLabel}>{t('carte.telecharger')}</Text>
               </Pressable>
             ) : (
@@ -315,14 +341,14 @@ export function MapScreen({ contacts, focus, onBack, onOpenChat }: Props) {
               </Text>
             </View>
             <Pressable onPress={() => onOpenChat(chosen.contact.publicKey)} accessibilityRole="button" accessibilityLabel={t('contact.ecrire')} style={({ pressed }) => [styles.write, pressed && styles.pressed]}>
-              <MessageCircle size={19} color={MAP_COLORS.background} strokeWidth={1.9} />
+              <MessageCircle size={19} color={ink.map.background} strokeWidth={1.9} />
             </Pressable>
           </Reanimated.View>
         ) : (
           <Text style={styles.cardText}>{t('carte.personne')}</Text>
         )}
         <View style={styles.footer}>
-          <Lock size={14} color={SIGNATURE} strokeWidth={2} />
+          <Lock size={14} color={ink.signature} strokeWidth={2} />
           <Text style={styles.footerText}>{hidden ? t('carte.footerDiscret') : t('carte.footer', { n: sharingWith.length })}</Text>
         </View>
       </Reanimated.View>
@@ -330,37 +356,40 @@ export function MapScreen({ contacts, focus, onBack, onOpenChat }: Props) {
   );
 }
 
-const useStyles = createStyles(() => ({
+const useStyles = createStyles((colors) => {
+  const p = darkPalette(colors) ? DARK_INK : LIGHT_INK;
+  return {
   flex: { flex: 1 },
-  screen: { flex: 1, backgroundColor: MAP_COLORS.background },
-  blank: { backgroundColor: MAP_COLORS.background },
+  screen: { flex: 1, backgroundColor: p.map.background },
+  blank: { backgroundColor: p.map.background },
   header: { position: 'absolute', left: 14, right: 14, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  round: { width: 44, height: 44, borderRadius: radius.full, overflow: 'hidden', backgroundColor: CHROME, alignItems: 'center', justifyContent: 'center' },
-  roundLit: { backgroundColor: INK },
-  titlePill: { flex: 1, height: 44, borderRadius: 22, paddingHorizontal: spacing.md, justifyContent: 'center', backgroundColor: CHROME },
-  title: { fontSize: 15, fontWeight: '600', color: INK },
-  sheet: { position: 'absolute', left: 10, right: 10, padding: spacing.md, gap: 12, borderRadius: 26, backgroundColor: SHEET },
+  round: { width: 44, height: 44, borderRadius: radius.full, overflow: 'hidden', backgroundColor: p.chrome, alignItems: 'center', justifyContent: 'center' },
+  roundLit: { backgroundColor: p.ink },
+  titlePill: { flex: 1, height: 44, borderRadius: 22, paddingHorizontal: spacing.md, justifyContent: 'center', backgroundColor: p.chrome },
+  title: { fontSize: 15, fontWeight: '600', color: p.ink },
+  sheet: { position: 'absolute', left: 10, right: 10, padding: spacing.md, gap: 12, borderRadius: 26, backgroundColor: p.sheet },
   card: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  cardAvatar: { width: 48, height: 48, borderRadius: 24, overflow: 'hidden', backgroundColor: FACE, alignItems: 'center', justifyContent: 'center' },
+  cardAvatar: { width: 48, height: 48, borderRadius: 24, overflow: 'hidden', backgroundColor: p.face, alignItems: 'center', justifyContent: 'center' },
   download: { gap: 10 },
-  cardTitle: { fontSize: 17, fontWeight: '600', color: INK },
-  cardText: { fontSize: 13, lineHeight: 18, marginTop: 2, color: MUTED },
-  write: { width: 44, height: 44, borderRadius: radius.full, backgroundColor: INK, alignItems: 'center', justifyContent: 'center' },
-  primary: { height: 50, borderRadius: 25, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: INK },
-  primaryLabel: { fontSize: 15, fontWeight: '600', color: MAP_COLORS.background },
-  progress: { height: 6, borderRadius: 3, overflow: 'hidden', backgroundColor: '#222226' },
-  progressFill: { height: '100%', borderRadius: 3, backgroundColor: SIGNATURE },
-  footer: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#222226' },
-  footerText: { flex: 1, fontSize: 12, color: MUTED },
+  cardTitle: { fontSize: 17, fontWeight: '600', color: p.ink },
+  cardText: { fontSize: 13, lineHeight: 18, marginTop: 2, color: p.muted },
+  write: { width: 44, height: 44, borderRadius: radius.full, backgroundColor: p.ink, alignItems: 'center', justifyContent: 'center' },
+  primary: { height: 50, borderRadius: 25, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: p.ink },
+  primaryLabel: { fontSize: 15, fontWeight: '600', color: p.map.background },
+  progress: { height: 6, borderRadius: 3, overflow: 'hidden', backgroundColor: p.line },
+  progressFill: { height: '100%', borderRadius: 3, backgroundColor: p.signature },
+  footer: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 10, borderTopWidth: 1, borderTopColor: p.line },
+  footerText: { flex: 1, fontSize: 12, color: p.muted },
   pressed: { opacity: 0.85, transform: [{ scale: 0.97 }] },
   pin: { width: PIN + 40, height: PIN + 24, alignItems: 'center' },
   pinBody: { alignItems: 'center' },
-  halo: { position: 'absolute', top: 0, width: PIN, height: PIN, borderRadius: PIN / 2, backgroundColor: SIGNATURE },
-  face: { width: PIN, height: PIN, borderRadius: PIN / 2, borderWidth: 3, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', backgroundColor: FACE },
+  halo: { position: 'absolute', top: 0, width: PIN, height: PIN, borderRadius: PIN / 2, backgroundColor: p.signature },
+  face: { width: PIN, height: PIN, borderRadius: PIN / 2, borderWidth: 3, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', backgroundColor: p.face },
   faceEnded: { opacity: 0.7 },
-  tag: { marginTop: 6, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 9, backgroundColor: CHROME },
-  tagText: { fontSize: 11, fontWeight: '600', color: INK },
+  tag: { marginTop: 6, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 9, backgroundColor: p.chrome },
+  tagText: { fontSize: 11, fontWeight: '600', color: p.ink },
   me: { width: 22, height: 22, alignItems: 'center', justifyContent: 'center' },
-  meHalo: { position: 'absolute', width: 22, height: 22, borderRadius: 11, backgroundColor: SIGNATURE },
-  meDot: { width: 16, height: 16, borderRadius: 8, borderWidth: 3, borderColor: MAP_COLORS.background },
-}));
+  meHalo: { position: 'absolute', width: 22, height: 22, borderRadius: 11, backgroundColor: p.signature },
+  meDot: { width: 16, height: 16, borderRadius: 8, borderWidth: 3, borderColor: p.map.background },
+  };
+});

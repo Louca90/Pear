@@ -5,9 +5,9 @@ import { StaticMapImageManager } from '@maplibre/maplibre-react-native';
 
 import { log } from '../log';
 import { timing } from '../motion';
-import { createStyles, radius } from '../theme';
+import { createStyles, radius, useIsDark } from '../theme';
 import { keepMapOffline } from './offlineMap';
-import { PEAR_MAP_STYLE } from './pearStyle';
+import { mapStyleOf } from './pearStyle';
 
 const ZOOM = 14;
 // Une nouvelle image seulement si la position a bougé d'environ 20 m : sinon celle en cache resservira.
@@ -22,7 +22,9 @@ type Props = { latitude: number; longitude: number; width: number; height: numbe
 export function MiniMap({ latitude, longitude, width, height, live }: Props) {
   const styles = useStyles();
   const reduced = useReducedMotion();
-  const key = `pear,${latitude.toFixed(ROUND)},${longitude.toFixed(ROUND)},${width}x${height}`;
+  // Claire ou sombre comme le thème : une image par version.
+  const dark = useIsDark();
+  const key = `pear-${dark ? 'sombre' : 'clair'},${latitude.toFixed(ROUND)},${longitude.toFixed(ROUND)},${width}x${height}`;
   const [uri, setUri] = useState(() => cache.get(key) ?? null);
   const shown = useSharedValue(cache.has(key) ? 1 : 0);
   const pulse = useSharedValue(0);
@@ -36,7 +38,7 @@ export function MiniMap({ latitude, longitude, width, height, live }: Props) {
     let alive = true;
     keepMapOffline();
     StaticMapImageManager.createImage({
-      mapStyle: PEAR_MAP_STYLE,
+      mapStyle: mapStyleOf(dark),
       center: [longitude, latitude],
       zoom: ZOOM,
       width: PixelRatio.getPixelSizeForLayoutSize(width),

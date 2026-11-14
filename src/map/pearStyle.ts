@@ -1,9 +1,13 @@
 import type { StyleSpecification } from '@maplibre/maplibre-react-native';
 
-// Le style de carte de Pear, aux couleurs de la planche « Carte » : un fond vert très sombre, des routes
-// à peine plus claires, l'eau en bleu nuit, les parcs en vert profond, et des noms discrets. Il réutilise
+// Le style de carte de Pear, en deux versions qui suivent le thème. Sombre (planche « Carte ») : un fond
+// vert très sombre, des routes à peine plus claires, l'eau en bleu nuit, les parcs en vert profond.
+// Clair : un fond crème à peine vert, des routes blanches, l'eau bleu pâle, les parcs vert tendre.
+// Les noms restent discrets dans les deux. Il réutilise
 // la source et la police des styles d'OpenFreeMap téléchargés avec la zone : tout vient du téléphone,
 // rien n'est demandé au réseau.
+
+export type MapColors = typeof MAP_COLORS;
 
 export const MAP_COLORS = {
   background: '#121613',
@@ -22,11 +26,29 @@ export const MAP_COLORS = {
   halo: '#121613',
 };
 
+export const MAP_COLORS_LIGHT: MapColors = {
+  background: '#F3F4EE',
+  park: '#DCE8CF',
+  wood: '#E1EBD6',
+  residential: '#EEEFE8',
+  water: '#CFE0EA',
+  waterway: '#C3D7E3',
+  building: '#E6E7E0',
+  minor: '#FFFFFF',
+  major: '#FFFFFF',
+  motorway: '#FBF6E6',
+  rail: '#DCDDD6',
+  label: '#7A8479',
+  labelStrong: '#4F5A50',
+  halo: '#F3F4EE',
+};
+
 const ROAD_WIDTH = (base: number) => ['interpolate', ['exponential', 1.5], ['zoom'], 10, base * 0.4, 14, base, 18, base * 4] as unknown as number;
 
-export const PEAR_MAP_STYLE: StyleSpecification = {
+function styleFor(MAP_COLORS: MapColors, name: string): StyleSpecification {
+  return {
   version: 8,
-  name: 'Pear',
+  name,
   glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
   sources: {
     openmaptiles: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' },
@@ -87,4 +109,11 @@ export const PEAR_MAP_STYLE: StyleSpecification = {
       paint: { 'text-color': MAP_COLORS.labelStrong, 'text-halo-color': MAP_COLORS.halo, 'text-halo-width': 1.4 },
     },
   ],
-};
+  };
+}
+
+export const PEAR_MAP_STYLE = styleFor(MAP_COLORS, 'Pear');
+export const PEAR_MAP_STYLE_LIGHT = styleFor(MAP_COLORS_LIGHT, 'Pear clair');
+
+export const mapStyleOf = (dark: boolean) => (dark ? PEAR_MAP_STYLE : PEAR_MAP_STYLE_LIGHT);
+export const mapColorsOf = (dark: boolean) => (dark ? MAP_COLORS : MAP_COLORS_LIGHT);
