@@ -172,3 +172,11 @@ Planches du canevas (fichier → sujet) : `Main` accueil · `Conversation` · `P
 - **Sans TURN**, certaines connexions directes échouent (réseaux mobiles) : messages par push et fichiers par relais prennent le relais, les appels non.
 - **Si des dons arrivent un jour**, ordre des dépenses utiles : d'abord le palier Firebase qui lève le plafond de connexions, ensuite un serveur TURN (appels fiables partout). Les deux se branchent par la configuration distante signée, sans nouvel APK.
 - **Google voit les métadonnées des pushs** (qui réveille qui, quand), jamais le contenu. L'écran 3.6 doit le dire honnêtement.
+
+## Filtres fun de l'appareil photo (décidé le 14 nov.)
+
+- Recherche : aucune bibliothèque libre n'atteint seule Snapchat (Banuba, DeepAR, Snap Camera Kit payants). Choix validé par Louca : **MediaPipe Face Landmarker** (Google, Apache 2.0 : garder la mention de licence ; 478 points, matrices de pose, expressions) en mode flux sur une `ImageAnalysis` CameraX, et **nos effets dessinés par `OverlayEffect`** (`androidx.camera:camera-effects`, CameraX 1.6) : l'effet est dans l'aperçu, la photo et la vidéo. Nouvel APK, environ +10 à 15 Mo.
+- Familles voulues : accessoires sur le visage (lunettes, couronne, chien, chat, moustache), effets qui réagissent (cœurs bouche ouverte, bisous, étoiles au sourire, larmes), déformations (gros yeux, petit visage, tête allongée : shaders OpenGL, `CameraEffect` avec `SurfaceProcessor`), fonds (flou, noir et blanc, pop : segmentation de la personne) et couleurs (filtres actuels).
+- Pastilles : planche `CameraFiltres.dc.html` (rangée 7) à valider par Louca avant de coder : lentilles qui défilent, la choisie dans l'anneau du déclencheur (anneau vert qui se trace), catégories en pilules, nom qui apparaît, conseil pour les lentilles qui réagissent.
+- Ordre prévu : 1) moteur natif (MediaPipe + OverlayEffect) et accessoires ; 2) effets qui réagissent (expressions) ; 3) fonds (segmentation) ; 4) déformations (OpenGL).
+- Démarrage de la caméra (fait le 14 nov., à valider) : mesures A33 avant : écran monté 500-700 ms, autorisation +250 ms, caméra ouverte +350 ms, première image ~1 s natif. L'écran est maintenant construit d'avance et gardé caché caméra éteinte (`src/screens/cameraStandby.ts`), la caméra s'allume au toucher de l'onglet ou au glissé vers lui.
