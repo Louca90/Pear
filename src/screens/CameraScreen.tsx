@@ -727,9 +727,12 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
             <Lock size={20} color={colors.onMedia} strokeWidth={1.75} />
           </Animated.View>
         )}
-        <IconButton onPress={flipCamera} label={t('camera.changerCamera')} style={[styles.flip, { right: sideInset }]}>
-          <SwitchCamera size={22} color={colors.onMedia} strokeWidth={1.8} />
-        </IconButton>
+        {/* IconButton pose son style sur la vue intérieure : la place se donne par une vue autour. */}
+        <View style={[styles.flipPlace, { right: sideInset }]}>
+          <IconButton onPress={flipCamera} label={t('camera.changerCamera')} style={styles.flip}>
+            <SwitchCamera size={22} color={colors.onMedia} strokeWidth={1.8} />
+          </IconButton>
+        </View>
       </View>
       {capture && (
         <CaptureReview
@@ -829,8 +832,11 @@ const useStyles = createMediaStyles((colors) => ({
     borderRadius: 12,
     backgroundColor: fixed.cameraSurface,
   },
-  flip: {
+  flipPlace: {
     position: 'absolute',
+    top: (SHUTTER_SIZE - SIDE_BUTTON) / 2,
+  },
+  flip: {
     width: SIDE_BUTTON,
     height: SIDE_BUTTON,
     borderRadius: radius.full,
