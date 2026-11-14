@@ -177,6 +177,11 @@ export function useColors(): Palette {
   return useSyncExternalStore(subscribe, () => palette);
 }
 
+// Le thème sombre est affiché (préférence ou réglage d'Android) : la carte prend son style sombre.
+export function useIsDark(): boolean {
+  return useSyncExternalStore(subscribe, () => palette === dark);
+}
+
 export function useThemePreference(): ThemePreference {
   return useSyncExternalStore(subscribe, () => readPreference());
 }

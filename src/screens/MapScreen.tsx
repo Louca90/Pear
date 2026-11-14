@@ -13,10 +13,10 @@ import { Avatar, useInsets, useNavigationBarHeight, usePressFeedback } from '../
 import { haptics } from '../haptics';
 import { t } from '../i18n';
 import { log } from '../log';
-import { downloadRegion, keepMapOffline, MAP_STYLE, MapRegion, REGION_RADIUS_KM, savedRegion } from '../map/offlineMap';
+import { downloadRegion, keepMapOffline, mapStyleFor, MapRegion, REGION_RADIUS_KM, savedRegion } from '../map/offlineMap';
 import { enterUp, timing } from '../motion';
 import { Contact } from '../storage';
-import { createStyles, radius, spacing, useColors } from '../theme';
+import { createStyles, radius, spacing, useColors, useIsDark } from '../theme';
 
 // Une position terminée reste sur la carte (grisée) pendant ce temps.
 const ENDED_VISIBLE_MS = 24 * 3600 * 1000;
@@ -115,6 +115,7 @@ type Props = { contacts: Contact[]; focus: string | null; onBack: () => void; on
 // sur le téléphone ; la fiche du bas rejoue son entrée quand on choisit un autre contact.
 export function MapScreen({ contacts, focus, onBack, onOpenChat }: Props) {
   const colors = useColors();
+  const dark = useIsDark();
   const styles = useStyles();
   const { top } = useInsets();
   const bottom = useNavigationBarHeight();
@@ -198,7 +199,7 @@ export function MapScreen({ contacts, focus, onBack, onOpenChat }: Props) {
   return (
     <View style={styles.screen}>
       {region && start ? (
-        <Map style={StyleSheet.absoluteFill} mapStyle={MAP_STYLE} logo={false} compass={false} attribution touchPitch={false}>
+        <Map style={StyleSheet.absoluteFill} mapStyle={mapStyleFor(dark)} logo={false} compass={false} attribution touchPitch={false}>
           <Camera ref={camera} initialViewState={{ center: [start.longitude, start.latitude], zoom: 13 }} />
           {me && (
             <Marker id="me" lngLat={[me.longitude, me.latitude]}>
