@@ -99,7 +99,7 @@ export function LocationContent({ message, palette }: { message: Message; palett
             </Text>
           )}
           <Text style={[styles.time, { color: palette.muted }]}>
-            {live ? `${ago(now - location.at)} · ${location.open ? t('position.tantQueOuverte') : remaining(location.until - now)}` : t('position.termine')}
+            {location.once ? `${t('position.ponctuelle')} · ${ago(now - location.at)}` : live ? `${ago(now - location.at)} · ${location.open ? t('position.tantQueOuverte') : remaining(location.until - now)}` : t('position.termine')}
           </Text>
         </View>
       </View>

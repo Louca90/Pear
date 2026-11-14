@@ -15,8 +15,8 @@ import { DURATION, exitFade, timing } from '../../../motion';
 import { useBackInterceptor } from '../../../navigation/backInterceptors';
 import { createStyles, radius, spacing, useColors } from '../../../theme';
 
-// Le choix : une durée (en secondes) ou « tant que l'app est ouverte ».
-export type ShareChoice = { seconds: number; open: boolean };
+// Le choix : une durée (en secondes), « tant que l'app est ouverte », ou seulement la position actuelle.
+export type ShareChoice = { seconds: number; open: boolean; once?: boolean };
 
 const CHOICES: { id: string; choice: ShareChoice; label: string; sub: string }[] = [
   { id: '15', choice: { seconds: LOCATION_DURATIONS[0], open: false }, label: t('position.min15'), sub: t('position.sArrete') },
@@ -111,6 +111,9 @@ export function LocationSheet({ name, onShare, onClose }: Props) {
             <Text style={styles.primaryLabel}>{t('position.partagerDirect')}</Text>
           </Reanimated.View>
         </Pressable>
+        <Pressable onPress={() => onShare({ seconds: 0, open: false, once: true })} accessibilityRole="button" hitSlop={6} style={({ pressed }) => [styles.once, pressed && styles.oncePressed]}>
+          <Text style={styles.onceLabel}>{t('position.seulementActuelle')}</Text>
+        </Pressable>
         <Text style={styles.note}>{t('position.seulVoit', { nom: name })}</Text>
       </Reanimated.View>
     </View>
@@ -155,4 +158,7 @@ const useStyles = createStyles((colors) => ({
   primary: { height: 54, borderRadius: 27, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.text },
   primaryLabel: { fontSize: 16, fontWeight: '600', color: colors.background },
   note: { textAlign: 'center', fontSize: 12, color: colors.textMuted },
+  once: { alignSelf: 'center', marginTop: -4, paddingVertical: 6, paddingHorizontal: 12, borderRadius: radius.full },
+  oncePressed: { backgroundColor: colors.surface },
+  onceLabel: { fontSize: 14, fontWeight: '600', color: colors.text },
 }));

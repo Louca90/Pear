@@ -821,6 +821,8 @@ export const fr = {
     aide: 'Le média s\'efface après avoir été ouvert une fois.',
   },
   position: {
+    ponctuelle: 'Position envoyée',
+    seulementActuelle: 'Envoyer seulement ma position actuelle',
     sArrete: 'S’arrête tout seul',
     uneJournee: 'Pour une journée',
     tantQueOuverte: 'Tant que l’app est ouverte',

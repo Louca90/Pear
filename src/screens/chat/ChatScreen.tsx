@@ -471,7 +471,7 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
     setAttachOpen(false);
     setLocationOpen(true);
   };
-  const startSharing = async ({ seconds, open }: ShareChoice) => {
+  const startSharing = async ({ seconds, open, once }: ShareChoice) => {
     setLocationOpen(false);
     try {
       const granted = (await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION)) === PermissionsAndroid.RESULTS.GRANTED;
@@ -482,7 +482,7 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
         ]);
         return;
       }
-      if (chat.startLocation(contactKey, seconds, open)) scroll.followSent();
+      if (once ? chat.sendCurrentLocation(contactKey) : chat.startLocation(contactKey, seconds, open)) scroll.followSent();
       else showDialog(t('position.indisponible'), t('position.indisponibleAide'));
     } catch (e) {
       showDialog(t('position.indisponible'), String(e));

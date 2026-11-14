@@ -19,7 +19,7 @@ import { publishMyToken, retryAll, watch } from './connections';
 import { ChatCore } from './core';
 import { addSystemMessage, applyEphemeral, ephemeralFor, ephemeralSettingTime, flush, lastEphemeralChoice, sendEvent } from './outbox';
 import { expiryFor } from '../ephemeral';
-import { sharedLocationId, startLocation, stopLocation, stopOpenLocations, tickLocations } from './location';
+import { sendCurrentLocation, sharedLocationId, startLocation, stopLocation, stopOpenLocations, tickLocations } from './location';
 import { isRepairPending, requestRepair } from './sessions';
 import { getMyProfile, saveProfile, shareProfile } from './profile';
 import { acceptFile, closeIncomingFiles, dropIncomingFile, refuseFile, sendFile } from './transfers';
@@ -396,6 +396,14 @@ class ChatManager extends ChatCore {
     const started = startLocation(this, contact, seconds, open);
     if (started) reconcile(this);
     return started;
+  }
+
+  // Envoie seulement ma position actuelle, sans suivi. false si le téléphone ne donne aucune position.
+  sendCurrentLocation(contact: string) {
+    if (isSelf(contact)) return false;
+    const sent = sendCurrentLocation(this, contact);
+    if (sent) reconcile(this);
+    return sent;
   }
 
   stopLocation(contact: string) {

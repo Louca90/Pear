@@ -21,6 +21,11 @@ describe('position en direct', () => {
     expect(parseLocation({ ...paris, at: 1000, until: 2000, open: 'oui' })).toEqual({ ...paris, at: 1000, until: 2000 });
   });
 
+  it('garde la marque « position ponctuelle », et seulement si elle vaut true', () => {
+    expect(parseLocation({ ...paris, at: 1000, until: 1001, once: true })).toEqual({ ...paris, at: 1000, until: 1001, once: true });
+    expect(parseLocation({ ...paris, at: 1000, until: 1001, once: 1 })).toEqual({ ...paris, at: 1000, until: 1001 });
+  });
+
   it('borne la durée d’un partage reçu à 8 heures', () => {
     const year = 365 * 24 * 3600 * 1000;
     const parsed = parseLocation({ ...paris, at: 1000, until: 1000 + year });

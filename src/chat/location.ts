@@ -19,6 +19,8 @@ export type SharedLocation = {
   until: number;
   // Partage « tant que l'app est ouverte » (la fin affichée n'a alors pas de sens).
   open?: true;
+  // Position envoyée une seule fois (« seulement ma position actuelle ») : pas de suivi.
+  once?: true;
 };
 
 const isCoordinate = (value: unknown, max: number): value is number => typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= max;
@@ -27,10 +29,10 @@ const isTime = (value: unknown): value is number => Number.isSafeInteger(value) 
 // Une position reçue de l'autre téléphone, ou relue dans la base. null si un champ n'est pas valide.
 export function parseLocation(value: unknown): SharedLocation | null {
   if (value === null || typeof value !== 'object') return null;
-  const { latitude, longitude, at, until, open } = value as Record<string, unknown>;
+  const { latitude, longitude, at, until, open, once } = value as Record<string, unknown>;
   if (!isCoordinate(latitude, 90) || !isCoordinate(longitude, 180) || !isTime(at) || !isTime(until)) return null;
   // Une fin trop lointaine est ramenée à la durée maximale.
-  return { latitude, longitude, at, until: Math.min(until, at + MAX_SHARE_MS), ...(open === true ? { open: true as const } : {}) };
+  return { latitude, longitude, at, until: Math.min(until, at + MAX_SHARE_MS), ...(open === true ? { open: true as const } : {}), ...(once === true ? { once: true as const } : {}) };
 }
 
 export function parseLocationText(text: string): SharedLocation | null {

@@ -23,7 +23,8 @@ const KEEP_MS = 60 * 1000;
 const SHARES_KEY = 'location_shares';
 
 // open : « tant que l'app est ouverte » (voir OPEN_SHARE_WINDOW_S).
-type Share = { id: string; until: number; open?: boolean };
+// once : position envoyée une seule fois, gardée ici jusqu'à ce que la connexion directe l'emporte.
+type Share = { id: string; until: number; open?: boolean; once?: boolean };
 
 // Un partage « app ouverte » laissé par un lancement précédent (Pear fermé) s'arrête au premier tour.
 const launchedAt = Date.now();
@@ -39,7 +40,7 @@ function loadShares(): Map<string, Share> {
   try {
     const saved = JSON.parse(getSetting(SHARES_KEY) ?? '{}') as Record<string, Share>;
     for (const [contact, share] of Object.entries(saved)) {
-      if (typeof share?.id === 'string' && typeof share?.until === 'number') shares.set(contact, { id: share.id, until: share.until, ...(share.open ? { open: true } : {}) });
+      if (typeof share?.id === 'string' && typeof share?.until === 'number') shares.set(contact, { id: share.id, until: share.until, ...(share.open ? { open: true } : {}), ...(share.once ? { once: true } : {}) });
     }
   } catch {
     // Réglage illisible : aucun partage en cours.
@@ -52,17 +53,45 @@ function saveShares() {
   setSetting(SHARES_KEY, all.size > 0 ? JSON.stringify(Object.fromEntries(all)) : null);
 }
 
-function send(core: ChatCore, contact: string, id: string, location: SharedLocation) {
+function send(core: ChatCore, contact: string, id: string, location: SharedLocation): boolean {
   try {
-    sendSecure(core, contact, { type: 'location', id, ...location });
+    return sendSecure(core, contact, { type: 'location', id, ...location });
   } catch (e) {
     log.warn('position', e);
+    return false;
   }
 }
 
 export function sharedLocationId(contact: string): string | null {
-  return loadShares().get(contact)?.id ?? null;
+  const share = loadShares().get(contact);
+  return share && !share.once ? share.id : null;
 }
+
+// Combien de temps une position ponctuelle attend la connexion directe avant d'être abandonnée.
+const ONCE_WAIT_MS = 10 * 60 * 1000;
+
+// « Envoyer seulement ma position actuelle » : un message de position sans suivi. Il part tout de suite
+// si la connexion directe est ouverte ; sinon il est réessayé à chaque tour, pendant ONCE_WAIT_MS.
+export function sendCurrentLocation(core: ChatCore, contact: string): boolean {
+  const position = lastKnownLocation();
+  if (!position) return false;
+  const now = Date.now();
+  const id = to_base64(randombytes_buf(16));
+  // Fin une milliseconde après : le message est reçu, puis s'affiche comme une position fixe.
+  const location: SharedLocation = { ...position, at: now, until: now + 1, once: true };
+  addMessage({ id, contact, mine: 1, text: locationText(location), status: 'read', created_at: now, kind: 'location', conn_session: core.sessionFor(contact) });
+  if (!send(core, contact, id, location)) {
+    // Le partage en direct éventuel continue : la position ponctuelle attend sous sa propre clé.
+    loadShares().set(onceKey(contact), { id, until: now + ONCE_WAIT_MS, once: true });
+    saveShares();
+    core.keepConnected(contact, KEEP_MS);
+  }
+  core.notify();
+  return true;
+}
+
+const ONCE_PREFIX = 'once:';
+const onceKey = (contact: string) => ONCE_PREFIX + contact;
 
 // Commence à partager ma position avec ce contact pendant `seconds`. false si le téléphone ne donne
 // aucune position (autorisation refusée, localisation coupée).
@@ -109,7 +138,18 @@ export function tickLocations(core: ChatCore) {
   if (all.size === 0) return;
   const now = Date.now();
   let changed = false;
-  for (const [contact, share] of [...all]) {
+  for (const [key, share] of [...all]) {
+    if (share.once) {
+      const contact = key.slice(ONCE_PREFIX.length);
+      const message = getMessage(share.id, contact);
+      const location = message && parseLocationText(message.text);
+      if (!location || now >= share.until || send(core, contact, share.id, location)) {
+        all.delete(key);
+        saveShares();
+      } else core.keepConnected(contact, KEEP_MS);
+      continue;
+    }
+    const contact = key;
     // « App ouverte » : arrêté si Pear n'est plus au premier plan, ou s'il vient d'un lancement précédent.
     const staleOpen = share.open && (AppState.currentState !== 'active' || (openSince.get(contact) ?? 0) < launchedAt);
     if (staleOpen || now >= share.until || !getMessage(share.id, contact)) {
@@ -134,7 +174,7 @@ export function tickLocations(core: ChatCore) {
 
 // Pear passe en arrière-plan : les partages « tant que l'app est ouverte » s'arrêtent tout de suite.
 export function stopOpenLocations(core: ChatCore) {
-  for (const [contact, share] of [...loadShares()]) if (share.open) stopLocation(core, contact);
+  for (const [contact, share] of [...loadShares()]) if (share.open && !share.once) stopLocation(core, contact);
 }
 
 // Une position reçue du contact (première ou mise à jour d'un partage déjà affiché).

@@ -822,6 +822,8 @@ export const en: Dictionary = {
     aide: 'The media is erased after being opened once.',
   },
   position: {
+    ponctuelle: 'Location sent',
+    seulementActuelle: 'Send only my current location',
     sArrete: 'Stops on its own',
     uneJournee: 'For a day',
     tantQueOuverte: 'While the app is open',
