@@ -677,6 +677,8 @@ export const fr = {
     redemarrer: 'Fermez et rouvrez Pear pour changer de langue.',
   },
   nouveautes: {
+    nouveauDans: 'Nouveau dans Pear {version}',
+    cestParti: 'C’est parti',
     passer: 'Passer',
     termine: 'Terminé',
     suivant: 'Suivant',

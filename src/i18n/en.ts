@@ -678,6 +678,8 @@ export const en: Dictionary = {
     redemarrer: 'Close and reopen Pear to change the language.',
   },
   nouveautes: {
+    nouveauDans: 'New in Pear {version}',
+    cestParti: 'Let’s go',
     passer: 'Skip',
     termine: 'Done',
     suivant: 'Next',
