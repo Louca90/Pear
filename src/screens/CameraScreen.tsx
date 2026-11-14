@@ -4,7 +4,7 @@ import { useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import { haptics } from '../haptics';
 import { NavigationBar } from 'expo-navigation-bar';
 import { StatusBar } from 'expo-status-bar';
-import { Camera, Check, Download, Lock, Send, Settings, SwitchCamera, X, Zap, ZapOff } from 'lucide-react-native';
+import { Camera, Check, Download, Lock, Settings, SwitchCamera, X, Zap, ZapOff } from 'lucide-react-native';
 
 import { setScreenBrightness } from '../../modules/pear-native';
 import { hasLastCameraFrame, PearCameraHandle, PearCameraView, wideLens } from '../../modules/pear-native/camera';
@@ -43,7 +43,6 @@ const PHOTO_JPEG_QUALITY = 82;
 const DOUBLE_TAP_MS = 300;
 const FLIP_SWIPE_DISTANCE = 70;
 const FLIP_TAP_DISTANCE = 10;
-const REVIEW_CONTROLS_MS = 180;
 // Glisser le déclencheur vers le haut en filmant zoome : ×2 tous les ZOOM_SLIDE points.
 const ZOOM_SLIDE = 140;
 const ZOOM_SLIDE_MAX = 8;
@@ -82,18 +81,10 @@ type ReviewProps = {
 function CaptureReview({ capture, contacts, onDiscard, onSent }: ReviewProps) {
   const colors = useMediaColors();
   const styles = useStyles();
-  const { top: topInset } = useInsets();
-  const bottom = useNavigationBarHeight();
   const [picking, setPicking] = useState(false);
   const [saved, setSaved] = useState(false);
   const editor = useRef<MediaEditorHandle>(null);
   const [preparing, setPreparing] = useState(false);
-  // Un outil de l'éditeur ouvert en bas (réglages) : les boutons de l'écran s'effacent.
-  const [toolOpen, setToolOpen] = useState(false);
-  const controls = useRef(new Animated.Value(1)).current;
-  useEffect(() => {
-    Animated.timing(controls, { toValue: toolOpen ? 0 : 1, duration: REVIEW_CONTROLS_MS, easing: Easing.bezier(0.2, 0.8, 0.2, 1), useNativeDriver: true }).start();
-  }, [toolOpen, controls]);
 
   const finalUri = async () => {
     setPreparing(true);
@@ -160,18 +151,22 @@ function CaptureReview({ capture, contacts, onDiscard, onSent }: ReviewProps) {
     <Modal visible animationType="fade" onRequestClose={() => (picking ? setPicking(false) : onDiscard())} statusBarTranslucent navigationBarTranslucent>
       {/* Sur Android, les gestes d'une fenêtre Modal ne marchent que si son contenu a sa propre racine. */}
       <GestureHandlerRootView style={styles.review}>
-        <MediaEditor ref={editor} uri={capture.uri} kind={capture.kind} takenAt={capture.takenAt} initialFilter={capture.filter} onToolChange={setToolOpen} />
-        <Animated.View pointerEvents={toolOpen ? 'none' : 'box-none'} style={[styles.topControls, { top: topInset + spacing.md, opacity: controls }]}>
-          <IconButton onPress={onDiscard} label={t('camera.jeter')} style={styles.roundControl}>
-            <X size={24} color={colors.background} strokeWidth={1.75} />
-          </IconButton>
-          <IconButton onPress={save} disabled={saved} label={saved ? t('camera.enregistre') : t('camera.enregistrerGalerie')} style={styles.roundControl}>
-            {saved ? <Check size={24} color={colors.background} strokeWidth={2} /> : <Download size={24} color={colors.background} strokeWidth={1.75} />}
-          </IconButton>
-        </Animated.View>
-        <Animated.View pointerEvents={toolOpen ? 'none' : 'box-none'} style={[styles.reviewSend, { bottom: bottom + spacing.lg, opacity: controls }]}>
-          <Button label={t('camera.envoyerA')} icon={Send} variant="secondary" onPress={() => setPicking(true)} />
-        </Animated.View>
+        <MediaEditor
+          ref={editor}
+          uri={capture.uri}
+          kind={capture.kind}
+          takenAt={capture.takenAt}
+          initialFilter={capture.filter}
+          actions={{
+            onClose: onDiscard,
+            onSend: () => setPicking(true),
+            extra: (
+              <IconButton onPress={save} disabled={saved} label={saved ? t('camera.enregistre') : t('camera.enregistrerGalerie')} style={styles.roundControl}>
+                {saved ? <Check size={22} color={colors.background} strokeWidth={2} /> : <Download size={22} color={colors.background} strokeWidth={1.9} />}
+              </IconButton>
+            ),
+          }}
+        />
 
         {picking && (
           <ContactPickerSheet title={t('camera.envoyerA')} contacts={contacts} onSend={send} onClose={() => setPicking(false)} />
@@ -756,10 +751,5 @@ const useStyles = createMediaStyles((colors) => ({
   review: {
     flex: 1,
     backgroundColor: colors.text,
-  },
-  reviewSend: {
-    position: 'absolute',
-    left: spacing.lg,
-    right: spacing.lg,
   },
 }));

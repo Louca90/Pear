@@ -34,6 +34,27 @@ export async function readAmbient(kind: StampKind | undefined): Promise<Partial<
   return {};
 }
 
+// Pour les vignettes de la rangée Ambiance : ce qui se lit sans rien demander. La batterie, et la ville
+// seulement si la position est déjà permise (jamais de demande d'autorisation ici). Rien ne sort du
+// téléphone : la marque n'est gravée que si on choisit le filtre.
+export async function peekAmbient(): Promise<Partial<Ambient>> {
+  const found: Partial<Ambient> = {};
+  try {
+    found.battery = batteryStatus();
+  } catch {
+    // Batterie illisible : la vignette montre une icône.
+  }
+  try {
+    if (Platform.OS === 'android' && (await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION))) {
+      const position = lastKnownLocation();
+      if (position) found.place = nearestCity(position);
+    }
+  } catch {
+    // Position illisible : la vignette montre une icône.
+  }
+  return found;
+}
+
 // Le style typographique choisi pour chaque marque, gardé d'une fois sur l'autre.
 const styles = new Map<StampKind, number>();
 

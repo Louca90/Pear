@@ -6,7 +6,7 @@ import { haptics } from '../../haptics';
 import { t } from '../../i18n';
 import { createMediaStyles, fixed, radius, spacing } from '../../theme';
 import { lockTabSwipe } from '../tabSwipeLock';
-import { FILTERS, FilterId, NO_ADJUSTMENTS, presetOf, stepsOf, tintsOf, viewFiltersOf } from './filters';
+import { Adjustments, FILTERS, FilterId, NO_ADJUSTMENTS, presetOf, stepsOf, tintsOf, viewFiltersOf } from './filters';
 import type { StampKind } from './stamps';
 
 // Tous les filtres, dans l'ordre de l'éditeur : Original, les marques, puis les couleurs.
@@ -77,9 +77,9 @@ function StampSample({ kind, size }: { kind: StampKind; size: number }) {
 // Un contenu filtré, découpé dans un rond. Le filtre d'Android se pose sur la vue qui découpe
 // elle-même : posé sur un enfant (FilteredView), il dessinait parfois hors du rond (coins carrés).
 // Les voiles (fané, température) sont découpés par le même rond.
-export function RoundFiltered({ id, radius: corner, children }: { id: FilterId; radius: number; children: ReactNode }) {
+export function RoundFiltered({ id, radius: corner, adjustments = NO_ADJUSTMENTS, children }: { id: FilterId; radius: number; adjustments?: Adjustments; children: ReactNode }) {
   const styles = useStyles();
-  const steps = stepsOf(id, NO_ADJUSTMENTS);
+  const steps = stepsOf(id, adjustments);
   const filters = viewFiltersOf(steps);
   const round = { borderRadius: corner };
   return (

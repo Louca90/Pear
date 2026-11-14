@@ -1,26 +1,29 @@
 import { t } from '../i18n';
-import { ComponentRef, memo, Ref, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { Animated, Dimensions, Easing, findNodeHandle, Image, StyleSheet, Text, View } from 'react-native';
+import { ComponentRef, memo, ReactNode, Ref, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { Animated, Dimensions, Easing, findNodeHandle, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import Reanimated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { File, Paths } from 'expo-file-system';
 import { haptics } from '../haptics';
 import { useVideoPlayer, VideoPlayer, VideoView } from 'expo-video';
 import { getThumbnailAsync } from 'expo-video-thumbnails';
-import { Crop as CropIcon, Gauge, Pencil, Scissors, SlidersHorizontal, Smile, Trash2, Type, Volume2, VolumeX } from 'lucide-react-native';
+import { ArrowRight, Crop as CropIcon, Gauge, Pencil, Scissors, SlidersHorizontal, Smile, Trash2, Type, Undo2, Volume2, VolumeX, X } from 'lucide-react-native';
 import { GestureDetector, usePanGesture, usePinchGesture, useRotationGesture, useSimultaneousGestures, useTapGesture } from 'react-native-gesture-handler';
 import Svg, { Defs, FeColorMatrix, Filter, G, Image as SvgImage } from 'react-native-svg';
 
 import { captureView, editVideo } from '../../modules/pear-native';
 import { VIDEO_BITRATE } from '../config';
 import { createMediaStyles, fixed, radius, spacing, useMediaColors } from '../theme';
-import { useInsets, useNavigationBarHeight } from './ui';
+import { IconButton, useInsets, useNavigationBarHeight, usePressFeedback } from './ui';
 import { log } from '../log';
+import { DURATION, timing } from '../motion';
 import { AdjustPanel } from './editor/AdjustPanel';
+import { AmbiancePanel } from './editor/AmbiancePanel';
 import { ColorMatrix, isIdentity, toMedia3 } from './editor/colorMatrix';
-import { EditorToolbar, TOOL_SIZE } from './editor/EditorToolbar';
+import { AmbianceIcon, EditorToolbar, TOOLBAR_HEIGHT } from './editor/EditorToolbar';
 import { FilteredView } from './editor/FilteredView';
-import { Adjustments, FilterId, matrixOf, neighborOf, NO_ADJUSTMENTS, presetOf, stepsOf } from './editor/filters';
+import { Adjustments, FilterId, isAdjusted, matrixOf, neighborOf, NO_ADJUSTMENTS, presetOf, stepsOf } from './editor/filters';
 import { bringToFront, clamp, Layer, layerAt, newLayerId, SCALE_MAX, SCALE_MIN, Size, TEXT_SIZE_DEFAULT, TextLayer, updateLayer } from './editor/layers';
-import { getStampStyle, readAmbient } from './editor/ambient';
+import { getStampStyle, peekAmbient, readAmbient } from './editor/ambient';
 import { Ambient, formatStamp, NO_AMBIENT, Stamp, StampMarks } from './editor/stamps';
 import { TextEditor } from './editor/TextEditor';
 import { TextLayerView } from './editor/TextLayerView';
@@ -49,6 +52,38 @@ const TRASH_REACH = 56;
 const EXPORT_SCALE_MAX = 2.5;
 // Largeur maximale d'un texte, avant qu'il passe à la ligne (en part de l'aperçu).
 const TEXT_MAX_WIDTH = 0.86;
+// Les boutons ronds du haut (fermer, annuler) et la pilule « Envoyer ».
+const ROUND_SIZE = 44;
+const SEND_HEIGHT = 40;
+// Sans boutons fournis, l'écran parent pose son bouton d'envoi (52 points) en bas : la barre d'outils
+// se place au-dessus.
+const PARENT_SEND_HEIGHT = 52;
+// Historique : une retouche est retenue quand rien n'a bougé pendant ce temps (un pincement, un
+// glissé, un curseur ne font qu'un seul pas en arrière).
+const HISTORY_SETTLE_MS = 400;
+const HISTORY_MAX = 50;
+
+// Tout ce que « annuler » sait remettre comme avant.
+type Edits = { layers: Layer[]; strokes: Stroke[]; filter: FilterId; adjustments: Adjustments; crop: Crop; trim: Trim; muted: boolean; speed: number };
+
+function sameEdits(a: Edits, b: Edits) {
+  return (Object.keys(a) as (keyof Edits)[]).every((key) => a[key] === b[key]);
+}
+
+// La pilule claire « Envoyer », avec l'effet d'appui commun.
+function SendPill({ label, onPress }: { label: string; onPress: () => void }) {
+  const colors = useMediaColors();
+  const styles = useStyles();
+  const feedback = usePressFeedback();
+  return (
+    <Pressable onPress={onPress} onPressIn={feedback.onPressIn} onPressOut={feedback.onPressOut} accessibilityRole="button" accessibilityLabel={label} hitSlop={6}>
+      <Reanimated.View style={[styles.send, feedback.style]}>
+        <Text style={styles.sendLabel}>{label}</Text>
+        <ArrowRight size={16} color={colors.text} strokeWidth={2} />
+      </Reanimated.View>
+    </Pressable>
+  );
+}
 
 export type MediaEditorHandle = {
   // Grave les retouches dans un nouveau fichier. Sans retouche, renvoie le fichier d'origine.
@@ -101,6 +136,11 @@ type Props = {
   initialFilter?: FilterId;
   // Un outil occupe l'écran (réglages, texte, déplacement) : l'écran parent range ses boutons.
   onToolChange?: (open: boolean) => void;
+  // Les boutons du haut de la maquette (fermer, annuler, « Envoyer » en pilule claire, et `extra` entre
+  // les deux, par exemple « enregistrer »). Sans eux, l'écran parent garde ses propres boutons : l'éditeur
+  // n'ajoute alors que « annuler », à droite du bouton fermer du parent, et pose sa barre d'outils au-dessus
+  // du bouton d'envoi du parent.
+  actions?: { onClose: () => void; onSend: () => void; sendLabel?: string; extra?: ReactNode };
   ref: Ref<MediaEditorHandle>;
 };
 
@@ -109,7 +149,7 @@ type Props = {
 // exacte, la marque et les calques), dessinée dans une image par le module natif : ce qu'on voit est
 // ce qui part. Pour une vidéo, cette copie sans image devient le calque transparent que Media3 incruste
 // pendant qu'il applique la même matrice à toute la vidéo.
-export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onToolChange, ref }: Props) {
+export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onToolChange, actions, ref }: Props) {
   const colors = useMediaColors();
   const styles = useStyles();
   const { top: topInset } = useInsets();
@@ -136,10 +176,25 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
   const exportRoot = useRef<ComponentRef<typeof View>>(null);
   const screen = Dimensions.get('screen');
 
+  // L'image des vignettes Ambiance : la photo elle-même, ou la première image de la vidéo.
+  const [videoPoster, setVideoPoster] = useState<string | null>(null);
+  const poster = kind === 'image' ? uri : videoPoster;
   useEffect(() => {
-    const measured = kind === 'video' ? getThumbnailAsync(uri, { time: 0 }) : Image.getSize(uri);
-    measured.then(({ width: measuredWidth, height: measuredHeight }) => setSize({ width: measuredWidth, height: measuredHeight })).catch((e) => log.warn('média', e));
+    if (kind === 'video') {
+      getThumbnailAsync(uri, { time: 0 })
+        .then((thumbnail) => {
+          setSize({ width: thumbnail.width, height: thumbnail.height });
+          setVideoPoster(thumbnail.uri);
+        })
+        .catch((e) => log.warn('média', e));
+      return;
+    }
+    Image.getSize(uri)
+      .then(({ width: measuredWidth, height: measuredHeight }) => setSize({ width: measuredWidth, height: measuredHeight }))
+      .catch((e) => log.warn('média', e));
   }, [uri, kind]);
+  // La rangée Ambiance, ouverte au-dessus de la barre d'outils (elle n'occupe pas l'écran : pas « busy »).
+  const [ambiancing, setAmbiancing] = useState(false);
 
   // Vidéo : découpe, son et vitesse, appliqués à l'aperçu par le lecteur puis au fichier par Media3.
   const [trimming, setTrimming] = useState(false);
@@ -195,6 +250,39 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
     onToolChange?.(busy);
   }, [busy, onToolChange]);
 
+  // --- Annuler ---
+
+  // `committed` : le dernier état retenu ; `past` : les précédents. Une retouche n'est retenue qu'une
+  // fois l'outil refermé et les doigts immobiles (HISTORY_SETTLE_MS) ; avant, « annuler » la défait déjà.
+  const edits: Edits = { layers, strokes, filter, adjustments, crop, trim, muted, speed };
+  const committed = useRef(edits);
+  const past = useRef<Edits[]>([]);
+  const pending = !sameEdits(edits, committed.current);
+  useEffect(() => {
+    if (busy || !pending) return;
+    const settled = edits;
+    const timer = setTimeout(() => {
+      past.current = [...past.current.slice(1 - HISTORY_MAX), committed.current];
+      committed.current = settled;
+    }, HISTORY_SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [busy, pending, layers, strokes, filter, adjustments, crop, trim, muted, speed]);
+  const canUndo = pending || past.current.length > 0;
+  const undo = () => {
+    const target = pending ? committed.current : past.current.pop();
+    if (!target) return;
+    vibrate();
+    committed.current = target;
+    setLayers(target.layers);
+    setStrokes(target.strokes);
+    setFilter(target.filter);
+    setAdjustments(target.adjustments);
+    setCrop(target.crop);
+    setTrim(target.trim);
+    setMuted(target.muted);
+    setSpeed(target.speed);
+  };
+
   // Un message apparaît un instant au milieu, puis s'efface : le nom du filtre, la vitesse, le son.
   const toast = useRef(new Animated.Value(0)).current;
   const [toastText, setToastText] = useState('');
@@ -246,6 +334,15 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
       current = false;
     };
   }, [stampKind]);
+  // Rangée Ambiance ouverte : la batterie et la ville (si déjà permise) s'écrivent sur leurs vignettes.
+  useEffect(() => {
+    if (!ambiancing) return;
+    let current = true;
+    peekAmbient().then((found) => current && setAmbient((previous) => ({ ...previous, ...found })));
+    return () => {
+      current = false;
+    };
+  }, [ambiancing]);
 
   const steps = stepsOf(filter, adjustments);
   const neighbor = swipeDirection !== 0 ? neighborOf(filter, swipeDirection) : null;
@@ -514,6 +611,37 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
       return <TextLayerView key={layer.id} layer={layer} maxWidth={textMaxWidth} size={sizes[layer.id]} onMeasure={onMeasure} hidden={hidden} />;
     });
 
+  // --- Barre d'outils et boutons du haut ---
+
+  // Avec ses propres boutons, la barre est collée en bas ; sinon elle laisse la place au bouton d'envoi du parent.
+  const toolbarBottom = actions ? 0 : navigationBar + spacing.lg + PARENT_SEND_HEIGHT + spacing.sm;
+  const toolbarInset = actions ? navigationBar : 0;
+  const selectedTool = ambiancing
+    ? 'filters'
+    : adjusting
+      ? 'adjust'
+      : drawing
+        ? 'draw'
+        : cropping
+          ? 'crop'
+          : trimming
+            ? 'trim'
+            : picking
+              ? 'stickers'
+              : editing
+                ? 'text'
+                : null;
+  // Un outil qui prend l'écran referme la rangée Ambiance.
+  const openTool = (open: () => void) => () => {
+    setAmbiancing(false);
+    open();
+  };
+  const headerVisible = useSharedValue(1);
+  useEffect(() => {
+    headerVisible.set(timing(busy ? 0 : 1, DURATION.small));
+  }, [busy, headerVisible]);
+  const headerShown = useAnimatedStyle(() => ({ opacity: headerVisible.get() }));
+
   const addSticker = (emoji: string) =>
     setLayers((current) => [...current, { id: newLayerId(), kind: 'sticker', emoji, x: width / 2, y: height / 2, scale: 1, rotation: 0 }]);
 
@@ -611,20 +739,58 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
         <Trash2 size={24} color={colors.background} strokeWidth={1.75} />
       </Animated.View>
 
+      <Reanimated.View pointerEvents={busy ? 'none' : 'box-none'} style={[styles.header, { top: topInset + spacing.md }, headerShown]}>
+        {actions ? (
+          <IconButton onPress={actions.onClose} label={t('editeur.fermer')} style={styles.round}>
+            <X size={22} color={colors.background} strokeWidth={1.9} />
+          </IconButton>
+        ) : (
+          // La place du bouton fermer de l'écran parent.
+          <View pointerEvents="none" style={styles.roundSpace} />
+        )}
+        <IconButton onPress={undo} disabled={!canUndo} label={t('editeur.annulerAction')} style={styles.round}>
+          <View style={!canUndo && styles.disabled}>
+            <Undo2 size={22} color={colors.background} strokeWidth={1.9} />
+          </View>
+        </IconButton>
+        <View style={styles.headerSpace} />
+        {actions?.extra}
+        {actions && <SendPill label={actions.sendLabel ?? t('editeur.envoyer')} onPress={actions.onSend} />}
+      </Reanimated.View>
+
+      {ambiancing && !busy && <AmbiancePanel value={filter} poster={poster} adjustments={adjustments} stamp={stamp} bottom={toolbarBottom + toolbarInset + TOOLBAR_HEIGHT + spacing.sm} onChange={setFilter} />}
+
       <EditorToolbar
-        top={topInset + spacing.md + TOOL_SIZE + spacing.md}
+        bottom={toolbarBottom}
+        inset={toolbarInset}
         hidden={busy}
+        selected={selectedTool}
         tools={[
-          { id: 'text', icon: Type, label: t('editeur.texte'), onPress: startNewText },
-          ...(kind === 'image' ? [{ id: 'crop', icon: CropIcon, label: t('editeur.recadrer'), onPress: () => setCropping(true) }] : []),
+          ...(kind === 'image' ? [{ id: 'crop', icon: CropIcon, label: t('editeur.recadrer'), on: isCropped(crop), onPress: openTool(() => setCropping(true)) }] : []),
+          ...(kind === 'video'
+            ? [{ id: 'trim', icon: Scissors, label: t('editeur.decouper'), on: trim.start > 0 || trim.end !== null, onPress: openTool(() => duration > 0 && setTrimming(true)) }]
+            : []),
+          { id: 'draw', icon: Pencil, label: t('editeur.dessin'), on: strokes.length > 0, onPress: openTool(() => setDrawing(true)) },
+          { id: 'text', icon: Type, label: t('editeur.texte'), onPress: openTool(startNewText) },
+          {
+            id: 'filters',
+            icon: AmbianceIcon,
+            label: t('editeur.ambiance'),
+            on: filter !== 'none',
+            onPress: () => {
+              vibrate();
+              setAmbiancing((open) => !open);
+            },
+          },
+          { id: 'stickers', icon: Smile, label: t('editeur.stickers'), onPress: openTool(() => setPicking(true)) },
+          { id: 'adjust', icon: SlidersHorizontal, label: t('editeur.reglages'), on: isAdjusted(adjustments), onPress: openTool(() => setAdjusting(true)) },
           ...(kind === 'video'
             ? [
-                { id: 'trim', icon: Scissors, label: t('editeur.decouper'), active: trim.start > 0 || trim.end !== null, onPress: () => duration > 0 && setTrimming(true) },
                 {
                   id: 'sound',
                   icon: muted ? VolumeX : Volume2,
                   label: muted ? t('editeur.sonCoupe') : t('editeur.son'),
-                  active: muted,
+                  on: muted,
                   onPress: () => {
                     vibrate();
                     setMuted((current) => !current);
@@ -635,7 +801,7 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
                   id: 'speed',
                   icon: Gauge,
                   label: t('editeur.vitesse'),
-                  active: speed !== 1,
+                  on: speed !== 1,
                   onPress: () => {
                     vibrate();
                     const next = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length];
@@ -645,9 +811,6 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
                 },
               ]
             : []),
-          { id: 'draw', icon: Pencil, label: t('editeur.dessin'), onPress: () => setDrawing(true) },
-          { id: 'stickers', icon: Smile, label: t('editeur.stickers'), onPress: () => setPicking(true) },
-          { id: 'adjust', icon: SlidersHorizontal, label: t('editeur.reglages'), active: adjusting, onPress: () => setAdjusting(true) },
         ]}
       />
 
@@ -724,5 +887,45 @@ const useStyles = createMediaStyles((colors) => ({
   },
   trashOn: {
     backgroundColor: colors.danger,
+  },
+  header: {
+    position: 'absolute',
+    left: spacing.lg,
+    right: spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  headerSpace: {
+    flex: 1,
+  },
+  round: {
+    width: ROUND_SIZE,
+    height: ROUND_SIZE,
+    borderRadius: radius.full,
+    backgroundColor: colors.overlay,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  roundSpace: {
+    width: ROUND_SIZE,
+    height: ROUND_SIZE,
+  },
+  disabled: {
+    opacity: 0.4,
+  },
+  send: {
+    height: SEND_HEIGHT,
+    paddingHorizontal: 18,
+    borderRadius: SEND_HEIGHT / 2,
+    backgroundColor: colors.background,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  sendLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.text,
   },
 }));

@@ -1,89 +1,146 @@
-import { useEffect, useRef } from 'react';
-import { Animated, Easing, View } from 'react-native';
-import { LucideIcon } from 'lucide-react-native';
+import { ComponentType, useEffect } from 'react';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import Reanimated, { interpolateColor, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import Svg, { Circle } from 'react-native-svg';
 
-import { createMediaStyles, radius, spacing, useMediaColors } from '../../theme';
-import { IconButton } from '../ui';
+import { t } from '../../i18n';
+import { DURATION, timing } from '../../motion';
+import { createMediaStyles, spacing, useMediaColors } from '../../theme';
+import { usePressFeedback } from '../ui';
 
-export const TOOL_SIZE = 44;
-const EASING = Easing.bezier(0.2, 0.8, 0.2, 1);
-// Les noms des outils se montrent à l'ouverture de l'éditeur, puis s'effacent.
-const LABELS_VISIBLE_MS = 1600;
-const FADE_MS = 220;
+// Hauteur de la barre (outil compris son léger relèvement), pour poser les panneaux juste au-dessus.
+export const TOOLBAR_HEIGHT = 70;
+const ICON_SIZE = 22;
+// L'outil choisi se relève de 2 points.
+const LIFT = 2;
+// La barre s'efface (fondu et glissement vers le bas) quand un outil plein écran l'a remplacée.
+const HIDE_SHIFT = 14;
 
-export type EditorTool = { id: string; icon: LucideIcon; label: string; active?: boolean; onPress: () => void };
+export type ToolIconProps = { size?: number; color?: string; strokeWidth?: number };
 
-// La colonne d'outils, à droite, sous les boutons du haut. Elle s'efface quand un outil occupe l'écran.
-export function EditorToolbar({ tools, top, hidden }: { tools: EditorTool[]; top: number; hidden: boolean }) {
+export type EditorTool = {
+  id: string;
+  icon: ComponentType<ToolIconProps>;
+  label: string;
+  // Un réglage en place (son coupé, vidéo découpée, filtre choisi…) : l'outil reste allumé en blanc.
+  on?: boolean;
+  onPress: () => void;
+};
+
+// L'icône de la catégorie Ambiance : trois cercles qui se chevauchent, au trait comme les autres outils.
+export function AmbianceIcon({ size = 24, color, strokeWidth = 1.8 }: ToolIconProps) {
+  const line = { fill: 'none', stroke: color, strokeWidth };
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Circle cx={12} cy={8} r={5} {...line} />
+      <Circle cx={8.5} cy={15} r={5} {...line} />
+      <Circle cx={15.5} cy={15} r={5} {...line} />
+    </Svg>
+  );
+}
+
+function ToolButton({ tool, selected }: { tool: EditorTool; selected: boolean }) {
   const colors = useMediaColors();
   const styles = useStyles();
-  const visible = useRef(new Animated.Value(1)).current;
-  const labels = useRef(new Animated.Value(0)).current;
-
+  const feedback = usePressFeedback();
+  const progress = useSharedValue(selected ? 1 : 0);
   useEffect(() => {
-    Animated.timing(visible, { toValue: hidden ? 0 : 1, duration: FADE_MS, easing: EASING, useNativeDriver: true }).start();
-  }, [hidden, visible]);
+    progress.set(timing(selected ? 1 : 0, DURATION.small));
+  }, [selected, progress]);
 
-  useEffect(() => {
-    Animated.sequence([
-      Animated.timing(labels, { toValue: 1, duration: FADE_MS, easing: EASING, useNativeDriver: true }),
-      Animated.delay(LABELS_VISIBLE_MS),
-      Animated.timing(labels, { toValue: 0, duration: FADE_MS * 1.5, easing: EASING, useNativeDriver: true }),
-    ]).start();
-  }, [labels]);
+  const rest = tool.on ? colors.background : colors.onDarkMuted;
+  const lit = colors.signature;
+  const lift = useAnimatedStyle(() => ({ transform: [{ translateY: -LIFT * progress.get() }] }));
+  const restIcon = useAnimatedStyle(() => ({ opacity: 1 - progress.get() }));
+  const litIcon = useAnimatedStyle(() => ({ opacity: progress.get() }));
+  const label = useAnimatedStyle(() => ({ color: interpolateColor(progress.get(), [0, 1], [rest, lit]) }));
+  const Icon = tool.icon;
 
   return (
-    <Animated.View
-      pointerEvents={hidden ? 'none' : 'box-none'}
-      style={[styles.column, { top, opacity: visible, transform: [{ translateX: visible.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }] }]}
+    <Pressable
+      onPress={tool.onPress}
+      onPressIn={feedback.onPressIn}
+      onPressOut={feedback.onPressOut}
+      accessibilityRole="button"
+      accessibilityLabel={tool.label}
+      accessibilityState={{ selected, checked: tool.on }}
+      hitSlop={4}
     >
-      {tools.map(({ id, icon: Icon, label, active, onPress }) => (
-        <View key={id} style={styles.row}>
-          <Animated.Text
-            pointerEvents="none"
-            style={[styles.label, { opacity: labels, transform: [{ translateX: labels.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }] }]}
-          >
-            {label}
-          </Animated.Text>
-          <IconButton onPress={onPress} label={label} style={[styles.button, active && styles.buttonActive]}>
-            <Icon size={22} color={active ? colors.text : colors.background} strokeWidth={1.75} />
-          </IconButton>
+      <Reanimated.View style={[styles.tool, feedback.style, lift]}>
+        {/* Deux icônes superposées, en fondu croisé : la couleur change sur le fil natif. */}
+        <View style={styles.icon}>
+          <Reanimated.View style={[StyleSheet.absoluteFill, restIcon]}>
+            <Icon size={ICON_SIZE} color={rest} strokeWidth={1.8} />
+          </Reanimated.View>
+          <Reanimated.View style={[StyleSheet.absoluteFill, litIcon]}>
+            <Icon size={ICON_SIZE} color={lit} strokeWidth={1.8} />
+          </Reanimated.View>
         </View>
-      ))}
-    </Animated.View>
+        <Reanimated.Text numberOfLines={1} style={[styles.label, label]}>
+          {tool.label}
+        </Reanimated.Text>
+      </Reanimated.View>
+    </Pressable>
+  );
+}
+
+// La barre d'outils du bas : une icône et son nom sous chaque outil ; l'outil choisi passe en couleur
+// signature et se relève un peu. Elle défile si les outils ne tiennent pas (vidéo : huit outils).
+// `bottom` : où la barre se pose ; `inset` : la place laissée dessous, dans la barre, pour celle d'Android.
+export function EditorToolbar({ tools, selected, bottom, inset, hidden }: { tools: EditorTool[]; selected: string | null; bottom: number; inset: number; hidden: boolean }) {
+  const styles = useStyles();
+  const visible = useSharedValue(hidden ? 0 : 1);
+  useEffect(() => {
+    visible.set(timing(hidden ? 0 : 1, DURATION.small));
+  }, [hidden, visible]);
+  const shown = useAnimatedStyle(() => ({ opacity: visible.get(), transform: [{ translateY: HIDE_SHIFT * (1 - visible.get()) }] }));
+
+  return (
+    <Reanimated.View pointerEvents={hidden ? 'none' : 'box-none'} style={[styles.bar, inset === 0 && styles.floating, { bottom, paddingBottom: inset }, shown]} accessibilityLabel={t('editeur.outils')}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+        {tools.map((tool) => (
+          <ToolButton key={tool.id} tool={tool} selected={selected === tool.id} />
+        ))}
+      </ScrollView>
+    </Reanimated.View>
   );
 }
 
 const useStyles = createMediaStyles((colors) => ({
-  column: {
+  bar: {
     position: 'absolute',
-    right: spacing.md,
-    gap: spacing.md,
-    alignItems: 'flex-end',
+    left: 0,
+    right: 0,
+    backgroundColor: colors.overlay,
+  },
+  // Posée au-dessus d'un bouton de l'écran parent : une pastille arrondie plutôt qu'une bande.
+  floating: {
+    left: spacing.sm,
+    right: spacing.sm,
+    borderRadius: 22,
+    overflow: 'hidden',
   },
   row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
+    flexGrow: 1,
+    justifyContent: 'space-around',
+    paddingHorizontal: spacing.sm,
+    paddingTop: 8,
+    paddingBottom: 6,
   },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.background,
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
-  },
-  button: {
-    width: TOOL_SIZE,
-    height: TOOL_SIZE,
-    borderRadius: radius.full,
-    backgroundColor: colors.overlay,
+  tool: {
+    minWidth: 60,
+    minHeight: 52,
+    paddingHorizontal: 4,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 4,
   },
-  buttonActive: {
-    backgroundColor: colors.background,
+  icon: {
+    width: ICON_SIZE,
+    height: ICON_SIZE,
+  },
+  label: {
+    fontSize: 11,
+    fontWeight: '500',
   },
 }));
-
