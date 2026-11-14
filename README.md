@@ -57,6 +57,29 @@ Plus de détails pour travailler dans le code : `CLAUDE.md`.
 
 Voir `RELEASE.md` : `node scripts/release.mjs bump X.Y.Z`, puis `draft`, `build` et `publish`.
 
+## Screenshots
+
+<p align="center">
+  <img width="100%" alt="Pear banner" src="https://github.com/user-attachments/assets/6add8e59-2e83-4656-99ce-1f715c02cdd9" />
+</p>
+
+<p align="center">
+  <img width="32%" alt="Permissions" src="https://github.com/user-attachments/assets/b988b24b-276b-4153-a29e-98444f899792" />
+  <img width="32%" alt="Chat" src="https://github.com/user-attachments/assets/331ee050-e213-4c3f-b1c7-2138d1b4b984" />
+  <img width="32%" alt="Contact verification" src="https://github.com/user-attachments/assets/d20d1877-10ad-484f-b3da-555916a3a3f2" />
+</p>
+
+
+
+https://github.com/user-attachments/assets/2dca6454-0534-4647-a62d-48b77e3a12b5
+
+
+
+
+
+
+
+
 ## Licence
 
 MIT, voir `LICENSE`.
