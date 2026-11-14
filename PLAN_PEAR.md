@@ -140,7 +140,7 @@ Planches du canevas (fichier → sujet) : `Main` accueil · `Conversation` · `P
 5. [x] **Menu « 3 points » d'une conversation** : refaire complètement les 2 catégories (personnalisation : couleur des bulles, fond, etc. ; et l'autre catégorie) : planche « Réglages de la conversation ».
 6. [x] **Profil d'un contact + Médias** (appui sur le pseudo) : planche « Profil du contact ».
 7. [x] **Prise en main avec les autorisations Android** : notifications, optimisation de la batterie, appareil photo, fichiers/photos, position (filtres de l'appareil photo et partage de position) : planche « Prise en main ».
-8. [ ] **Partage de position** (gros lot, natif, mode plan, gros modèle) :
+8. [ ] **Partage de position** (gros lot, natif, mode plan, gros modèle). Fait le 14 nov. : MapLibre 11.5.1 (APK debug installé sur l'A33), style Positron d'OpenFreeMap, zone de 25 km téléchargée une fois (`src/map/offlineMap.ts`, `NetworkManager.setConnected(false)` le reste du temps), carte des contacts (`MapScreen.tsx`, bouton sur l'accueil), mini-carte dans la bulle (image rendue hors ligne, `MiniMap.tsx`), mode discret = arrêter tous mes partages. Reste : la feuille d'envoi de la planche Position (durées en liste + mini-carte), « tant que ma localisation est activée » (position en arrière-plan, autorisation « toujours », nouvel APK), et l'APK release.
    - meilleure interface d'envoi ; arrêter le partage le retire aussi chez le contact (message de fin chiffré, la bulle passe à « partage terminé ») ;
    - au lieu d'ouvrir Google Maps : une **mini-carte dans l'app** ;
    - option « partager tout le temps quand la localisation est activée » avec certains contacts ;
