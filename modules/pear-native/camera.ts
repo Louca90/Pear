@@ -27,6 +27,8 @@ export type PearCameraProps = ViewProps & {
   mute: boolean;
   videoBitrate: number;
   active?: boolean;
+  // Lentille (filtre fun) dessinée sur le visage : « none » ou un identifiant de src/screens/camera/lenses.ts.
+  lens?: string;
   onReady?: (event: NativeSyntheticEvent<CameraReady>) => void;
   onFrame?: (event: NativeSyntheticEvent<{ ms: number }>) => void;
   onCameraError?: (event: NativeSyntheticEvent<{ message: string }>) => void;

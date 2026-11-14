@@ -1,7 +1,7 @@
 import { ReactNode, useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, AppState, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Reanimated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
-import { BatteryCharging, Bell, Ban, Download, Eye, FileDown, FileUp, Languages, Link2, Lock, RefreshCw, Share2, ShieldCheck, Sparkles, Stethoscope, Volume2 } from 'lucide-react-native';
+import { BatteryCharging, Bell, Ban, Download, Eye, FileDown, FileText, FileUp, Languages, Link2, Lock, RefreshCw, Share2, ShieldCheck, Sparkles, Stethoscope, Volume2 } from 'lucide-react-native';
 
 import { appVersionCode, appVersionName, authenticate } from '../../../modules/pear-native';
 import { getBlockedKeys, getSetting, setSetting } from '../../chat/database';
@@ -406,6 +406,17 @@ export function UpdatesPage({ onBack, onDiscover, onDiagnostic }: { onBack: () =
           {pages.length > 0 && <SettingRow icon={Sparkles} label={t('nouveautes.version', { version })} onPress={() => setWhatsNewOpen(true)} />}
           <SettingRow icon={RefreshCw} label={t('nouveautes.decouvrir')} onPress={onDiscover} />
           <SettingRow icon={Stethoscope} label={t('diag.ouvrir')} onPress={onDiagnostic} />
+          {/* Ce que demande la licence Apache 2.0 des bibliothèques libres embarquées. */}
+          <SettingRow
+            icon={FileText}
+            label={t('licences.titre')}
+            onPress={() =>
+              showDialog(t('licences.titre'), t('licences.texte'), [
+                { label: t('licences.lire'), onPress: () => Linking.openURL('https://www.apache.org/licenses/LICENSE-2.0') },
+                { label: 'OK', style: 'cancel' },
+              ])
+            }
+          />
         </SettingsGroup>
       </Block>
       <Block index={2}>

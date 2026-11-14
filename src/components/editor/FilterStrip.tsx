@@ -116,21 +116,21 @@ export function FilterSwatch({ id, size, flat = false }: { id: FilterId; size: n
   );
 }
 
-// Toucher le filtre déjà posé au milieu passe au style typographique suivant de sa marque.
-type Props = { value: FilterId; hidden: boolean; onChange: (id: FilterId) => void; onRestyle?: (kind: StampKind) => void };
+// Une pastille de la bande : ce qui s'affiche, son nom, et ce que fait un appui quand elle est déjà au milieu.
+export type Pastille = { id: string; label: string; node: ReactNode; onSelectedPress?: () => void };
 
-// La bande des filtres, de part et d'autre du déclencheur, comme sur Snap : on la fait défiler, le
-// filtre posé au milieu (sous le déclencheur) s'applique tout de suite à l'aperçu, et son nom
-// apparaît un instant au-dessus.
-export function FilterStrip({ value, hidden, onChange, onRestyle }: Props) {
+// La bande des pastilles, de part et d'autre du déclencheur, comme sur Snap : on la fait défiler, la
+// pastille posée au milieu (sous le déclencheur) s'applique tout de suite à l'aperçu, et son nom
+// apparaît un instant au-dessus. Sert aux filtres de couleur et aux lentilles.
+export function PastilleStrip({ items, value, hidden, onChange }: { items: Pastille[]; value: string; hidden: boolean; onChange: (id: string) => void }) {
   const styles = useStyles();
   const { width } = useWindowDimensions();
   const scroll = useRef<ComponentRef<typeof ScrollView>>(null);
-  const current = useRef(Math.max(0, CAMERA_FILTERS.findIndex((preset) => preset.id === value)));
+  const current = useRef(Math.max(0, items.findIndex((item) => item.id === value)));
   const visible = useSharedValue(hidden ? 0 : 1);
   const name = useSharedValue(0);
   const nameStyle = useAnimatedStyle(() => ({ opacity: name.get(), transform: [{ translateY: 4 * (1 - name.get()) }] }));
-  const nameText = useRef<string>(t(presetOf(value).label));
+  const nameText = useRef<string>(items[current.current]?.label ?? '');
 
   useEffect(() => {
     visible.set(withTiming(hidden ? 0 : 1, { duration: HIDE_MS, easing: EASING }));
@@ -142,12 +142,12 @@ export function FilterStrip({ value, hidden, onChange, onRestyle }: Props) {
   };
 
   const onScroll = ({ nativeEvent }: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const index = Math.max(0, Math.min(CAMERA_FILTERS.length - 1, Math.round(nativeEvent.contentOffset.x / ITEM_WIDTH)));
+    const index = Math.max(0, Math.min(items.length - 1, Math.round(nativeEvent.contentOffset.x / ITEM_WIDTH)));
     if (index === current.current) return;
     current.current = index;
     haptics.select();
-    nameText.current = t(CAMERA_FILTERS[index].label);
-    onChange(CAMERA_FILTERS[index].id);
+    nameText.current = items[index].label;
+    onChange(items[index].id);
     showName();
   };
 
@@ -173,25 +173,41 @@ export function FilterStrip({ value, hidden, onChange, onRestyle }: Props) {
         onTouchCancel={() => lockTabSwipe(false)}
         style={styles.strip}
       >
-        {CAMERA_FILTERS.map((preset, index) => (
+        {items.map((item, index) => (
           <Pressable
-            key={preset.id}
+            key={item.id}
             onPress={() => {
-              if (preset.id === value && preset.stamp) onRestyle?.(preset.stamp);
+              if (item.id === value && item.onSelectedPress) item.onSelectedPress();
               else scroll.current?.scrollTo({ x: index * ITEM_WIDTH, animated: true });
             }}
             accessibilityRole="button"
-            accessibilityLabel={t(preset.label)}
-            accessibilityState={{ selected: preset.id === value }}
+            accessibilityLabel={item.label}
+            accessibilityState={{ selected: item.id === value }}
             style={styles.item}
           >
-            <FilterSwatch id={preset.id} size={SWATCH_SIZE} />
+            {item.node}
           </Pressable>
         ))}
       </ScrollView>
     </Reanimated.View>
   );
 }
+
+// Toucher le filtre déjà posé au milieu passe au style typographique suivant de sa marque.
+type Props = { value: FilterId; hidden: boolean; onChange: (id: FilterId) => void; onRestyle?: (kind: StampKind) => void };
+
+// La bande des filtres de couleur.
+export function FilterStrip({ value, hidden, onChange, onRestyle }: Props) {
+  const items: Pastille[] = CAMERA_FILTERS.map((preset) => ({
+    id: preset.id,
+    label: t(preset.label),
+    node: <FilterSwatch id={preset.id} size={SWATCH_SIZE} />,
+    onSelectedPress: preset.stamp ? () => onRestyle?.(preset.stamp as StampKind) : undefined,
+  }));
+  return <PastilleStrip items={items} value={value} hidden={hidden} onChange={(id) => onChange(id as FilterId)} />;
+}
+
+export const PASTILLE_SIZE = SWATCH_SIZE;
 
 const useStyles = createMediaStyles((colors) => ({
   layer: {

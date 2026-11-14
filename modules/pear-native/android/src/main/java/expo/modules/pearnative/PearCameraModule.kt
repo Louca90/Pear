@@ -47,6 +47,7 @@ class PearCameraModule : Module() {
       Prop("mute") { view: PearCameraView, mute: Boolean -> view.mute = mute }
       Prop("videoBitrate") { view: PearCameraView, bitrate: Int -> view.videoBitrate = bitrate }
       Prop("active") { view: PearCameraView, active: Boolean -> view.setActive(active) }
+      Prop("lens") { view: PearCameraView, lens: String? -> view.setLens(lens) }
 
       OnViewDidUpdateProps { view -> view.applyChanges() }
       OnViewDestroys { view -> view.release() }

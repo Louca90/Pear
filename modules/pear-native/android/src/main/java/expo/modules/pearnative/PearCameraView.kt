@@ -21,6 +21,7 @@ import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
+import androidx.camera.core.UseCaseGroup
 import androidx.camera.core.resolutionselector.AspectRatioStrategy
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
@@ -129,6 +130,10 @@ class PearCameraView(context: Context, appContext: AppContext) : ExpoView(contex
   private var flash = false
   private var active = true
   private var needsBind = true
+  // Lentille (filtre fun) : « none », ou l'effet dessiné sur le visage. Le suivi du visage n'est créé
+  // et branché que lorsqu'une lentille est choisie : sans lentille, la caméra s'ouvre comme avant.
+  private var lens = "none"
+  private var faceLens: FaceLens? = null
   var mute = false
   var videoBitrate = 4_000_000
 
@@ -209,6 +214,22 @@ class PearCameraView(context: Context, appContext: AppContext) : ExpoView(contex
     photo.flashMode = if (flash) ImageCapture.FLASH_MODE_ON else ImageCapture.FLASH_MODE_OFF
   }
 
+  fun setLens(value: String?) {
+    val next = value ?: "none"
+    if (next == lens) return
+    val wasOn = lens != "none"
+    lens = next
+    val on = next != "none"
+    if (on) {
+      val tracker = faceLens ?: FaceLens(context).also { faceLens = it }
+      tracker.lens = next
+      tracker.prepare()
+    } else {
+      faceLens?.lens = next
+    }
+    if (wasOn != on) needsBind = true
+  }
+
   fun setActive(value: Boolean) {
     if (value == active) return
     active = value
@@ -278,8 +299,12 @@ class PearCameraView(context: Context, appContext: AppContext) : ExpoView(contex
         cameraProvider.unbindAll()
         // L'aperçu seul d'abord : la première image arrive plus vite. Photo et vidéo se branchent juste
         // après (sauf si une vidéo est en cours : elle doit continuer sur la nouvelle caméra).
-        val staged = recording == null
-        val bound = if (staged) {
+        val tracker = faceLens
+        val withLens = lens != "none" && tracker != null
+        val staged = recording == null && !withLens
+        val bound = if (withLens && tracker != null) {
+          bindWithLens(cameraProvider, owner, video, tracker)
+        } else if (staged) {
           photoAvailable = true
           cameraProvider.bindToLifecycle(owner, selector(), preview)
         } else {
@@ -368,6 +393,25 @@ class PearCameraView(context: Context, appContext: AppContext) : ExpoView(contex
     }
   }
 
+  // Avec une lentille : aperçu, vidéo et analyse du visage ensemble, et l'effet dessiné sur l'aperçu
+  // et la vidéo. La photo est alors prise sur l'aperçu, qui contient l'effet.
+  private fun bindWithLens(cameraProvider: ProcessCameraProvider, owner: LifecycleOwner, video: VideoCapture<Recorder>, tracker: FaceLens): Camera {
+    photoAvailable = false
+    val group = UseCaseGroup.Builder()
+      .addUseCase(preview)
+      .addUseCase(video)
+      .addUseCase(tracker.analysis)
+      .addEffect(tracker.effect)
+      .build()
+    return try {
+      cameraProvider.bindToLifecycle(owner, selector(), group)
+    } catch (e: IllegalArgumentException) {
+      // Trop de flux pour ce téléphone : la lentille reste, sans la vidéo.
+      Log.w(TAG, "lentille avec vidéo impossible", e)
+      cameraProvider.bindToLifecycle(owner, selector(), UseCaseGroup.Builder().addUseCase(preview).addUseCase(tracker.analysis).addEffect(tracker.effect).build())
+    }
+  }
+
   // Branche photo et vidéo avec l'aperçu. Si le téléphone ne sait pas les faire ensemble, la photo
   // viendra de l'aperçu.
   private fun bindExtras(cameraProvider: ProcessCameraProvider, owner: LifecycleOwner, photo: ImageCapture, video: VideoCapture<Recorder>): Camera {
@@ -391,7 +435,7 @@ class PearCameraView(context: Context, appContext: AppContext) : ExpoView(contex
     camera = null
     // Seulement nos usages : une nouvelle vue de caméra (écran rouvert) a pu déjà se brancher, et
     // unbindAll la coupait juste après son ouverture (caméra noire jusqu'au changement d'onglet).
-    val mine = listOfNotNull(preview, imageCapture, videoCapture).toTypedArray()
+    val mine = listOfNotNull(preview, imageCapture, videoCapture, faceLens?.analysis).toTypedArray()
     try {
       provider?.unbind(*mine)
     } catch (e: Exception) {
@@ -509,6 +553,8 @@ class PearCameraView(context: Context, appContext: AppContext) : ExpoView(contex
     recording?.stop()
     rememberFrame()
     unbind()
+    faceLens?.close()
+    faceLens = null
     scope.cancel()
   }
 }

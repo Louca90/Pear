@@ -17,7 +17,9 @@ import { showDialog } from '../components/dialog';
 import { ContactPickerSheet } from '../components/ContactPickerSheet';
 import { MediaEditor, MediaEditorHandle } from '../components/MediaEditor';
 import { FilteredView } from '../components/editor/FilteredView';
-import { FilterStrip } from '../components/editor/FilterStrip';
+import { FilterStrip, PASTILLE_SIZE, PastilleStrip } from '../components/editor/FilterStrip';
+import { LensCategories, LensHint, LensPastille, LensRing } from './camera/LensBar';
+import { LENSES, LensCategory, lensOf, NO_LENS } from './camera/lenses';
 import { FilterId, NO_ADJUSTMENTS, presetOf, stepsOf } from '../components/editor/filters';
 import { getStampStyle, nextStampStyle, readAmbient } from '../components/editor/ambient';
 import { Ambient, formatStamp, NO_AMBIENT, StampMarks } from '../components/editor/stamps';
@@ -61,6 +63,9 @@ const FILTER_ROW_HEIGHT = 72;
 const MODE_TABS_HEIGHT = 36;
 const SIDE_BUTTON = 48;
 const ZOOM_INSET = 18;
+// Les catégories de lentilles, au-dessus des pastilles de zoom ; le conseil encore au-dessus.
+const CATEGORIES_ABOVE_ZOOM = 54;
+const HINT_ABOVE_CATEGORIES = 42;
 const PREVIEW_RADIUS = 28;
 
 // filter : le filtre choisi avant la prise, repris par l'éditeur (il ne touche pas encore au fichier).
@@ -284,6 +289,14 @@ export function CameraScreen({ contacts, to, onSent, onRecordingChange }: Props)
   const [lastShot, setLastShot] = useState<Capture | null>(null);
   // Le filtre en direct, appliqué à l'aperçu ; lu par une référence quand la vidéo se termine.
   const [liveFilter, setLiveFilter] = useState<FilterId>('none');
+  // Lentilles (filtres fun) : la catégorie de la bande, et la lentille posée sur le visage. Une lentille
+  // et un filtre de couleur peuvent se combiner.
+  const [lensCategory, setLensCategory] = useState<LensCategory>('couleurs');
+  const [lens, setLens] = useState(NO_LENS);
+  const chooseCategory = (category: LensCategory) => {
+    setLensCategory(category);
+    if (category !== 'couleurs') setLens(LENSES[category][1].id);
+  };
   const liveFilterRef = useRef(liveFilter);
   liveFilterRef.current = liveFilter;
   // Heure, Date, Pellicule : la marque se voit sur l'aperçu, mise à jour à chaque minute.
@@ -626,6 +639,7 @@ export function CameraScreen({ contacts, to, onSent, onRecordingChange }: Props)
                 ref={camera}
                 style={StyleSheet.absoluteFill}
                 active={live}
+                lens={lens}
                 facing={facing}
                 cameraId={facing === 'back' ? lensId : null}
                 zoom={zoom}
@@ -680,20 +694,33 @@ export function CameraScreen({ contacts, to, onSent, onRecordingChange }: Props)
 
       {/* La bande des filtres, sous l'aperçu : le filtre posé dans l'anneau du milieu s'applique. */}
       <View pointerEvents="box-none" style={[styles.filterRow, { bottom: stripBottom }]}>
-        <View pointerEvents="none" style={[styles.filterRing, filming && styles.hidden]} />
-        <FilterStrip
-          value={liveFilter}
-          hidden={filming}
-          onChange={setLiveFilter}
-          onRestyle={(stamp) => {
-            nextStampStyle(stamp);
-            haptics.select();
-            setStyleTick((tick) => tick + 1);
-          }}
-        />
+        <LensRing chosen={lensCategory === 'couleurs' ? liveFilter !== 'none' : lens !== NO_LENS} hidden={filming} token={lensCategory === 'couleurs' ? liveFilter : lens} />
+        {lensCategory === 'couleurs' ? (
+          <FilterStrip
+            key="couleurs"
+            value={liveFilter}
+            hidden={filming}
+            onChange={setLiveFilter}
+            onRestyle={(stamp) => {
+              nextStampStyle(stamp);
+              haptics.select();
+              setStyleTick((tick) => tick + 1);
+            }}
+          />
+        ) : (
+          <PastilleStrip
+            key={lensCategory}
+            items={LENSES[lensCategory].map((item) => ({ id: item.id, label: t(item.label), node: <LensPastille lens={item} size={PASTILLE_SIZE} /> }))}
+            value={lens}
+            hidden={filming}
+            onChange={setLens}
+          />
+        )}
       </View>
 
       <ModeTabs mode={mode} hidden={filming} bottom={tabsBottom} onChange={changeMode} />
+      <LensCategories value={lensCategory} hidden={filming} bottom={previewBottom + ZOOM_INSET + CATEGORIES_ABOVE_ZOOM} onChange={chooseCategory} />
+      {!filming && <LensHint text={lensOf(lens)?.hint ? t(lensOf(lens)!.hint!) : null} bottom={previewBottom + ZOOM_INSET + CATEGORIES_ABOVE_ZOOM + HINT_ABOVE_CATEGORIES} />}
 
       {/* La place de la miniature, puis la dernière photo qui s'y pose. */}
       <View pointerEvents="none" style={[styles.thumbPlace, { left: sideInset, bottom: rowBottom + (SHUTTER_SIZE - SIDE_BUTTON) / 2 }, filming && styles.hidden]} />
