@@ -1,12 +1,12 @@
 import { ComponentRef, RefObject, useMemo } from 'react';
 import { Animated, findNodeHandle, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { setIncognitoKeyboard } from '../../../../modules/pear-native';
-import { ArrowUp, Check, ChevronUp, Lock, Mic, Trash2 } from 'lucide-react-native';
+import { ArrowUp, Check, ChevronUp, Lock, Mic, Smile, Trash2 } from 'lucide-react-native';
 
 import { Message } from '../../../chat/database';
 import { MAX_TEXT_LENGTH } from '../../../chat/manager';
 import { IconButton, useNavigationBarHeight } from '../../../components/ui';
-import { createStyles, radius, spacing, useColors } from '../../../theme';
+import { createStyles, fixed, radius, spacing, useColors } from '../../../theme';
 
 import { VOICE_CANCEL_DISTANCE, VOICE_LOCK_DISTANCE } from '../constants';
 import { useVoiceRecorder } from '../hooks/useVoiceRecorder';
@@ -94,6 +94,7 @@ export function Composer({
         ) : (
           <View style={styles.field}>
             <AttachButton open={attachOpen} onToggle={onToggleAttach} />
+            <View style={styles.inputBox}>
             <TextInput
               ref={input}
               onLayout={() => {
@@ -108,6 +109,12 @@ export function Composer({
               maxLength={MAX_TEXT_LENGTH}
               multiline
             />
+            {onStickers && (
+              <IconButton onPress={onStickers} label={t('stickers.titre')} hitSlop={4} style={styles.emoji}>
+                <Smile size={20} color={colors.textMuted} strokeWidth={1.75} />
+              </IconButton>
+            )}
+            </View>
           </View>
         )}
         {voice.phase === 'holding' && (
@@ -131,7 +138,7 @@ export function Composer({
             hitSlop={0}
             style={[styles.send, !draft.trim() && styles.sendDisabled]}
           >
-            {editing ? <Check size={20} color={colors.onAccent} strokeWidth={2} /> : <ArrowUp size={20} color={colors.onAccent} strokeWidth={2} />}
+            {editing ? <Check size={20} color={colors.onSignature} strokeWidth={2} /> : <ArrowUp size={20} color={colors.onSignature} strokeWidth={2} />}
           </IconButton>
         ) : (
           <Animated.View
@@ -141,13 +148,13 @@ export function Composer({
             style={[styles.send, { transform: [{ translateX: voice.dragX }, { translateY: voice.dragY }, { scale: voice.scale }] }]}
           >
             <Animated.View style={[styles.micLayer, styles.micTrash, { opacity: trashAmount }]}>
-              <Trash2 size={20} color={colors.onAccent} strokeWidth={2} />
+              <Trash2 size={20} color={fixed.white} strokeWidth={2} />
             </Animated.View>
             <Animated.View style={[styles.micLayer, { opacity: Animated.multiply(Animated.subtract(1, trashAmount), Animated.subtract(1, voice.lockProgress)) }]}>
-              <Mic size={20} color={colors.onAccent} strokeWidth={2} />
+              <Mic size={20} color={colors.onSignature} strokeWidth={2} />
             </Animated.View>
             <Animated.View style={[styles.micLayer, { opacity: voice.lockProgress }]}>
-              <ArrowUp size={20} color={colors.onAccent} strokeWidth={2} />
+              <ArrowUp size={20} color={colors.onSignature} strokeWidth={2} />
             </Animated.View>
           </Animated.View>
         )}
@@ -212,16 +219,30 @@ const useLocalStyles = createStyles((colors) => ({
     width: 44,
     bottom: 0,
   },
+  // Le champ et son bouton émojis, dans une même pilule.
+  inputBox: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    minHeight: 44,
+    borderRadius: 22,
+    backgroundColor: colors.surface,
+    paddingLeft: spacing.md,
+    paddingRight: 4,
+  },
   input: {
     flex: 1,
-    minHeight: 44,
     maxHeight: 120,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 10,
+    paddingVertical: 11,
     fontSize: 16,
     color: colors.text,
+  },
+  emoji: {
+    width: 36,
+    height: 36,
+    marginBottom: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   voiceLockHint: {
     position: 'absolute',
@@ -240,7 +261,7 @@ const useLocalStyles = createStyles((colors) => ({
     width: 44,
     height: 44,
     borderRadius: radius.full,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.signature,
     alignItems: 'center',
     justifyContent: 'center',
   },

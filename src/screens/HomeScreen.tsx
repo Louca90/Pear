@@ -115,8 +115,8 @@ const ConversationRow = memo(function ConversationRow({ item, now, index, arrivi
 
   return (
     <View style={styles.rowInner}>
-      <OnlineRing online={online} size={44} delay={ringDelay(index)} trace={arriving}>
-        <Avatar uri={item.photo} notes={isSelf(contact.publicKey)} />
+      <OnlineRing online={online} size={52} delay={ringDelay(index)} trace={arriving}>
+        <Avatar uri={item.photo} size={52} notes={isSelf(contact.publicKey)} />
       </OnlineRing>
       <View style={styles.rowText}>
         <View style={styles.nameLine}>
@@ -131,7 +131,7 @@ const ConversationRow = memo(function ConversationRow({ item, now, index, arrivi
         </Text>
       </View>
       <View style={styles.side}>
-        {last && <Text style={[styles.time, bold && styles.bold]}>{relativeTime(last.created_at, now)}</Text>}
+        {last && <Text style={[styles.time, bold && styles.timeUnread]}>{relativeTime(last.created_at, now)}</Text>}
         {/* Les pastilles apparaissent et disparaissent en fondu (pas à l'ouverture de l'écran). */}
         <LayoutAnimationConfig skipEntering>
           <View style={styles.badges}>
@@ -548,8 +548,13 @@ const useStyles = createStyles((colors) => ({
     gap: 4,
   },
   time: {
-    fontSize: 12,
+    fontSize: 13,
     color: colors.textMuted,
+  },
+  // Non lu : l'heure passe en couleur signature, comme la pastille.
+  timeUnread: {
+    fontWeight: '600',
+    color: colors.signatureStrong,
   },
   badges: {
     flexDirection: 'row',
@@ -562,19 +567,19 @@ const useStyles = createStyles((colors) => ({
     height: 20,
     paddingHorizontal: 5,
     borderRadius: radius.full,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.signatureStrong,
     alignItems: 'center',
     justifyContent: 'center',
   },
   dotText: {
     fontSize: 12,
     fontWeight: '700',
-    color: colors.onAccent,
+    color: colors.onSignature,
   },
   dotPlain: {
     width: 12,
     height: 12,
     borderRadius: radius.full,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.signatureStrong,
   },
 }));

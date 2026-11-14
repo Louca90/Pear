@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react';
-import { Animated, Pressable, Text, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import Reanimated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import { DURATION, timing } from '../../../motion';
 import { EllipsisVertical, Search, Timer } from 'lucide-react-native';
 
 import { getContactProfile } from '../../../chat/database';
@@ -25,6 +27,17 @@ type Props = {
   onEphemeral: () => void;
 };
 
+// Le point « en ligne » au coin de l'avatar, en fondu.
+function OnlineDot({ online }: { online: boolean }) {
+  const styles = useStyles();
+  const shown = useSharedValue(online ? 1 : 0);
+  useEffect(() => {
+    shown.set(timing(online ? 1 : 0, DURATION.small));
+  }, [online, shown]);
+  const style = useAnimatedStyle(() => ({ opacity: shown.get(), transform: [{ scale: 0.6 + 0.4 * shown.get() }] }));
+  return <Reanimated.View pointerEvents="none" style={[styles.dot, style]} />;
+}
+
 export function ChatHeader({ contactKey, name, onBack, onInfo, onCustomize, onSearch, ephemeral, onEphemeral }: Props) {
   const colors = useColors();
   const styles = useStyles();
@@ -38,6 +51,8 @@ export function ChatHeader({ contactKey, name, onBack, onInfo, onCustomize, onSe
   }, [ephemeral, edge]);
   // Connexion en cours avec ce contact : la petite poire en pointillés tourne à côté du nom.
   const connecting = !notes && chat.isOnline() && !chat.isContactOnline(contactKey) && status === 'connecting';
+  const onlineNow = chat.isOnline() && chat.isContactOnline(contactKey);
+  const typingNow = chat.isTyping(contactKey);
   const subtitle = notes
     ? t('notes.sousTitre')
     : chat.isTyping(contactKey)
@@ -54,7 +69,13 @@ export function ChatHeader({ contactKey, name, onBack, onInfo, onCustomize, onSe
         title={name}
         subtitle={subtitle}
         onBack={onBack}
-        avatar={<Avatar uri={photo} size={36} notes={notes} />}
+        subtitleColor={!notes && !typingNow && onlineNow ? colors.signatureStrong : undefined}
+        avatar={
+          <View>
+            <Avatar uri={photo} size={38} notes={notes} />
+            {!notes && <OnlineDot online={onlineNow} />}
+          </View>
+        }
         onTitlePress={notes ? undefined : onInfo}
         titleAccessory={
           notes ? undefined : (
@@ -94,6 +115,19 @@ export function ChatHeader({ contactKey, name, onBack, onInfo, onCustomize, onSe
 const useStyles = createStyles((colors) => ({
   headerBar: {
     backgroundColor: colors.background,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  dot: {
+    position: 'absolute',
+    right: -1,
+    bottom: -1,
+    width: 11,
+    height: 11,
+    borderRadius: radius.full,
+    borderWidth: 2,
+    borderColor: colors.background,
+    backgroundColor: colors.signatureStrong,
   },
   edge: {
     position: 'absolute',

@@ -43,6 +43,13 @@ export function TypingBubble({ typing, palette, avatar }: { typing: boolean; pal
     return motion.reduced ? 0.6 : pulse.interpolate({ inputRange: [0, start, peak, end, 1], outputRange: [0.3, 0.3, 1, 0.3, 0.3] });
   };
 
+  // Et monte de 3 points au même moment.
+  const dotLift = (index: number) => {
+    if (motion.reduced) return 0;
+    const start = (index * STAGGER_MS) / CYCLE_MS;
+    return pulse.interpolate({ inputRange: [0, start, start + 0.2, start + 0.4, 1], outputRange: [0, 0, -3, 0, 0] });
+  };
+
   return (
     <Animated.View
       accessibilityLabel={t('chat.ecrit')}
@@ -53,7 +60,7 @@ export function TypingBubble({ typing, palette, avatar }: { typing: boolean; pal
       </View>
       <View style={[styles.bubble, { backgroundColor: palette.background }]}>
         {[0, 1, 2].map((index) => (
-          <Animated.View key={index} style={[styles.dot, { backgroundColor: palette.muted, opacity: dotOpacity(index) }]} />
+          <Animated.View key={index} style={[styles.dot, { backgroundColor: palette.muted, opacity: dotOpacity(index), transform: [{ translateY: dotLift(index) }] }]} />
         ))}
       </View>
     </Animated.View>

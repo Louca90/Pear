@@ -30,6 +30,8 @@ export function Screen({ children, edgeToEdgeBottom }: { children: ReactNode; ed
 type HeaderProps = {
   title: string;
   subtitle?: string;
+  // Couleur du sous-titre (« en ligne » en couleur signature).
+  subtitleColor?: string;
   // À côté du titre (indicateurs de la conversation : connexion, éphémère).
   titleAccessory?: ReactNode;
   onBack?: () => void;
@@ -95,7 +97,7 @@ export function Avatar({ uri, size = 44, notes }: { uri?: string | null; size?: 
 }
 
 // Le sous-titre de l'en-tête (« Connecté », « écrit… ») change en fondu.
-function FadingSubtitle({ text }: { text: string }) {
+function FadingSubtitle({ text, color }: { text: string; color?: string }) {
   const styles = useStyles();
   const opacity = useRef(new Animated.Value(1)).current;
   const first = useRef(true);
@@ -108,13 +110,13 @@ function FadingSubtitle({ text }: { text: string }) {
     Animated.timing(opacity, { toValue: 1, duration: motion.small, easing: motion.easing, useNativeDriver: true }).start();
   }, [text, opacity]);
   return (
-    <Animated.Text style={[styles.headerSubtitle, { opacity }]} numberOfLines={1}>
+    <Animated.Text style={[styles.headerSubtitle, !!color && { color }, { opacity }]} numberOfLines={1}>
       {text}
     </Animated.Text>
   );
 }
 
-export function Header({ title, subtitle, onBack, action, avatar, onTitlePress, titleAccessory }: HeaderProps) {
+export function Header({ title, subtitle, subtitleColor, onBack, action, avatar, onTitlePress, titleAccessory }: HeaderProps) {
   const colors = useColors();
   const styles = useStyles();
   return (
@@ -131,7 +133,7 @@ export function Header({ title, subtitle, onBack, action, avatar, onTitlePress, 
             <Text style={[subtitle ? styles.headerTitleSmall : styles.headerTitle, styles.headerTitleText]} numberOfLines={1}>{title}</Text>
             {titleAccessory}
           </View>
-          {subtitle && <FadingSubtitle text={subtitle} />}
+          {!!subtitle && <FadingSubtitle text={subtitle} color={subtitleColor} />}
         </View>
       </Pressable>
       {action}
