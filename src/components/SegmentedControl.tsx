@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Easing, LayoutChangeEvent, Pressable, Text, View } from 'react-native';
-import Reanimated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { LayoutChangeEvent, Pressable, Text, View } from 'react-native';
+import Reanimated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { createStyles, radius } from '../theme';
 

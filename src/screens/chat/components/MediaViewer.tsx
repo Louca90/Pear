@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Dimensions, Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import Reanimated, { FadeOut, useAnimatedStyle, useSharedValue, withTiming, type EntryExitAnimationFunction } from 'react-native-reanimated';
+import { Dimensions, Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import Reanimated, { FadeOut, useAnimatedStyle, useSharedValue, withTiming, type EntryExitAnimationFunction, interpolate } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 import { GestureDetector, GestureHandlerRootView, usePanGesture, usePinchGesture, useSimultaneousGestures, useTapGesture } from 'react-native-gesture-handler';
 import { useEvent, useEventListener } from 'expo';
 import { useVideoPlayer, VideoPlayer, VideoView } from 'expo-video';
@@ -200,13 +201,14 @@ export type Viewing = { message: Message; rect: Rect; poster: string; size: { wi
 // Le cadre passe en douceur du carré de la conversation au format réel du média : l'image, recadrée
 // en continu, ne saute jamais. Une vidéo n'est lue qu'une fois le cadre en place, et se met en pause
 // dès la fermeture. Glissé vers le bas, le média suit le doigt ; lâché trop tôt, il revient en plein écran.
-// Le cadre change de taille à chaque image : ces animations ne peuvent pas passer par le pilote natif.
+// Tout passe par Reanimated : le cadre change de taille sur le fil de l'interface, sans repasser par JS.
 export function MediaViewer({ viewing: { message, rect, poster, size }, onClose }: { viewing: Viewing; onClose: () => void }) {
   const styles = useStyles();
   const colors = useMediaColors();
   const isVideo = message.kind === 'video';
-  const progress = useRef(new Animated.Value(0)).current;
-  const drag = useRef(new Animated.ValueXY()).current;
+  const progress = useSharedValue(0);
+  const dragX = useSharedValue(0);
+  const dragY = useSharedValue(0);
   const closingRef = useRef(false);
   const [opened, setOpened] = useState(false);
   const [closing, setClosing] = useState(false);
@@ -241,9 +243,10 @@ export function MediaViewer({ viewing: { message, rect, poster, size }, onClose 
     if (isPlaying) autoplay.current = false;
   });
 
-  // Zoom et déplacement (pilotés en JS, comme le reste de la visionneuse).
-  const zoom = useRef(new Animated.Value(1)).current;
-  const pan = useRef(new Animated.ValueXY()).current;
+  // Zoom et déplacement : la position voulue est gardée en JS (gestes), l'affichage suit par Reanimated.
+  const zoom = useSharedValue(1);
+  const panX = useSharedValue(0);
+  const panY = useSharedValue(0);
   const zoomNow = useRef(1);
   const panNow = useRef<Point>({ x: 0, y: 0 });
   const panStart = useRef<Point>({ x: 0, y: 0 });
@@ -258,21 +261,22 @@ export function MediaViewer({ viewing: { message, rect, poster, size }, onClose 
   };
   const setPan = (point: Point) => {
     panNow.current = point;
-    pan.setValue(point);
+    panX.set(point.x);
+    panY.set(point.y);
   };
   const setZoom = (level: number) => {
     zoomNow.current = level;
-    zoom.setValue(level);
+    zoom.set(level);
     setPan(clampPan(panNow.current, level));
   };
   const animateZoom = (level: number, target: Point) => {
     const next = clampPan(target, level);
     zoomNow.current = level;
     panNow.current = next;
-    Animated.parallel([
-      Animated.timing(zoom, { toValue: level, duration: ZOOM_MS, easing: VIEWER_EASING, useNativeDriver: false }),
-      Animated.timing(pan, { toValue: next, duration: ZOOM_MS, easing: VIEWER_EASING, useNativeDriver: false }),
-    ]).start();
+    const config = { duration: ZOOM_MS, easing: VIEWER_EASING };
+    zoom.set(withTiming(level, config));
+    panX.set(withTiming(next.x, config));
+    panY.set(withTiming(next.y, config));
   };
   const zoomed = () => zoomNow.current > 1.01;
 
@@ -283,29 +287,41 @@ export function MediaViewer({ viewing: { message, rect, poster, size }, onClose 
     closingRef.current = true;
     if (isVideo) player.pause();
     setClosing(true);
-    Animated.parallel([
-      Animated.timing(progress, { toValue: 0, duration: VIEWER_CLOSE_MS, easing: VIEWER_EASING, useNativeDriver: false }),
-      Animated.timing(drag, { toValue: { x: 0, y: 0 }, duration: VIEWER_CLOSE_MS, easing: VIEWER_EASING, useNativeDriver: false }),
-    ]).start(onClose);
+    const config = { duration: VIEWER_CLOSE_MS, easing: VIEWER_EASING };
+    dragX.set(withTiming(0, config));
+    dragY.set(withTiming(0, config));
+    progress.set(
+      withTiming(0, config, (finished) => {
+        if (finished) scheduleOnRN(onClose);
+      }),
+    );
   };
   const latestClose = useRef(close);
   latestClose.current = close;
 
   // L'ouverture démarre une fois la fenêtre affichée : lancée pendant sa création, ses premières images sautaient.
   const startOpening = () => {
-    Animated.timing(progress, { toValue: 1, duration: VIEWER_OPEN_MS, easing: VIEWER_EASING, useNativeDriver: false }).start(({ finished }) => {
-      if (!finished || closingRef.current) return;
+    const opened = () => {
+      if (closingRef.current) return;
       setOpened(true);
       if (isVideo) {
         autoplay.current = true;
         player.play();
       }
-    });
+    };
+    progress.set(
+      withTiming(1, { duration: VIEWER_OPEN_MS, easing: VIEWER_EASING }, (finished) => {
+        if (finished) scheduleOnRN(opened);
+      }),
+    );
   };
 
   // Lâché trop tôt, le média revient en plein écran, sans rebond.
-  const settleDrag = () =>
-    Animated.timing(drag, { toValue: { x: 0, y: 0 }, duration: VIEWER_CANCEL_MS, easing: VIEWER_EASING, useNativeDriver: false }).start();
+  const settleDrag = () => {
+    const config = { duration: VIEWER_CANCEL_MS, easing: VIEWER_EASING };
+    dragX.set(withTiming(0, config));
+    dragY.set(withTiming(0, config));
+  };
 
   // Les gestes (react-native-gesture-handler, qui voit vraiment les deux doigts sur Android), en même
   // temps : deux doigts pincent pour zoomer et dézoomer, un doigt déplace le média zoomé (sinon un
@@ -336,7 +352,10 @@ export function MediaViewer({ viewing: { message, rect, poster, size }, onClose 
         return;
       }
       // Pas zoomé : seul un glissé vers le bas compte (fermeture).
-      if (event.translationY > VIEWER_DRAG_START) drag.setValue({ x: event.translationX, y: Math.max(0, event.translationY) });
+      if (event.translationY > VIEWER_DRAG_START) {
+        dragX.set(event.translationX);
+        dragY.set(Math.max(0, event.translationY));
+      }
     },
     onDeactivate: (event) => {
       if (zoomed()) {
@@ -367,47 +386,40 @@ export function MediaViewer({ viewing: { message, rect, poster, size }, onClose 
   const finalWidth = size.width * fit;
   const finalHeight = size.height * fit;
   fitted.current = { width: finalWidth, height: finalHeight };
-  const between = (from: number, to: number) => progress.interpolate({ inputRange: [0, 1], outputRange: [from, to] });
-
-  const dragRange = { inputRange: [0, height / 2], extrapolate: 'clamp' as const };
-  const dimming = Animated.multiply(progress, drag.y.interpolate({ ...dragRange, outputRange: [1, 0.15] }));
-  const chrome = drag.y.interpolate({ inputRange: [0, VIEWER_CLOSE_DISTANCE], outputRange: [1, 0], extrapolate: 'clamp' });
+  const half = height / 2;
+  const dimming = useAnimatedStyle(() => ({ opacity: progress.get() * interpolate(dragY.get(), [0, half], [1, 0.15], 'clamp') }));
+  const chrome = useAnimatedStyle(() => ({ opacity: interpolate(dragY.get(), [0, VIEWER_CLOSE_DISTANCE], [1, 0], 'clamp') }));
+  const dragged = useAnimatedStyle(() => ({
+    transform: [{ translateX: dragX.get() }, { translateY: dragY.get() }, { scale: interpolate(dragY.get(), [0, half], [1, VIEWER_MIN_SCALE], 'clamp') }],
+  }));
+  const panned = useAnimatedStyle(() => ({ transform: [{ translateX: panX.get() }, { translateY: panY.get() }] }));
+  const zoomed_ = useAnimatedStyle(() => ({ transform: [{ scale: zoom.get() }] }));
+  const from = { left: rect.x, top: rect.y, width: rect.width, height: rect.height };
+  const to = { left: (width - finalWidth) / 2, top: (height - finalHeight) / 2, width: finalWidth, height: finalHeight };
+  const corner = radius.md;
+  const frame = useAnimatedStyle(() => {
+    const p = progress.get();
+    return {
+      left: from.left + (to.left - from.left) * p,
+      top: from.top + (to.top - from.top) * p,
+      width: from.width + (to.width - from.width) * p,
+      height: from.height + (to.height - from.height) * p,
+      borderRadius: corner * (1 - p),
+    };
+  });
 
   return (
     <Modal visible transparent animationType="none" onRequestClose={close} onShow={startOpening} statusBarTranslucent navigationBarTranslucent>
       {/* Sur Android, les gestes d'une fenêtre Modal ne marchent que si son contenu a sa propre racine. */}
       <GestureHandlerRootView style={StyleSheet.absoluteFill}>
-      <Animated.View style={[StyleSheet.absoluteFill, styles.viewerBackground, { opacity: dimming }]} />
+      <Reanimated.View style={[StyleSheet.absoluteFill, styles.viewerBackground, dimming]} />
       {/* collapsable : sans contrôles vidéo, cette vue doit exister pour recevoir le doigt sur une photo. */}
       <GestureDetector gesture={gestures}>
       <View collapsable={false} style={StyleSheet.absoluteFill}>
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            StyleSheet.absoluteFill,
-            {
-              transform: [
-                { translateX: drag.x },
-                { translateY: drag.y },
-                { scale: drag.y.interpolate({ ...dragRange, outputRange: [1, VIEWER_MIN_SCALE] }) },
-              ],
-            },
-          ]}
-        >
-          <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ translateX: pan.x }, { translateY: pan.y }] }]}>
-          <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ scale: zoom }] }]}>
-          <Animated.View
-            style={[
-              styles.viewerFrame,
-              {
-                left: between(rect.x, (width - finalWidth) / 2),
-                top: between(rect.y, (height - finalHeight) / 2),
-                width: between(rect.width, finalWidth),
-                height: between(rect.height, finalHeight),
-                borderRadius: between(radius.md, 0),
-              },
-            ]}
-          >
+        <Reanimated.View pointerEvents="none" style={[StyleSheet.absoluteFill, dragged]}>
+          <Reanimated.View style={[StyleSheet.absoluteFill, panned]}>
+          <Reanimated.View style={[StyleSheet.absoluteFill, zoomed_]}>
+          <Reanimated.View style={[styles.viewerFrame, frame]}>
             <Image source={{ uri: poster }} style={StyleSheet.absoluteFill} resizeMode="cover" />
             {isVideo && opened && (
               <VideoView
@@ -419,22 +431,22 @@ export function MediaViewer({ viewing: { message, rect, poster, size }, onClose 
                 onFirstFrameRender={() => setFrameReady(true)}
               />
             )}
-          </Animated.View>
-          </Animated.View>
-          </Animated.View>
-        </Animated.View>
+          </Reanimated.View>
+          </Reanimated.View>
+          </Reanimated.View>
+        </Reanimated.View>
         {isVideo && opened && !closing && (
-          <Animated.View pointerEvents="box-none" style={[StyleSheet.absoluteFill, { opacity: chrome }]}>
+          <Reanimated.View pointerEvents="box-none" style={[StyleSheet.absoluteFill, chrome]}>
             <VideoControls player={player} />
-          </Animated.View>
+          </Reanimated.View>
         )}
       </View>
       </GestureDetector>
-      <Animated.View style={[styles.viewerClose, { opacity: dimming }]}>
+      <Reanimated.View style={[styles.viewerClose, dimming]}>
         <IconButton onPress={close} label={t('commun.fermer')}>
           <X size={28} color={colors.background} strokeWidth={1.75} />
         </IconButton>
-      </Animated.View>
+      </Reanimated.View>
       </GestureHandlerRootView>
     </Modal>
   );

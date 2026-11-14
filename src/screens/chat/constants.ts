@@ -1,4 +1,5 @@
-import { Dimensions, Easing } from 'react-native';
+import { Dimensions } from 'react-native';
+import { Easing } from 'react-native-reanimated';
 
 import { RouteType } from '../../network/peer';
 import { t } from '../../i18n';
