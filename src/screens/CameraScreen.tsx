@@ -19,7 +19,7 @@ import { MediaEditor, MediaEditorHandle } from '../components/MediaEditor';
 import { FilteredView } from '../components/editor/FilteredView';
 import { FilterStrip, PASTILLE_SIZE, PastilleStrip } from '../components/editor/FilterStrip';
 import { LensCategories, LensHint, LensPastille, LensRing } from './camera/LensBar';
-import { LENSES, LENSES_ENABLED, LensCategory, lensOf, NO_LENS } from './camera/lenses';
+import { FILTERS_ENABLED, LENSES, LENSES_ENABLED, LensCategory, lensOf, NO_LENS } from './camera/lenses';
 import { FilterId, NO_ADJUSTMENTS, presetOf, stepsOf } from '../components/editor/filters';
 import { getStampStyle, nextStampStyle, readAmbient } from '../components/editor/ambient';
 import { Ambient, formatStamp, NO_AMBIENT, StampMarks } from '../components/editor/stamps';
@@ -622,7 +622,8 @@ export function CameraScreen({ contacts, to, onSent, onRecordingChange }: Props)
   const rowBottom = barSpace + spacing.sm;
   const tabsBottom = rowBottom + SHUTTER_SIZE + 2;
   const stripBottom = tabsBottom + MODE_TABS_HEIGHT;
-  const previewHeight = window.height - (stripBottom + FILTER_ROW_HEIGHT + spacing.sm);
+  // Sans la bande des filtres, l'aperçu en reprend la place.
+  const previewHeight = window.height - (stripBottom + (FILTERS_ENABLED ? FILTER_ROW_HEIGHT : 0) + spacing.sm);
   const previewBottom = window.height - previewHeight;
   const sideInset = (window.width / 2 - SHUTTER_SIZE / 2 - SIDE_BUTTON) / 2;
 
@@ -693,6 +694,7 @@ export function CameraScreen({ contacts, to, onSent, onRecordingChange }: Props)
       )}
 
       {/* La bande des filtres, sous l'aperçu : le filtre posé dans l'anneau du milieu s'applique. */}
+      {FILTERS_ENABLED && (
       <View pointerEvents="box-none" style={[styles.filterRow, { bottom: stripBottom }]}>
         <LensRing chosen={lensCategory === 'couleurs' ? liveFilter !== 'none' : lens !== NO_LENS} hidden={filming} token={lensCategory === 'couleurs' ? liveFilter : lens} />
         {lensCategory === 'couleurs' ? (
@@ -717,6 +719,7 @@ export function CameraScreen({ contacts, to, onSent, onRecordingChange }: Props)
           />
         )}
       </View>
+      )}
 
       <ModeTabs mode={mode} hidden={filming} bottom={tabsBottom} onChange={changeMode} />
       {LENSES_ENABLED && <LensCategories value={lensCategory} hidden={filming} bottom={previewBottom + ZOOM_INSET + CATEGORIES_ABOVE_ZOOM} onChange={chooseCategory} />}
