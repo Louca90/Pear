@@ -1,5 +1,5 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react';
-import { Image, Pressable, StyleSheet, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import Reanimated, { Easing, ReduceMotion, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
 import { haptics } from '../haptics';
 import { Camera, LucideIcon, MessageCircle, User, Users } from 'lucide-react-native';
@@ -24,13 +24,16 @@ const TABS: { tab: Tab; icon: LucideIcon; filled: FilledIcon | null; label: stri
   { tab: 'profile', icon: User, filled: null, label: t('profil.titre') },
 ];
 
-const SLOT_WIDTH = 76;
-const SLOT_HEIGHT = 60;
+// La planche Accueil : des emplacements de 64 × 52 séparés de 4 points ; sous l'onglet choisi, une pastille
+// aux bouts ronds de la taille de l'emplacement (pas un rond) qui glisse de l'un à l'autre.
+const SLOT_WIDTH = 64;
+const SLOT_HEIGHT = 52;
+const SLOT_GAP = 4;
 const BAR_PADDING = 6;
-const ICON_SIZE = 26;
+const ICON_SIZE = 24;
 const KICK_MS = 650;
 const SLIDE_MS = 300;
-const SLIDE_STEP = SLOT_WIDTH;
+const SLIDE_STEP = SLOT_WIDTH + SLOT_GAP;
 const PHOTO_SIZE = 30;
 
 // La place que les écrans laissent libre sous leur contenu, pour que la barre flottante ne le cache pas.
@@ -45,12 +48,15 @@ function ProfileIcon({ draw }: { draw: SharedValue<number> }) {
   useSyncExternalStore(chat.subscribe, chat.getVersion);
   // Ma photo est chiffrée sur le disque (lot 2.3) : affichée depuis sa copie déchiffrée.
   const photo = useMediaUri(chat.getMyProfile().photo, { scope: 'app' });
+  const initial = (chat.getMyProfile().name ?? '').trim().charAt(0).toUpperCase();
   return (
     <View style={styles.photoSlot}>
       {photo ? (
         <Image source={{ uri: photo }} style={styles.photo} />
       ) : (
-        <User size={ICON_SIZE - 4} color={colors.text} strokeWidth={1.75} />
+        <View style={styles.initial}>
+          {initial ? <Text style={styles.initialText}>{initial}</Text> : <User size={ICON_SIZE - 6} color={colors.text} strokeWidth={1.75} />}
+        </View>
       )}
       <ProfileRing size={PHOTO_SIZE + 6} draw={draw} />
     </View>
@@ -140,6 +146,7 @@ const useStyles = createStyles((colors) => ({
   },
   bar: {
     flexDirection: 'row',
+    gap: SLOT_GAP,
     padding: BAR_PADDING,
     borderRadius: radius.full,
     backgroundColor: colors.elevated,
@@ -155,6 +162,19 @@ const useStyles = createStyles((colors) => ({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  initial: {
+    width: PHOTO_SIZE,
+    height: PHOTO_SIZE,
+    borderRadius: PHOTO_SIZE / 2,
+    backgroundColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  initialText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.text,
+  },
   photo: {
     width: PHOTO_SIZE,
     height: PHOTO_SIZE,
@@ -163,10 +183,10 @@ const useStyles = createStyles((colors) => ({
   indicator: {
     position: 'absolute',
     top: BAR_PADDING,
-    left: BAR_PADDING + (SLOT_WIDTH - SLOT_HEIGHT) / 2,
-    width: SLOT_HEIGHT,
+    left: BAR_PADDING,
+    width: SLOT_WIDTH,
     height: SLOT_HEIGHT,
-    borderRadius: radius.full,
+    borderRadius: SLOT_HEIGHT / 2,
     backgroundColor: colors.elevatedActive,
   },
   slot: {

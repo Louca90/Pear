@@ -70,7 +70,9 @@ function ActionCard({ icon: Icon, label, on, onPress }: { icon: ComponentType<{ 
     <Pressable onPress={onPress} onPressIn={feedback.onPressIn} onPressOut={feedback.onPressOut} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ checked: on }}>
       <Reanimated.View style={[styles.action, on && styles.actionOn, feedback.style]}>
         <Icon size={20} color={on ? colors.onSignature : colors.text} strokeWidth={1.8} />
-        <Text style={[styles.actionLabel, on && { color: colors.onSignature }]} numberOfLines={1}>{label}</Text>
+        <Text style={[styles.actionLabel, on && { color: colors.onSignature }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+          {label}
+        </Text>
       </Reanimated.View>
     </Pressable>
   );
@@ -226,10 +228,10 @@ export function ContactScreen({ initialName, profile, isNew, initialTab = 'profi
             {[
               { icon: MessageCircle, label: t('contact.ecrire'), onPress: () => onOpen() },
               { icon: Search, label: t('contact.rechercher'), onPress: () => onOpen('search') },
-              { icon: Palette, label: t('chat.personnaliser'), onPress: onCustomize },
+              { icon: Palette, label: t('contact.actionPersonnaliser'), onPress: onCustomize },
               { icon: MapPin, label: t('contact.maPosition'), onPress: () => onOpen('location') },
               { icon: muted ? VolumeX : Volume2, label: muted ? t('contact.silencieux') : t('contact.couperSon'), on: muted, onPress: toggleMute },
-              { icon: Timer, label: t('contact.ephemeres'), on: !!ephemeral, onPress: () => onOpen('ephemeral') },
+              { icon: Timer, label: t('contact.actionEphemeres'), on: !!ephemeral, onPress: () => onOpen('ephemeral') },
             ].map((action, index) => (
               <Reanimated.View key={index} entering={enterUp(10, 280, 60 + index * 35)} style={styles.actionSlot}>
                 <ActionCard icon={action.icon} label={action.label} on={action.on} onPress={action.onPress} />
@@ -355,6 +357,7 @@ const useStyles = createStyles((colors) => ({
   },
   action: {
     height: 64,
+    paddingHorizontal: 6,
     borderRadius: radius.md,
     backgroundColor: colors.surface,
     alignItems: 'center',

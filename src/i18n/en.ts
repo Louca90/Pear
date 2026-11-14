@@ -140,6 +140,7 @@ export const en: Dictionary = {
     messageEpingleN: 'Pinned message {i}/{n}',
   },
   profil: {
+    confidentialiteAide: 'Relay, link previews, servers, blocked contacts',
     photoImpossible: 'Photo not cropped',
     themeAuto: 'Automatic',
     themeClair: 'Light',
@@ -200,6 +201,8 @@ export const en: Dictionary = {
     galerie: 'Your gallery',
   },
   contact: {
+    actionEphemeres: 'Disappearing',
+    actionPersonnaliser: 'Customize',
     rechercher: 'Search',
     maPosition: 'My location',
     couperSon: 'Mute',

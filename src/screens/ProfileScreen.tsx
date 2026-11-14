@@ -3,8 +3,9 @@ import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInpu
 import Reanimated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { Bell, Camera, Check, Eye, FileDown, HardDrive, Lock, Moon, Pencil, RefreshCw, Settings, ShieldCheck } from 'lucide-react-native';
 
-import { appVersionName } from '../../modules/pear-native';
-import { getSetting } from '../chat/database';
+import { appVersionName, authenticate } from '../../modules/pear-native';
+import { getSetting, setSetting } from '../chat/database';
+import { Toggle } from '../components/Toggle';
 import { chat, MAX_PROFILE_NAME_LENGTH } from '../chat/manager';
 import { MediaPicker } from '../components/MediaPicker';
 import { ProfilePhotoCropper } from '../components/ProfilePhotoCropper';
@@ -61,7 +62,17 @@ export function ProfileScreen({ onSettings, onStorage, onPage }: Props) {
   const [photo, setPhoto] = useState(saved.photo);
   const [editingName, setEditingName] = useState(false);
   const input = useRef<ComponentRef<typeof TextInput>>(null);
-  const lockOn = getSetting('app_lock') === '1';
+  const [lockOn, setLockOn] = useState(() => getSetting('app_lock') === '1');
+  // On vérifie que l'empreinte ou le code marche avant d'activer : sinon on s'enfermerait dehors.
+  const changeLock = async (value: boolean) => {
+    if (value) {
+      const result = await authenticate(t('reglages.verrouTitre'));
+      if (result === 'unavailable') return showDialog(t('reglages.verrou'), t('reglages.verrouIndisponible'));
+      if (result !== 'ok') return;
+    }
+    setLockOn(value);
+    setSetting('app_lock', value ? '1' : null);
+  };
 
   // La galerie de Pear, une seule photo : elle passe par le recadrage en carré, puis est gardée tout de suite.
   const [galleryOpen, setGalleryOpen] = useState(false);
@@ -156,8 +167,8 @@ export function ProfileScreen({ onSettings, onStorage, onPage }: Props) {
 
           <Reanimated.View entering={enterUp(10, 260, STEP_MS * 3)}>
             <SettingsGroup title={t('reglages.confidentialite')}>
-              <SettingRow icon={Lock} label={t('reglages.verrou')} value={lockOn ? t('profil.active') : t('profil.desactive')} onPress={() => onPage('privacy')} />
-              <SettingRow icon={Eye} label={t('reglages.confidentialite')} onPress={() => onPage('privacy')} />
+              <SettingRow icon={Lock} label={t('reglages.verrou')} detail={lockOn ? t('reglages.verrouActif') : t('profil.desactive')} right={<Toggle value={lockOn} onChange={changeLock} label={t('reglages.verrou')} />} />
+              <SettingRow icon={Eye} label={t('reglages.confidentialite')} detail={t('profil.confidentialiteAide')} onPress={() => onPage('privacy')} />
             </SettingsGroup>
           </Reanimated.View>
 

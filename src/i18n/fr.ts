@@ -139,6 +139,7 @@ export const fr = {
     messageEpingleN: 'Message épinglé {i}/{n}',
   },
   profil: {
+    confidentialiteAide: 'Relais, aperçus de liens, serveurs, contacts bloqués',
     photoImpossible: 'Photo non recadrée',
     themeAuto: 'Automatique',
     themeClair: 'Clair',
@@ -199,6 +200,8 @@ export const fr = {
     galerie: 'Ta galerie',
   },
   contact: {
+    actionEphemeres: 'Éphémères',
+    actionPersonnaliser: 'Personnaliser',
     rechercher: 'Rechercher',
     maPosition: 'Ma position',
     couperSon: 'Couper le son',
