@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { AccessibilityInfo, Appearance, Easing, ImageStyle, StyleSheet, TextStyle, ViewStyle } from 'react-native';
+import { AccessibilityInfo, Appearance, ImageStyle, StyleSheet, TextStyle, ViewStyle } from 'react-native';
 
 import { getSetting, setSetting } from './chat/database';
 import { log } from './log';
@@ -308,7 +308,6 @@ export const motion = {
   get mascot() {
     return duration(420);
   },
-  easing: Easing.bezier(0.2, 0.8, 0.2, 1),
   // Effet d'appui commun à tous les boutons (src/components/ui.tsx).
   pressScale: 0.97,
   pressOpacity: 0.85,

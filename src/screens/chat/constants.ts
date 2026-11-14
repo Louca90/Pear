@@ -26,7 +26,6 @@ export const SELECTION_TOP = 72;
 export const TEXT_LINE_HEIGHT = 22;
 // Sélection : une courbe douce, sans rebond, pour la montée comme pour le retour.
 export const SELECTION_OPEN_MS = 280;
-export const SELECTION_EASING = Easing.bezier(0.2, 0.8, 0.2, 1);
 export const SELECTION_CLOSE_MS = 170;
 // Glisser pour répondre : le geste démarre après SWIPE_START, et répond à partir de SWIPE_REPLY.
 export const SWIPE_START = 12;

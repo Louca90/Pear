@@ -89,7 +89,7 @@ type Route =
 // Animations fixes, sans suivre le doigt. Chaque écran a deux valeurs : enter (0 → 1 à son arrivée)
 // et g (0 → 1 quand il part). La page qui part garde la sienne jusqu'à disparaître : rien n'est remis
 // en place au changement d'écran, donc pas d'image de l'ancien écran. Durée et courbe : motion.screen
-// et motion.easing (src/theme.ts), 0 si Android a « Supprimer les animations ».
+// et SCREEN_EASE (plus bas), 0 si Android a « Supprimer les animations ».
 // La page arrive de la droite et repart vers la droite ; l'écran d'en dessous se décale un peu.
 const PAGE_SHIFT = 36;
 const UNDER_SHIFT = 24;
@@ -107,7 +107,7 @@ const PARENT_MOUNT_DELAY_MS = 600;
 
 type PageMotion = { g: SharedValue<number>; enter: SharedValue<number> };
 
-// La courbe des écrans (celle de motion.easing), sur le fil de l'interface.
+// La courbe des écrans (douce, sans dépassement), sur le fil de l'interface.
 const SCREEN_EASE = Easing.bezier(0.2, 0.8, 0.2, 1);
 const screenTiming = () => ({ duration: motion.screen, easing: SCREEN_EASE });
 

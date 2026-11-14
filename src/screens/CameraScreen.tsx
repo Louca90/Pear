@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, Linking, useWindowDimensions, Modal, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
-import Reanimated, { interpolateColor, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import { ActivityIndicator, Linking, useWindowDimensions, Modal, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
+import Reanimated, { Easing, useAnimatedStyle, useSharedValue, withTiming, withSpring, withSequence, interpolateColor } from 'react-native-reanimated';
 import { useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import { haptics } from '../haptics';
 import { NavigationBar } from 'expo-navigation-bar';
@@ -244,7 +244,7 @@ export function CameraScreen({ contacts, to, onSent, onRecordingChange }: Props)
   }, [cameraPermission]);
   // L'aperçu apparaît en fondu à la première image, sur l'interface déjà affichée.
   // Si le natif garde la dernière image, il la montre floue : l'aperçu est visible tout de suite.
-  const previewOpacity = useRef(new Animated.Value(hasLastCameraFrame() ? 1 : 0)).current;
+  const previewOpacity = useSharedValue(hasLastCameraFrame() ? 1 : 0);
   useEffect(() => {
     logCameraStep('écran monté');
   }, []);
@@ -253,7 +253,7 @@ export function CameraScreen({ contacts, to, onSent, onRecordingChange }: Props)
   }, [cameraPermission?.granted]);
   const onCameraReady = () => {
     logCameraStep('caméra ouverte');
-    Animated.timing(previewOpacity, { toValue: 1, duration: PREVIEW_FADE_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    previewOpacity.set(withTiming(1, { duration: PREVIEW_FADE_MS, easing: Easing.out(Easing.cubic) }));
   };
   const [facing, setFacing] = useState<'back' | 'front'>('back');
   // Le zoom : réel (×0,6 sur une caméra multiple), ou un autre objectif (ultra grand-angle séparé).
@@ -313,23 +313,25 @@ export function CameraScreen({ contacts, to, onSent, onRecordingChange }: Props)
   const isLocked = useRef(false);
   const stoppedByTap = useRef(false);
 
-  const shutterX = useRef(new Animated.Value(0)).current;
-  const shutterScale = useRef(new Animated.Value(1)).current;
+  const shutterX = useSharedValue(0);
+  const shutterScale = useSharedValue(1);
   // 0 : le cadenas attend. 1 : il a disparu, et l'icône d'arrêt a pris sa place au centre.
-  const lockProgress = useRef(new Animated.Value(0)).current;
-  const lockHover = useRef(new Animated.Value(1)).current;
+  const lockProgress = useSharedValue(0);
+  const lockHover = useSharedValue(1);
+  const shutterStyle = useAnimatedStyle(() => ({ transform: [{ translateX: shutterX.get() }, { scale: shutterScale.get() }] }));
+  const lockStyle = useAnimatedStyle(() => ({ opacity: 1 - lockProgress.get(), transform: [{ scale: lockHover.get() * (1 - 0.8 * lockProgress.get()) }] }));
   const overLock = useRef(false);
   const gestureAxis = useRef<'zoom' | 'lock' | null>(null);
   // Position du doigt (depuis l'appui) où le dernier axe s'est libéré : le suivant se mesure à partir d'elle.
   const gestureAnchor = useRef({ x: 0, y: 0 });
-  const flipFade = useRef(new Animated.Value(0)).current;
+  const flipFade = useSharedValue(0);
 
   // Vidéo avec la caméra avant et le flash : un cadre blanc doux autour de l'image et l'écran à pleine
   // luminosité éclairent le visage (pour une photo, c'est le flash d'écran de CameraX qui s'en charge).
   const frontLight = flashOn && filming && facing === 'front';
-  const frontGlow = useRef(new Animated.Value(0)).current;
+  const frontGlow = useSharedValue(0);
   useEffect(() => {
-    Animated.timing(frontGlow, { toValue: frontLight ? 1 : 0, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    frontGlow.set(withTiming(frontLight ? 1 : 0, { duration: 220, easing: Easing.out(Easing.cubic) }));
     setScreenBrightness(frontLight ? 1 : -1).catch((e) => log.warn('luminosité', e));
   }, [frontLight, frontGlow]);
   useEffect(() => () => void setScreenBrightness(-1).catch(() => undefined), []);
@@ -357,20 +359,20 @@ export function CameraScreen({ contacts, to, onSent, onRecordingChange }: Props)
     [],
   );
 
-  const animateShutter = (toValue: number) => Animated.spring(shutterScale, { toValue, useNativeDriver: true, overshootClamping: true, damping: 12, stiffness: 300 }).start();
+  const animateShutter = (toValue: number) => shutterScale.set(withSpring(toValue, { damping: 12, stiffness: 300, overshootClamping: true }));
 
   const resetFilming = () => {
     wantsVideo.current = false;
     isRecording.current = false;
     isLocked.current = false;
     overLock.current = false;
-    lockProgress.setValue(0);
-    lockHover.setValue(1);
+    lockProgress.set(0);
+    lockHover.set(1);
     setRecording(false);
     setLocked(false);
     setFilming(false);
     animateShutter(1);
-    Animated.spring(shutterX, { toValue: 0, useNativeDriver: true, overshootClamping: true, damping: 16, stiffness: 240 }).start();
+    shutterX.set(withSpring(0, { damping: 16, stiffness: 240, overshootClamping: true }));
   };
 
   const startRecording = () => {
@@ -436,7 +438,7 @@ export function CameraScreen({ contacts, to, onSent, onRecordingChange }: Props)
         wantsVideo.current = true;
         isLocked.current = true;
         setLocked(true);
-        lockProgress.setValue(1);
+        lockProgress.set(1);
         vibrate();
         setFilming(true);
         startRecording();
@@ -479,12 +481,12 @@ export function CameraScreen({ contacts, to, onSent, onRecordingChange }: Props)
       }
       const distance = Math.min(0, Math.max(-LOCK_DISTANCE, x));
       if (x >= 0) release();
-      shutterX.setValue(distance);
+      shutterX.set(distance);
       const reached = distance <= -(LOCK_DISTANCE - LOCK_REACH);
       if (reached !== overLock.current) {
         overLock.current = reached;
         if (reached) vibrate();
-        Animated.spring(lockHover, { toValue: reached ? 1.35 : 1, useNativeDriver: true, overshootClamping: true, damping: 12, stiffness: 300 }).start();
+        lockHover.set(withSpring(reached ? 1.35 : 1, { damping: 12, stiffness: 300, overshootClamping: true }));
       }
     },
     up: () => {
@@ -498,10 +500,8 @@ export function CameraScreen({ contacts, to, onSent, onRecordingChange }: Props)
         isLocked.current = true;
         setLocked(true);
         vibrate();
-        Animated.parallel([
-          Animated.spring(shutterX, { toValue: 0, useNativeDriver: true, overshootClamping: true, damping: 16, stiffness: 240 }),
-          Animated.spring(lockProgress, { toValue: 1, useNativeDriver: true, overshootClamping: true, damping: 14, stiffness: 220 }),
-        ]).start();
+        shutterX.set(withSpring(0, { damping: 16, stiffness: 240, overshootClamping: true }));
+        lockProgress.set(withSpring(1, { damping: 14, stiffness: 220, overshootClamping: true }));
       } else {
         stopFilming();
       }
@@ -556,10 +556,7 @@ export function CameraScreen({ contacts, to, onSent, onRecordingChange }: Props)
     // L'autre caméra repart à ×1 ; une vidéo en cours continue dessus.
     setZoom(1);
     setLensId(null);
-    Animated.sequence([
-      Animated.timing(flipFade, { toValue: 1, duration: 110, useNativeDriver: true }),
-      Animated.timing(flipFade, { toValue: 0, duration: 260, useNativeDriver: true }),
-    ]).start();
+    flipFade.set(withSequence(withTiming(1, { duration: 110 }), withTiming(0, { duration: 260 })));
   };
 
   // Pendant une vidéo verrouillée aussi : elle continue sur l'autre caméra.
@@ -618,7 +615,7 @@ export function CameraScreen({ contacts, to, onSent, onRecordingChange }: Props)
       <NavigationBar style="light" />
       <View style={[styles.preview, { height: previewHeight }]}>
         {cameraAllowed && (
-          <Animated.View style={[StyleSheet.absoluteFill, { opacity: previewOpacity }]}>
+          <Reanimated.View style={[StyleSheet.absoluteFill, { opacity: previewOpacity }]}>
             <FilteredView steps={stepsOf(liveFilter, NO_ADJUSTMENTS)} style={StyleSheet.absoluteFill}>
               <PearCameraView
                 ref={camera}
@@ -638,15 +635,15 @@ export function CameraScreen({ contacts, to, onSent, onRecordingChange }: Props)
                 onCameraError={({ nativeEvent }) => log.warn('caméra', nativeEvent.message)}
               />
             </FilteredView>
-          </Animated.View>
+          </Reanimated.View>
         )}
         {liveStamp && (
           <Svg pointerEvents="none" style={StyleSheet.absoluteFill} width={window.width} height={previewHeight}>
             <StampMarks kind={liveStamp} stamp={formatStamp(now, ambient)} width={window.width} height={previewHeight} variant={getStampStyle(liveStamp)} />
           </Svg>
         )}
-        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.frontGlow, { opacity: frontGlow }]} />
-        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.flipFade, { opacity: flipFade }]} />
+        <Reanimated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.frontGlow, { opacity: frontGlow }]} />
+        <Reanimated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.flipFade, { opacity: flipFade }]} />
         <PhotoFlash shots={shots} />
         <View collapsable={false} style={StyleSheet.absoluteFill} accessibilityLabel={t('camera.changerAide')} {...surface.panHandlers} />
       </View>
@@ -706,29 +703,23 @@ export function CameraScreen({ contacts, to, onSent, onRecordingChange }: Props)
       )}
 
       <View pointerEvents="box-none" style={[styles.shutterRow, { bottom: rowBottom }]}>
-        <Animated.View
+        <Reanimated.View
           {...shutter.panHandlers}
           accessibilityRole="button"
           accessibilityLabel={locked ? t('camera.arreterVideo') : mode === 'video' ? t('camera.filmer') : t('camera.declencheur')}
-          style={[styles.shutter, { transform: [{ translateX: shutterX }, { scale: shutterScale }] }]}
+          style={[styles.shutter, shutterStyle]}
         >
           {/* En vidéo, le cœur est rouge ; pendant l'enregistrement, c'est un carré arrondi qui sert d'arrêt. */}
           <ShutterFace filming={filming || mode === 'video'} recording={recording} elapsed={elapsed} filter={liveFilter} shots={shots} />
-        </Animated.View>
+        </Reanimated.View>
         {filming && !locked && (
-          <Animated.View
+          <Reanimated.View
             pointerEvents="none"
             accessibilityLabel={t('camera.verrouiller')}
-            style={[
-              styles.lock,
-              {
-                opacity: lockProgress.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
-                transform: [{ scale: Animated.multiply(lockHover, lockProgress.interpolate({ inputRange: [0, 1], outputRange: [1, 0.2] })) }],
-              },
-            ]}
+            style={[styles.lock, lockStyle]}
           >
             <Lock size={20} color={colors.onMedia} strokeWidth={1.75} />
-          </Animated.View>
+          </Reanimated.View>
         )}
         {/* IconButton pose son style sur la vue intérieure : la place se donne par une vue autour. */}
         <View style={[styles.flipPlace, { right: sideInset }]}>
