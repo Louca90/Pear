@@ -101,6 +101,9 @@ export const fixed = {
   coolTint: '#0A6CFF',
   filmOrange: '#FF8A1F',
   filmGlow: '#C8320A',
+  // Appareil photo : boutons gris sur le fond noir sous l'aperçu, onglet inactif.
+  cameraSurface: '#1C1C1F',
+  cameraIdle: '#6E6E73',
   // Filtre Batterie : niveau bas.
   batteryLow: '#FF5A4F',
   // Couleurs proposées pour le texte et le pinceau de l'éditeur.

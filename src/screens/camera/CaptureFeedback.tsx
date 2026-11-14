@@ -18,7 +18,7 @@ import { createMediaStyles, spacing, useMediaColors } from '../../theme';
 
 const FLASH_OPACITY = 0.85;
 const FLASH_MS = 260;
-export const LAST_SHOT_SIZE = 44;
+export const LAST_SHOT_SIZE = 48;
 const LAST_SHOT_RADIUS = 12;
 const LAND_MS = 300;
 const LAND_SCALE = 3;
@@ -61,14 +61,15 @@ type Props = {
   filter: FilterId;
   // Pendant une vidéo, la miniature s'efface.
   hidden: boolean;
-  // Distance du bas de l'écran (même ligne que les pastilles de zoom).
+  // Distance du bas et du bord gauche de l'écran.
   bottom: number;
+  left: number;
   onPress: () => void;
 };
 
 // La dernière photo, posée en bas à gauche : un appui la rouvre. Elle se pose quand l'écran de
 // relecture se ferme (montée à ce moment-là).
-export function LastShot({ uri, filter, hidden, bottom, onPress }: Props) {
+export function LastShot({ uri, filter, hidden, bottom, left, onPress }: Props) {
   const styles = useStyles();
   const window = useWindowDimensions();
   const visible = useSharedValue(hidden ? 0 : 1);
@@ -76,10 +77,10 @@ export function LastShot({ uri, filter, hidden, bottom, onPress }: Props) {
     visible.set(timing(hidden ? 0 : 1, DURATION.small));
   }, [hidden]);
   const fade = useAnimatedStyle(() => ({ opacity: visible.get() }));
-  const centerX = spacing.lg + LAST_SHOT_SIZE / 2;
+  const centerX = left + LAST_SHOT_SIZE / 2;
   const centerY = window.height - bottom - LAST_SHOT_SIZE / 2;
   return (
-    <Reanimated.View pointerEvents={hidden ? 'none' : 'box-none'} style={[styles.corner, { bottom }, fade]}>
+    <Reanimated.View pointerEvents={hidden ? 'none' : 'box-none'} style={[styles.corner, { bottom, left }, fade]}>
       <Reanimated.View key={uri} entering={landFrom(window.width / 2 - centerX, window.height / 2 - centerY)}>
         <Pressable onPress={onPress} hitSlop={6} accessibilityRole="button" accessibilityLabel={t('camera.revoirDernierePhoto')} style={styles.thumb}>
           <RoundFiltered id={filter} radius={LAST_SHOT_RADIUS}>
@@ -97,14 +98,11 @@ const useStyles = createMediaStyles((colors) => ({
   },
   corner: {
     position: 'absolute',
-    left: spacing.lg,
   },
   thumb: {
     width: LAST_SHOT_SIZE,
     height: LAST_SHOT_SIZE,
     borderRadius: LAST_SHOT_RADIUS,
-    borderWidth: 1.5,
-    borderColor: colors.background,
     overflow: 'hidden',
     backgroundColor: colors.text,
   },

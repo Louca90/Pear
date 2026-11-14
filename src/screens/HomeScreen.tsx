@@ -124,8 +124,9 @@ const ConversationRow = memo(function ConversationRow({ item, now, index, arrivi
           <Text style={[styles.name, bold && styles.bold]} numberOfLines={1}>
             {contact.name}
           </Text>
-          {contact.verified && <ShieldCheck size={14} color={colors.signatureStrong} strokeWidth={2} accessibilityLabel={t('contact.verifie')} />}        </View>
-        <Text style={[styles.preview, bold && styles.previewUnread] } numberOfLines={1}>
+          {contact.verified && <ShieldCheck size={14} color={colors.signatureStrong} strokeWidth={2} accessibilityLabel={t('contact.verifie')} />}
+        </View>
+        <Text style={[styles.preview, bold && styles.previewUnread]} numberOfLines={1}>
           {line}
         </Text>
       </View>

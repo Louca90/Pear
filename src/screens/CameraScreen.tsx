@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, Linking, useWindowDimensions, Modal, PanResponder, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, Easing, Linking, useWindowDimensions, Modal, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
+import Reanimated, { interpolateColor, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import { haptics } from '../haptics';
 import { NavigationBar } from 'expo-navigation-bar';
 import { StatusBar } from 'expo-status-bar';
-import { Camera, Check, Download, Lock, Settings, SwitchCamera, X, Zap, ZapOff } from 'lucide-react-native';
+import { Camera, Check, Download, Lock, Settings, SwitchCamera, Zap, ZapOff } from 'lucide-react-native';
 
 import { setScreenBrightness } from '../../modules/pear-native';
 import { hasLastCameraFrame, PearCameraHandle, PearCameraView, wideLens } from '../../modules/pear-native/camera';
@@ -22,9 +23,10 @@ import { getStampStyle, nextStampStyle, readAmbient } from '../components/editor
 import { Ambient, formatStamp, NO_AMBIENT, StampMarks } from '../components/editor/stamps';
 import Svg from 'react-native-svg';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { Button, IconButton, useInsets, useNavigationBarHeight } from '../components/ui';
+import { Button, IconButton, useInsets } from '../components/ui';
 import { Contact } from '../storage';
-import { createMediaStyles, radius, spacing, useMediaColors } from '../theme';
+import { createMediaStyles, fixed, radius, spacing, useMediaColors } from '../theme';
+import { DURATION, timing } from '../motion';
 import { log } from '../log';
 import { VIDEO_BITRATE } from '../config';
 import { t } from '../i18n';
@@ -52,13 +54,51 @@ const AXIS_LOCK_DISTANCE = 14;
 // Deux petits appuis d'un second doigt pendant qu'on tient le déclencheur : la caméra se retourne.
 const SECOND_TAP_MS = 250;
 // La rangée de zoom, au-dessus du déclencheur et du nom du filtre qui s'affiche un instant.
-const ZOOM_BAR_SPACE = 64;
+// Sous l'aperçu : la bande des filtres et les onglets PHOTO / VIDÉO ; à côté du déclencheur, la
+// miniature et le bouton caméra. Les pastilles de zoom sont dans l'aperçu, à 18 points du bas.
+const FILTER_ROW_HEIGHT = 72;
+const MODE_TABS_HEIGHT = 36;
+const SIDE_BUTTON = 48;
+const ZOOM_INSET = 18;
+const PREVIEW_RADIUS = 28;
 
 // filter : le filtre choisi avant la prise, repris par l'éditeur (il ne touche pas encore au fichier).
 // Une fois la caméra autorisée, inutile d'attendre la relecture de la permission (asynchrone) pour
 // monter l'aperçu à la prochaine ouverture.
 const cameraKnown = { granted: false };
 const PREVIEW_FADE_MS = 200;
+
+type CameraMode = 'photo' | 'video';
+
+// Les onglets PHOTO / VIDÉO sous l'aperçu : le choisi passe en clair, l'autre en gris (fondu sur le fil natif).
+function ModeTab({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
+  const styles = useStyles();
+  const on = useSharedValue(selected ? 1 : 0);
+  useEffect(() => {
+    on.set(timing(selected ? 1 : 0, 200));
+  }, [selected, on]);
+  const style = useAnimatedStyle(() => ({ color: interpolateColor(on.get(), [0, 1], [fixed.cameraIdle, fixed.white]) }));
+  return (
+    <Pressable onPress={onPress} hitSlop={8} accessibilityRole="tab" accessibilityState={{ selected }} style={styles.modeTab}>
+      <Reanimated.Text style={[styles.modeLabel, style]}>{label}</Reanimated.Text>
+    </Pressable>
+  );
+}
+
+function ModeTabs({ mode, hidden, bottom, onChange }: { mode: CameraMode; hidden: boolean; bottom: number; onChange: (mode: CameraMode) => void }) {
+  const styles = useStyles();
+  const shown = useSharedValue(hidden ? 0 : 1);
+  useEffect(() => {
+    shown.set(timing(hidden ? 0 : 1, DURATION.small));
+  }, [hidden, shown]);
+  const style = useAnimatedStyle(() => ({ opacity: shown.get() }));
+  return (
+    <Reanimated.View pointerEvents={hidden ? 'none' : 'box-none'} style={[styles.modeTabs, { bottom }, style]} accessibilityRole="tablist">
+      <ModeTab label={t('camera.modePhoto')} selected={mode === 'photo'} onPress={() => onChange('photo')} />
+      <ModeTab label={t('camera.modeVideo')} selected={mode === 'video'} onPress={() => onChange('video')} />
+    </Reanimated.View>
+  );
+}
 
 type Capture = { uri: string; kind: 'image' | 'video'; takenAt: number; filter: FilterId };
 
@@ -227,6 +267,10 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
   const [locked, setLocked] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [capture, setCapture] = useState<Capture | null>(null);
+  // PHOTO : un appui prend une photo, le maintien filme. VIDÉO : un appui lance l'enregistrement, un autre l'arrête.
+  const [mode, setMode] = useState<CameraMode>('photo');
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
   // Chaque photo : le cœur du déclencheur se tasse et l'aperçu s'éclaire. La dernière photo reste
   // en miniature (une vidéo l'efface : elle n'a pas d'image à montrer).
   const [shots, setShots] = useState(0);
@@ -383,6 +427,18 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
         stopFilming();
         return;
       }
+      if (modeRef.current === 'video') {
+        // Mode vidéo : l'enregistrement part tout de suite, déjà verrouillé ; le prochain appui l'arrête.
+        stoppedByTap.current = true;
+        wantsVideo.current = true;
+        isLocked.current = true;
+        setLocked(true);
+        lockProgress.setValue(1);
+        vibrate();
+        setFilming(true);
+        startRecording();
+        return;
+      }
       animateShutter(0.88);
       zoomStart.current = zoomRef.current;
       gestureAxis.current = null;
@@ -485,6 +541,12 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
     }),
   ).current;
 
+  const changeMode = (next: CameraMode) => {
+    if (next === mode || filming) return;
+    haptics.select();
+    setMode(next);
+  };
+
   const flipCamera = () => {
     vibrate();
     setFacing((current) => (current === 'back' ? 'front' : 'back'));
@@ -537,53 +599,59 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
     );
   }
 
+  // La mise en page de la planche, du bas vers le haut : la barre de l'app, la rangée du déclencheur
+  // (miniature, déclencheur, caméra), les onglets PHOTO / VIDÉO, la bande des filtres, puis l'aperçu
+  // aux coins du bas arrondis. Les hauteurs ne changent jamais, même quand la barre s'efface.
+  const rowBottom = barSpace + spacing.sm;
+  const tabsBottom = rowBottom + SHUTTER_SIZE + 2;
+  const stripBottom = tabsBottom + MODE_TABS_HEIGHT;
+  const previewHeight = window.height - (stripBottom + FILTER_ROW_HEIGHT + spacing.sm);
+  const previewBottom = window.height - previewHeight;
+  const sideInset = (window.width / 2 - SHUTTER_SIZE / 2 - SIDE_BUTTON) / 2;
+
   return (
     <View style={styles.screen}>
       <StatusBar style="light" />
-      {/* Sur l'image de la caméra, la barre d'Android passe en clair pour rester visible. */}
       <NavigationBar style="light" />
-      {cameraAllowed && (
-        <Animated.View style={[StyleSheet.absoluteFill, { opacity: previewOpacity }]}>
-        <FilteredView steps={stepsOf(liveFilter, NO_ADJUSTMENTS)} style={StyleSheet.absoluteFill}>
-        <PearCameraView
-          ref={camera}
-          style={StyleSheet.absoluteFill}
-          facing={facing}
-          cameraId={facing === 'back' ? lensId : null}
-          zoom={zoom}
-          videoBitrate={VIDEO_BITRATE}
-          flash={flashOn}
-          torch={flashOn && filming}
-          mute={!microphonePermission?.granted}
-          onReady={({ nativeEvent }) => {
-            setZoomRange({ min: nativeEvent.minZoom, max: nativeEvent.maxZoom });
-            onCameraReady();
-          }}
-          onFrame={({ nativeEvent }) => logCameraStep(`première image (natif : ${Math.round(nativeEvent.ms)} ms)`)}
-          onCameraError={({ nativeEvent }) => log.warn('caméra', nativeEvent.message)}
-        />
-        </FilteredView>
-        </Animated.View>
-      )}
-
-      {liveStamp && (
-        <Svg pointerEvents="none" style={StyleSheet.absoluteFill} width={window.width} height={window.height}>
-          {/* Au-dessus du déclencheur et de la barre du bas, qui cachent le bas de l'écran. */}
-          <StampMarks kind={liveStamp} stamp={formatStamp(now, ambient)} width={window.width} height={window.height - barSpace - SHUTTER_SIZE} variant={getStampStyle(liveStamp)} />
-        </Svg>
-      )}
-      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.frontGlow, { opacity: frontGlow }]} />
-      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.flipFade, { opacity: flipFade }]} />
-      <PhotoFlash shots={shots} />
-      <View collapsable={false} style={StyleSheet.absoluteFill} accessibilityLabel={t('camera.changerAide')} {...surface.panHandlers} />
+      <View style={[styles.preview, { height: previewHeight }]}>
+        {cameraAllowed && (
+          <Animated.View style={[StyleSheet.absoluteFill, { opacity: previewOpacity }]}>
+            <FilteredView steps={stepsOf(liveFilter, NO_ADJUSTMENTS)} style={StyleSheet.absoluteFill}>
+              <PearCameraView
+                ref={camera}
+                style={StyleSheet.absoluteFill}
+                facing={facing}
+                cameraId={facing === 'back' ? lensId : null}
+                zoom={zoom}
+                videoBitrate={VIDEO_BITRATE}
+                flash={flashOn}
+                torch={flashOn && filming}
+                mute={!microphonePermission?.granted}
+                onReady={({ nativeEvent }) => {
+                  setZoomRange({ min: nativeEvent.minZoom, max: nativeEvent.maxZoom });
+                  onCameraReady();
+                }}
+                onFrame={({ nativeEvent }) => logCameraStep(`première image (natif : ${Math.round(nativeEvent.ms)} ms)`)}
+                onCameraError={({ nativeEvent }) => log.warn('caméra', nativeEvent.message)}
+              />
+            </FilteredView>
+          </Animated.View>
+        )}
+        {liveStamp && (
+          <Svg pointerEvents="none" style={StyleSheet.absoluteFill} width={window.width} height={previewHeight}>
+            <StampMarks kind={liveStamp} stamp={formatStamp(now, ambient)} width={window.width} height={previewHeight} variant={getStampStyle(liveStamp)} />
+          </Svg>
+        )}
+        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.frontGlow, { opacity: frontGlow }]} />
+        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.flipFade, { opacity: flipFade }]} />
+        <PhotoFlash shots={shots} />
+        <View collapsable={false} style={StyleSheet.absoluteFill} accessibilityLabel={t('camera.changerAide')} {...surface.panHandlers} />
+      </View>
 
       {!filming && (
-        <View style={[styles.topControls, { top: topInset + spacing.md }]}>
+        <View pointerEvents="box-none" style={[styles.topControls, { top: topInset + spacing.md }]}>
           <IconButton onPress={() => setFlashOn(!flashOn)} label={flashOn ? t('camera.couperFlash') : t('camera.activerFlash')} style={styles.roundControl}>
-            {flashOn ? <Zap size={24} color={colors.background} fill={colors.background} strokeWidth={1.75} /> : <ZapOff size={24} color={colors.background} strokeWidth={1.75} />}
-          </IconButton>
-          <IconButton onPress={flipCamera} label={t('camera.changerCamera')} style={styles.roundControl}>
-            <SwitchCamera size={24} color={colors.background} strokeWidth={1.75} />
+            {flashOn ? <Zap size={20} color={colors.signature} fill={colors.signature} strokeWidth={2} /> : <ZapOff size={20} color={colors.onMedia} strokeWidth={2} />}
           </IconButton>
         </View>
       )}
@@ -596,7 +664,7 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
           active={activeLevel(zoomLevels(wide, Math.max(2, zoomRange.max)), wide, zoom, lensId)}
           zoom={zoom}
           lens={lensId}
-          bottom={barSpace + SHUTTER_SIZE + ZOOM_BAR_SPACE}
+          bottom={previewBottom + ZOOM_INSET}
           onChoose={(level) => {
             setLensId(level.lens);
             setZoom(level.zoom);
@@ -604,19 +672,9 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
         />
       )}
 
-      {/* Montée seulement hors de la relecture : elle se pose dans son coin quand la relecture se ferme. */}
-      {lastShot && !capture && (
-        <LastShot
-          uri={lastShot.uri}
-          filter={lastShot.filter}
-          hidden={filming}
-          bottom={barSpace + SHUTTER_SIZE + ZOOM_BAR_SPACE}
-          onPress={() => setCapture(lastShot)}
-        />
-      )}
-
-      {/* La hauteur ne change jamais : le bouton reste sous le doigt quand la barre du bas s'efface. */}
-      <View pointerEvents="box-none" style={[styles.shutterRow, { bottom: barSpace }]}>
+      {/* La bande des filtres, sous l'aperçu : le filtre posé dans l'anneau du milieu s'applique. */}
+      <View pointerEvents="box-none" style={[styles.filterRow, { bottom: stripBottom }]}>
+        <View pointerEvents="none" style={[styles.filterRing, filming && styles.hidden]} />
         <FilterStrip
           value={liveFilter}
           hidden={filming}
@@ -627,16 +685,34 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
             setStyleTick((tick) => tick + 1);
           }}
         />
+      </View>
+
+      <ModeTabs mode={mode} hidden={filming} bottom={tabsBottom} onChange={changeMode} />
+
+      {/* La place de la miniature, puis la dernière photo qui s'y pose. */}
+      <View pointerEvents="none" style={[styles.thumbPlace, { left: sideInset, bottom: rowBottom + (SHUTTER_SIZE - SIDE_BUTTON) / 2 }, filming && styles.hidden]} />
+      {lastShot && !capture && (
+        <LastShot
+          uri={lastShot.uri}
+          filter={lastShot.filter}
+          hidden={filming}
+          bottom={rowBottom + (SHUTTER_SIZE - SIDE_BUTTON) / 2}
+          left={sideInset}
+          onPress={() => setCapture(lastShot)}
+        />
+      )}
+
+      <View pointerEvents="box-none" style={[styles.shutterRow, { bottom: rowBottom }]}>
         <Animated.View
           {...shutter.panHandlers}
           accessibilityRole="button"
-          accessibilityLabel={locked ? t('camera.arreterVideo') : t('camera.declencheur')}
+          accessibilityLabel={locked ? t('camera.arreterVideo') : mode === 'video' ? t('camera.filmer') : t('camera.declencheur')}
           style={[styles.shutter, { transform: [{ translateX: shutterX }, { scale: shutterScale }] }]}
         >
-          {/* Verrouillée, la vidéo s'arrête d'un appui : le cœur, déjà un carré rouge, sert d'arrêt. */}
-          <ShutterFace filming={filming} recording={recording} elapsed={elapsed} filter={liveFilter} shots={shots} />
+          {/* En vidéo, le cœur est rouge ; pendant l'enregistrement, c'est un carré arrondi qui sert d'arrêt. */}
+          <ShutterFace filming={filming || mode === 'video'} recording={recording} elapsed={elapsed} filter={liveFilter} shots={shots} />
         </Animated.View>
-        {filming && (
+        {filming && !locked && (
           <Animated.View
             pointerEvents="none"
             accessibilityLabel={t('camera.verrouiller')}
@@ -648,11 +724,13 @@ export function CameraScreen({ contacts, onSent, onRecordingChange }: Props) {
               },
             ]}
           >
-            <Lock size={20} color={colors.background} strokeWidth={1.75} />
+            <Lock size={20} color={colors.onMedia} strokeWidth={1.75} />
           </Animated.View>
         )}
+        <IconButton onPress={flipCamera} label={t('camera.changerCamera')} style={[styles.flip, { right: sideInset }]}>
+          <SwitchCamera size={22} color={colors.onMedia} strokeWidth={1.8} />
+        </IconButton>
       </View>
-
       {capture && (
         <CaptureReview
           capture={capture}
@@ -688,12 +766,77 @@ const useStyles = createMediaStyles((colors) => ({
     color: colors.textMuted,
     textAlign: 'center',
   },
+  preview: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    borderBottomLeftRadius: PREVIEW_RADIUS,
+    borderBottomRightRadius: PREVIEW_RADIUS,
+    overflow: 'hidden',
+    backgroundColor: fixed.cameraSurface,
+  },
   topControls: {
     position: 'absolute',
     left: spacing.lg,
     right: spacing.lg,
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
+  },
+  filterRow: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: FILTER_ROW_HEIGHT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // L'anneau fixe du milieu : le filtre qui s'y pose est celui de l'aperçu.
+  filterRing: {
+    position: 'absolute',
+    width: 64,
+    height: 64,
+    borderRadius: radius.full,
+    borderWidth: 2,
+    borderColor: colors.signature,
+  },
+  hidden: {
+    opacity: 0,
+  },
+  modeTabs: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: MODE_TABS_HEIGHT,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 26,
+  },
+  modeTab: {
+    paddingHorizontal: 4,
+    paddingVertical: 8,
+  },
+  modeLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: 0.8,
+  },
+  thumbPlace: {
+    position: 'absolute',
+    width: SIDE_BUTTON,
+    height: SIDE_BUTTON,
+    borderRadius: 12,
+    backgroundColor: fixed.cameraSurface,
+  },
+  flip: {
+    position: 'absolute',
+    width: SIDE_BUTTON,
+    height: SIDE_BUTTON,
+    borderRadius: radius.full,
+    backgroundColor: fixed.cameraSurface,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   roundControl: {
     width: 44,

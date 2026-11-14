@@ -287,6 +287,9 @@ export const en: Dictionary = {
     arreterVideo: 'Stop the video',
     declencheur: 'Tap for a photo, hold for a video',
     verrouiller: 'Release here to lock',
+    modePhoto: 'PHOTO',
+    modeVideo: 'VIDEO',
+    filmer: 'Tap to record',
     revoirDernierePhoto: 'Review the last photo',
   },
   sauvegarde: {

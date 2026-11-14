@@ -55,6 +55,8 @@ const TEXT_MAX_WIDTH = 0.86;
 // Les boutons ronds du haut (fermer, annuler) et la pilule « Envoyer ».
 const ROUND_SIZE = 44;
 const SEND_HEIGHT = 40;
+// Hauteur de la rangée Ambiance (vignette 80 + anneau + nom + marges).
+const AMBIANCE_PANEL_HEIGHT = 136;
 // Sans boutons fournis, l'écran parent pose son bouton d'envoi (52 points) en bas : la barre d'outils
 // se place au-dessus.
 const PARENT_SEND_HEIGHT = 52;
@@ -440,6 +442,16 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
     setEditing({ id: newLayerId(), kind: 'text', text: '', font: 'classic', color: fixed.white, background: 'none', size: TEXT_SIZE_DEFAULT, x: width / 2, y: height * 0.45, scale: 1, rotation: 0 });
   };
 
+  // Les boutons de l'éditeur sont des Pressable, que le détecteur de gestes de l'image ne voit pas :
+  // sans ce filtre, un appui sur un outil ajoutait aussi un texte. Un geste qui part de l'en-tête, de la
+  // barre d'outils ou de la rangée Ambiance est laissé aux boutons.
+  const onChrome = (absoluteY: number) => {
+    if (busy) return false;
+    const headerBottom = topInset + spacing.md + ROUND_SIZE + spacing.sm;
+    const toolbarTop = screen.height - (toolbarBottom + toolbarInset + TOOLBAR_HEIGHT) - (ambiancing ? AMBIANCE_PANEL_HEIGHT + spacing.sm : 0);
+    return absoluteY < headerBottom || absoluteY > toolbarTop;
+  };
+
   const latest = {
     target: (x: number, y: number) => {
       const state = touch.current;
@@ -452,7 +464,7 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
     },
     panBegin: (x: number, y: number) => {
       const state = touch.current;
-      state.ignored = settling.current;
+      state.ignored = settling.current || onChrome(top + y);
       state.moved = false;
       state.swiping = false;
       state.direction = 0;
@@ -524,8 +536,8 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
       if (!state.ignored && !state.target && state.swiping && state.direction !== 0) settleSwipe(state.direction, false);
     },
     // Un toucher : modifie le texte touché, ou en commence un nouveau.
-    tap: (x: number, y: number) => {
-      if (busy) return;
+    tap: (x: number, y: number, absoluteY: number) => {
+      if (busy || onChrome(absoluteY)) return;
       const hit = layerAt(layers, sizes, x, y);
       if (hit?.kind === 'text') {
         vibrate();
@@ -582,7 +594,7 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
   const tap = useTapGesture({
     runOnJS: true,
     disableReanimated: true,
-    onActivate: (event) => latestRef.current.tap(event.x, event.y),
+    onActivate: (event) => latestRef.current.tap(event.x, event.y, event.absoluteY),
   });
   const gestures = useSimultaneousGestures(pan, pinch, rotation, tap);
 

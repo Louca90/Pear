@@ -286,6 +286,9 @@ export const fr = {
     arreterVideo: 'Arrêter la vidéo',
     declencheur: 'Appuyer pour une photo, maintenir pour une vidéo',
     verrouiller: 'Lâcher ici pour verrouiller',
+    modePhoto: 'PHOTO',
+    modeVideo: 'VIDÉO',
+    filmer: 'Appuyer pour filmer',
     revoirDernierePhoto: 'Revoir la dernière photo',
   },
   sauvegarde: {
