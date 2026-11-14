@@ -1,5 +1,7 @@
 import { memo, useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Reanimated, { Easing, useSharedValue, withTiming } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 import { haptics } from '../../haptics';
 import { Eraser, Redo2, Undo2 } from 'lucide-react-native';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
@@ -55,12 +57,12 @@ export function DrawPanel({ frame, strokes, color, width, bottom, onStrokes, onB
   const [history, setHistory] = useState<History>(() => historyOf(strokes));
   const [erasing, setErasing] = useState(false);
   const [live, setLive] = useState<number[] | null>(null);
-  const progress = useRef(new Animated.Value(0)).current;
-  const controls = useRef(new Animated.Value(1)).current;
+  const progress = useSharedValue(0);
+  const controls = useSharedValue(1);
   const closing = useRef(false);
 
   useEffect(() => {
-    Animated.timing(progress, { toValue: 1, duration: OPEN_MS, easing: EASING, useNativeDriver: true }).start();
+    progress.set(withTiming(1, { duration: OPEN_MS, easing: EASING }));
   }, [progress]);
 
   // Chaque changement de l'historique part tout de suite vers l'éditeur (traits affichés dessous).
@@ -72,10 +74,12 @@ export function DrawPanel({ frame, strokes, color, width, bottom, onStrokes, onB
   const close = () => {
     if (closing.current) return;
     closing.current = true;
-    Animated.timing(progress, { toValue: 0, duration: OPEN_MS, easing: EASING, useNativeDriver: true }).start(onClose);
+    progress.set(withTiming(0, { duration: OPEN_MS, easing: EASING }, (finished) => {
+      if (finished) scheduleOnRN(onClose);
+    }));
   };
 
-  const showControls = (visible: boolean) => Animated.timing(controls, { toValue: visible ? 1 : 0, duration: 160, easing: EASING, useNativeDriver: true }).start();
+  const showControls = (visible: boolean) => controls.set(withTiming(visible ? 1 : 0, { duration: 160, easing: EASING }));
 
   // Le trait en cours, et pour la gomme la liste des traits restants : un seul pas d'historique par geste.
   const working = useRef<{ points: number[]; remaining: Stroke[] | null }>({ points: [], remaining: null });
@@ -140,7 +144,7 @@ export function DrawPanel({ frame, strokes, color, width, bottom, onStrokes, onB
   const canRedo = history.future.length > 0;
 
   return (
-    <Animated.View style={[StyleSheet.absoluteFill, { opacity: progress }]}>
+    <Reanimated.View style={[StyleSheet.absoluteFill, { opacity: progress }]}>
       <GestureDetector gesture={pan}>
         <View collapsable={false} style={[styles.surface, frame]}>
           {live && (
@@ -151,7 +155,7 @@ export function DrawPanel({ frame, strokes, color, width, bottom, onStrokes, onB
         </View>
       </GestureDetector>
 
-      <Animated.View pointerEvents="box-none" style={[StyleSheet.absoluteFill, { opacity: controls }]}>
+      <Reanimated.View pointerEvents="box-none" style={[StyleSheet.absoluteFill, { opacity: controls }]}>
         <View style={[styles.topRow, { top: top + spacing.md }]}>
           <View style={styles.group}>
             <IconButton onPress={() => apply(undo(history))} disabled={!canUndo} label={t('editeur.annuler')} style={[styles.round, !canUndo && styles.disabled]}>
@@ -201,8 +205,8 @@ export function DrawPanel({ frame, strokes, color, width, bottom, onStrokes, onB
             ))}
           </ScrollView>
         </View>
-      </Animated.View>
-    </Animated.View>
+      </Reanimated.View>
+    </Reanimated.View>
   );
 }
 

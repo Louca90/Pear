@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Image, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import Reanimated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 import { haptics } from '../../haptics';
 import { RotateCw } from 'lucide-react-native';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
@@ -107,13 +109,15 @@ export function CropPanel({ uri, image, crop: initial, bottom, onDone, lockedAsp
   const screen = useWindowDimensions();
   const [crop, setCrop] = useState(initial);
   const [aspect, setAspect] = useState<Aspect>(lockedAspect ?? 'free');
-  const progress = useRef(new Animated.Value(0)).current;
-  const content = useRef(new Animated.Value(1)).current;
-  const grid = useRef(new Animated.Value(0)).current;
+  const progress = useSharedValue(0);
+  const content = useSharedValue(1);
+  const grid = useSharedValue(0);
   const closing = useRef(false);
+  const gridStyle = useAnimatedStyle(() => ({ opacity: 0.45 + 0.55 * grid.get() }));
+  const rowIn = useAnimatedStyle(() => ({ transform: [{ translateY: 14 * (1 - progress.get()) }] }));
 
   useEffect(() => {
-    Animated.timing(progress, { toValue: 1, duration: OPEN_MS, easing: EASING, useNativeDriver: true }).start();
+    progress.set(withTiming(1, { duration: OPEN_MS, easing: EASING }));
   }, [progress]);
 
   // La photo tournée, ajustée à la zone libre entre les boutons du haut et ceux du bas.
@@ -128,15 +132,26 @@ export function CropPanel({ uri, image, crop: initial, bottom, onDone, lockedAsp
   const finish = () => {
     if (closing.current) return;
     closing.current = true;
-    Animated.timing(progress, { toValue: 0, duration: OPEN_MS, easing: EASING, useNativeDriver: true }).start(() => onDone(crop));
+    const done = () => onDone(crop);
+    progress.set(
+      withTiming(0, { duration: OPEN_MS, easing: EASING }, (finished) => {
+        if (finished) scheduleOnRN(done);
+      }),
+    );
   };
 
   // Changer de format ou tourner : l'image s'efface un instant, puis revient avec son nouveau cadre.
-  const swap = (next: Crop) =>
-    Animated.timing(content, { toValue: 0, duration: TURN_MS, easing: EASING, useNativeDriver: true }).start(() => {
+  const swap = (next: Crop) => {
+    const turn = () => {
       setCrop(next);
-      Animated.timing(content, { toValue: 1, duration: TURN_MS * 1.4, easing: EASING, useNativeDriver: true }).start();
-    });
+      content.set(withTiming(1, { duration: TURN_MS * 1.4, easing: EASING }));
+    };
+    content.set(
+      withTiming(0, { duration: TURN_MS, easing: EASING }, (finished) => {
+        if (finished) scheduleOnRN(turn);
+      }),
+    );
+  };
 
   const rotate = () => {
     vibrate();
@@ -170,7 +185,7 @@ export function CropPanel({ uri, image, crop: initial, bottom, onDone, lockedAsp
       else if (!ratio && near(px, right, EDGE_REACH) && py > box.y && py < bottomEdge) mode = 'r';
       else if (px > box.x && px < right && py > box.y && py < bottomEdge) mode = 'move';
       drag.current = { mode, start: box };
-      if (mode) Animated.timing(grid, { toValue: 1, duration: 120, easing: EASING, useNativeDriver: true }).start();
+      if (mode) grid.set(withTiming(1, { duration: 120, easing: EASING }));
     },
     update: (dx: number, dy: number) => {
       const { mode, start } = drag.current;
@@ -204,7 +219,7 @@ export function CropPanel({ uri, image, crop: initial, bottom, onDone, lockedAsp
     },
     end: () => {
       drag.current.mode = null;
-      Animated.timing(grid, { toValue: 0, duration: 220, easing: EASING, useNativeDriver: true }).start();
+      grid.set(withTiming(0, { duration: 220, easing: EASING }));
     },
   };
   const latestRef = useRef(latest);
@@ -233,14 +248,14 @@ export function CropPanel({ uri, image, crop: initial, bottom, onDone, lockedAsp
   };
   const straighten = (next: number) => {
     setCrop((current) => ({ ...current, angle: next }));
-    Animated.timing(grid, { toValue: 1, duration: 120, easing: EASING, useNativeDriver: true }).start();
+    grid.set(withTiming(1, { duration: 120, easing: EASING }));
   };
-  const straightenEnd = () => Animated.timing(grid, { toValue: 0, duration: 220, easing: EASING, useNativeDriver: true }).start();
+  const straightenEnd = () => grid.set(withTiming(0, { duration: 220, easing: EASING }));
   const frame = { left: origin.x + box.x, top: origin.y + box.y, width: box.width, height: box.height };
 
   return (
-    <Animated.View style={[StyleSheet.absoluteFill, styles.screen, { opacity: progress }]}>
-      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: content }]}>
+    <Reanimated.View style={[StyleSheet.absoluteFill, styles.screen, { opacity: progress }]}>
+      <Reanimated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: content }]}>
         <Image source={{ uri }} style={imageStyle} resizeMode="stretch" />
         {/* Le reste de la photo, assombri autour du cadre. */}
         <View style={[styles.shade, { left: origin.x, top: origin.y, width: shown.width, height: box.y }]} />
@@ -249,12 +264,12 @@ export function CropPanel({ uri, image, crop: initial, bottom, onDone, lockedAsp
         <View style={[styles.shade, { left: frame.left + frame.width, top: frame.top, width: shown.width - box.x - box.width, height: frame.height }]} />
         <View style={[styles.frame, frame]}>
           {lockedAspect === '1:1' && <View style={styles.circle} />}
-          <Animated.View style={[StyleSheet.absoluteFill, { opacity: grid.interpolate({ inputRange: [0, 1], outputRange: [0.45, 1] }) }]}>
+          <Reanimated.View style={[StyleSheet.absoluteFill, gridStyle]}>
             <View style={[styles.gridLine, { left: '33.33%', top: 0, bottom: 0, width: StyleSheet.hairlineWidth }]} />
             <View style={[styles.gridLine, { left: '66.66%', top: 0, bottom: 0, width: StyleSheet.hairlineWidth }]} />
             <View style={[styles.gridLine, { top: '33.33%', left: 0, right: 0, height: StyleSheet.hairlineWidth }]} />
             <View style={[styles.gridLine, { top: '66.66%', left: 0, right: 0, height: StyleSheet.hairlineWidth }]} />
-          </Animated.View>
+          </Reanimated.View>
           {(['tl', 'tr', 'bl', 'br'] as const).map((corner) => (
             <View
               key={corner}
@@ -267,7 +282,7 @@ export function CropPanel({ uri, image, crop: initial, bottom, onDone, lockedAsp
             />
           ))}
         </View>
-      </Animated.View>
+      </Reanimated.View>
 
       <GestureDetector gesture={pan}>
         <View collapsable={false} style={[styles.surface, area]} />
@@ -283,7 +298,7 @@ export function CropPanel({ uri, image, crop: initial, bottom, onDone, lockedAsp
       </View>
 
       {/* Le panneau du bas monte de 14 points en fondu, comme les autres outils. */}
-      <Animated.View style={[styles.bottomRow, { bottom: bottom + spacing.lg, transform: [{ translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }] }]}>
+      <Reanimated.View style={[styles.bottomRow, { bottom: bottom + spacing.lg }, rowIn]}>
         <View style={styles.aspects}>
           {ASPECTS.filter(({ id }) => !lockedAspect || id === lockedAspect).map(({ id }) => (
             <Pressable
@@ -316,7 +331,7 @@ export function CropPanel({ uri, image, crop: initial, bottom, onDone, lockedAsp
         >
           <Text style={styles.resetLabel}>{t('editeur.reinitialiser')}</Text>
         </Pressable>
-      </Animated.View>    </Animated.View>
+      </Reanimated.View>    </Reanimated.View>
   );
 }
 

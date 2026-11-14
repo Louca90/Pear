@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import Reanimated, { Easing, useSharedValue, withTiming } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 import { haptics } from '../../haptics';
 
 import { t, TextKey } from '../../i18n';
@@ -41,11 +43,11 @@ export function TextEditor({ layer, maxWidth, onDone }: Props) {
   const { top } = useInsets();
   const [draft, setDraft] = useState(layer);
   const [keyboard, setKeyboard] = useState(0);
-  const progress = useRef(new Animated.Value(0)).current;
+  const progress = useSharedValue(0);
   const closing = useRef(false);
 
   useEffect(() => {
-    Animated.timing(progress, { toValue: 1, duration: OPEN_MS, easing: EASING, useNativeDriver: true }).start();
+    progress.set(withTiming(1, { duration: OPEN_MS, easing: EASING }));
     const shown = Keyboard.addListener('keyboardDidShow', (event) => setKeyboard(event.endCoordinates.height));
     const hidden = Keyboard.addListener('keyboardDidHide', () => setKeyboard(0));
     return () => {
@@ -58,7 +60,12 @@ export function TextEditor({ layer, maxWidth, onDone }: Props) {
     if (closing.current) return;
     closing.current = true;
     Keyboard.dismiss();
-    Animated.timing(progress, { toValue: 0, duration: OPEN_MS, easing: EASING, useNativeDriver: true }).start(() => onDone({ ...draft, text: draft.text.trim() }));
+    const done = () => onDone({ ...draft, text: draft.text.trim() });
+    progress.set(
+      withTiming(0, { duration: OPEN_MS, easing: EASING }, (finished) => {
+        if (finished) scheduleOnRN(done);
+      }),
+    );
   };
 
   const change = (fields: Partial<TextLayer>) => setDraft((current) => ({ ...current, ...fields }));
@@ -69,7 +76,7 @@ export function TextEditor({ layer, maxWidth, onDone }: Props) {
   const look = textLook(draft.font, draft.color, draft.background, draft.size);
 
   return (
-    <Animated.View style={[StyleSheet.absoluteFill, { opacity: progress }]}>
+    <Reanimated.View style={[StyleSheet.absoluteFill, { opacity: progress }]}>
       <Pressable style={[StyleSheet.absoluteFill, styles.backdrop]} onPress={finish} accessibilityLabel={t('editeur.termine')} />
 
       <View style={[styles.topRow, { top: top + spacing.md }]}>
@@ -137,7 +144,7 @@ export function TextEditor({ layer, maxWidth, onDone }: Props) {
           ))}
         </ScrollView>
       </View>
-    </Animated.View>
+    </Reanimated.View>
   );
 }
 

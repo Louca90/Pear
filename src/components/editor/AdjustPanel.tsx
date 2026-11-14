@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, PanResponder, Pressable, Text, View } from 'react-native';
+import { PanResponder, Pressable, Text, View } from 'react-native';
+import Reanimated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 import { haptics } from '../../haptics';
 
 import { t } from '../../i18n';
@@ -67,24 +69,28 @@ type Props = { value: Adjustments; bottom: number; onChange: (value: Adjustments
 export function AdjustPanel({ value, bottom, onChange, onClose }: Props) {
   const colors = useMediaColors();
   const styles = useStyles();
-  const progress = useRef(new Animated.Value(0)).current;
+  const progress = useSharedValue(0);
+  const panelIn = useAnimatedStyle(() => ({ opacity: progress.get(), transform: [{ translateY: 40 * (1 - progress.get()) }] }));
   const closing = useRef(false);
 
   useEffect(() => {
-    Animated.timing(progress, { toValue: 1, duration: OPEN_MS, easing: EASING, useNativeDriver: true }).start();
+    progress.set(withTiming(1, { duration: OPEN_MS, easing: EASING }));
   }, [progress]);
 
   const close = () => {
     if (closing.current) return;
     closing.current = true;
-    Animated.timing(progress, { toValue: 0, duration: OPEN_MS * 0.8, easing: EASING, useNativeDriver: true }).start(onClose);
+    progress.set(withTiming(0, { duration: OPEN_MS * 0.8, easing: EASING }, (finished) => {
+      if (finished) scheduleOnRN(onClose);
+    }));
   };
 
   return (
-    <Animated.View
+    <Reanimated.View
       style={[
         styles.panel,
-        { paddingBottom: bottom + spacing.md, opacity: progress, transform: [{ translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) }] },
+        { paddingBottom: bottom + spacing.md },
+        panelIn,
       ]}
     >
       {ADJUSTMENTS.map(({ key, label }) => (
@@ -104,7 +110,7 @@ export function AdjustPanel({ value, bottom, onChange, onClose }: Props) {
           <Text style={[styles.actionLabel, { color: colors.text }]}>{t('editeur.termine')}</Text>
         </Pressable>
       </View>
-    </Animated.View>
+    </Reanimated.View>
   );
 }
 

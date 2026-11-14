@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import Reanimated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 import { haptics } from '../../haptics';
 
 import { t, TextKey } from '../../i18n';
@@ -27,21 +29,26 @@ export function StickerPicker({ bottom, onPick, onClose }: Props) {
   const styles = useStyles();
   const { width, height } = useWindowDimensions();
   const [category, setCategory] = useState(0);
-  const progress = useRef(new Animated.Value(0)).current;
+  const progress = useSharedValue(0);
   const closing = useRef(false);
   const cell = (width - spacing.md * 2) / COLUMNS;
 
   useEffect(() => {
-    Animated.timing(progress, { toValue: 1, duration: OPEN_MS, easing: EASING, useNativeDriver: true }).start();
+    progress.set(withTiming(1, { duration: OPEN_MS, easing: EASING }));
   }, [progress]);
 
   const close = (then?: () => void) => {
     if (closing.current) return;
     closing.current = true;
-    Animated.timing(progress, { toValue: 0, duration: CLOSE_MS, easing: EASING, useNativeDriver: true }).start(() => {
+    const done = () => {
       then?.();
       onClose();
-    });
+    };
+    progress.set(
+      withTiming(0, { duration: CLOSE_MS, easing: EASING }, (finished) => {
+        if (finished) scheduleOnRN(done);
+      }),
+    );
   };
 
   const pick = (emoji: string) => {
@@ -50,13 +57,14 @@ export function StickerPicker({ bottom, onPick, onClose }: Props) {
   };
 
   const sheetHeight = height * 0.5;
+  const sheetIn = useAnimatedStyle(() => ({ transform: [{ translateY: (sheetHeight + bottom) * (1 - progress.get()) }] }));
 
   return (
     <View style={StyleSheet.absoluteFill}>
-      <Animated.View style={[StyleSheet.absoluteFill, styles.backdrop, { opacity: progress }]}>
+      <Reanimated.View style={[StyleSheet.absoluteFill, styles.backdrop, { opacity: progress }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={() => close()} accessibilityLabel={t('commun.fermer')} />
-      </Animated.View>
-      <Animated.View style={[styles.sheet, { height: sheetHeight + bottom, paddingBottom: bottom, transform: [{ translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [sheetHeight + bottom, 0] }) }] }]}>
+      </Reanimated.View>
+      <Reanimated.View style={[styles.sheet, { height: sheetHeight + bottom, paddingBottom: bottom }, sheetIn]}>
         <View style={styles.handle} />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs} style={styles.tabsScroll}>
           {CATEGORIES.map(({ label, emojis }, index) => (
@@ -79,7 +87,7 @@ export function StickerPicker({ bottom, onPick, onClose }: Props) {
             </Pressable>
           ))}
         </ScrollView>
-      </Animated.View>
+      </Reanimated.View>
     </View>
   );
 }

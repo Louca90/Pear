@@ -1,5 +1,6 @@
 import { ComponentRef, ReactNode, useEffect, useRef } from 'react';
-import { Animated, Easing, NativeScrollEvent, NativeSyntheticEvent, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { NativeScrollEvent, NativeSyntheticEvent, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import Reanimated, { Easing, useAnimatedStyle, useSharedValue, withTiming, cancelAnimation, withDelay, withSequence } from 'react-native-reanimated';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { haptics } from '../../haptics';
 
@@ -126,21 +127,18 @@ export function FilterStrip({ value, hidden, onChange, onRestyle }: Props) {
   const { width } = useWindowDimensions();
   const scroll = useRef<ComponentRef<typeof ScrollView>>(null);
   const current = useRef(Math.max(0, CAMERA_FILTERS.findIndex((preset) => preset.id === value)));
-  const visible = useRef(new Animated.Value(hidden ? 0 : 1)).current;
-  const name = useRef(new Animated.Value(0)).current;
+  const visible = useSharedValue(hidden ? 0 : 1);
+  const name = useSharedValue(0);
+  const nameStyle = useAnimatedStyle(() => ({ opacity: name.get(), transform: [{ translateY: 4 * (1 - name.get()) }] }));
   const nameText = useRef<string>(t(presetOf(value).label));
 
   useEffect(() => {
-    Animated.timing(visible, { toValue: hidden ? 0 : 1, duration: HIDE_MS, easing: EASING, useNativeDriver: true }).start();
+    visible.set(withTiming(hidden ? 0 : 1, { duration: HIDE_MS, easing: EASING }));
   }, [hidden, visible]);
 
   const showName = () => {
-    name.stopAnimation();
-    Animated.sequence([
-      Animated.timing(name, { toValue: 1, duration: 140, easing: EASING, useNativeDriver: true }),
-      Animated.delay(700),
-      Animated.timing(name, { toValue: 0, duration: 280, easing: EASING, useNativeDriver: true }),
-    ]).start();
+    cancelAnimation(name);
+    name.set(withSequence(withTiming(1, { duration: 140, easing: EASING }), withDelay(700, withTiming(0, { duration: 280, easing: EASING }))));
   };
 
   const onScroll = ({ nativeEvent }: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -154,10 +152,10 @@ export function FilterStrip({ value, hidden, onChange, onRestyle }: Props) {
   };
 
   return (
-    <Animated.View pointerEvents={hidden ? 'none' : 'box-none'} style={[styles.layer, { opacity: visible }]}>
-      <Animated.Text pointerEvents="none" style={[styles.name, { opacity: name, transform: [{ translateY: name.interpolate({ inputRange: [0, 1], outputRange: [4, 0] }) }] }]}>
+    <Reanimated.View pointerEvents={hidden ? 'none' : 'box-none'} style={[styles.layer, { opacity: visible }]}>
+      <Reanimated.Text pointerEvents="none" style={[styles.name, nameStyle]}>
         {nameText.current}
-      </Animated.Text>
+      </Reanimated.Text>
       <ScrollView
         ref={scroll}
         horizontal
@@ -191,7 +189,7 @@ export function FilterStrip({ value, hidden, onChange, onRestyle }: Props) {
           </Pressable>
         ))}
       </ScrollView>
-    </Animated.View>
+    </Reanimated.View>
   );
 }
 

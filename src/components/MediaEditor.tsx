@@ -1,7 +1,8 @@
 import { t } from '../i18n';
 import { ComponentRef, memo, ReactNode, Ref, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { Animated, Dimensions, Easing, findNodeHandle, Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import Reanimated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import { Dimensions, findNodeHandle, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import Reanimated, { Easing, useAnimatedStyle, useSharedValue, withTiming, cancelAnimation, withDelay, withSequence } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 import { File, Paths } from 'expo-file-system';
 import { haptics } from '../haptics';
 import { useVideoPlayer, VideoPlayer, VideoView } from 'expo-video';
@@ -174,7 +175,7 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
   const [overTrash, setOverTrash] = useState(false);
   // Pendant un glissé sur une photo : le filtre voisin (1 : suivant, par la droite ; -1 : précédent).
   const [swipeDirection, setSwipeDirection] = useState<0 | 1 | -1>(0);
-  const reveal = useRef(new Animated.Value(0)).current;
+  const reveal = useSharedValue(0);
   const exportRoot = useRef<ComponentRef<typeof View>>(null);
   const screen = Dimensions.get('screen');
 
@@ -204,7 +205,7 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
   const [muted, setMuted] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [duration, setDuration] = useState(0);
-  const playhead = useRef(new Animated.Value(0)).current;
+  const playhead = useSharedValue(0);
   const scrubbing = useRef(false);
   const player = useVideoPlayer(kind === 'video' ? uri : null, (created) => {
     created.loop = true;
@@ -221,7 +222,7 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
   useEffect(() => {
     if (kind !== 'video') return;
     const ticking = player.addListener('timeUpdate', ({ currentTime }) => {
-      playhead.setValue(currentTime);
+      playhead.set(currentTime);
       if (scrubbing.current) return;
       const last = trim.end ?? duration;
       if ((last > 0 && currentTime >= last - 0.03) || currentTime < trim.start - 0.15) player.currentTime = trim.start;
@@ -286,17 +287,13 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
   };
 
   // Un message apparaît un instant au milieu, puis s'efface : le nom du filtre, la vitesse, le son.
-  const toast = useRef(new Animated.Value(0)).current;
+  const toast = useSharedValue(0);
   const [toastText, setToastText] = useState('');
   const showToast = useCallback(
     (text: string) => {
       setToastText(text);
-      toast.stopAnimation();
-      Animated.sequence([
-        Animated.timing(toast, { toValue: 1, duration: 150, easing: EASING, useNativeDriver: true }),
-        Animated.delay(700),
-        Animated.timing(toast, { toValue: 0, duration: 300, easing: EASING, useNativeDriver: true }),
-      ]).start();
+      cancelAnimation(toast);
+      toast.set(withSequence(withTiming(1, { duration: 150, easing: EASING }), withDelay(700, withTiming(0, { duration: 300, easing: EASING }))));
     },
     [toast],
   );
@@ -310,13 +307,13 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
   }, [filter, showToast]);
 
   // La corbeille monte du bas pendant qu'on déplace un calque, et grossit quand il est dessus.
-  const trash = useRef(new Animated.Value(0)).current;
-  const trashHover = useRef(new Animated.Value(0)).current;
+  const trash = useSharedValue(0);
+  const trashHover = useSharedValue(0);
   useEffect(() => {
-    Animated.timing(trash, { toValue: dragging ? 1 : 0, duration: 180, easing: EASING, useNativeDriver: true }).start();
+    trash.set(withTiming(dragging ? 1 : 0, { duration: 180, easing: EASING }));
   }, [dragging, trash]);
   useEffect(() => {
-    Animated.timing(trashHover, { toValue: overTrash ? 1 : 0, duration: 140, easing: EASING, useNativeDriver: true }).start();
+    trashHover.set(withTiming(overTrash ? 1 : 0, { duration: 140, easing: EASING }));
   }, [overTrash, trashHover]);
 
   const geometry = cropGeometry(size ?? screen, crop, screen);
@@ -412,15 +409,20 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
   const settling = useRef(false);
   const settleSwipe = (direction: 1 | -1, commit: boolean) => {
     settling.current = true;
-    Animated.timing(reveal, { toValue: commit ? 1 : 0, duration: SWIPE_MS, easing: EASING, useNativeDriver: true }).start(() => {
+    const settled = () => {
       settling.current = false;
       if (commit) setFilter((current) => neighborOf(current, direction));
       setSwipeDirection(0);
-    });
+    };
+    reveal.set(
+      withTiming(commit ? 1 : 0, { duration: SWIPE_MS, easing: EASING }, (finished) => {
+        if (finished) scheduleOnRN(settled);
+      }),
+    );
   };
   // Remis à zéro une fois la couche voisine retirée : sinon l'ancien filtre reparaîtrait une image.
   useEffect(() => {
-    if (swipeDirection === 0) reveal.setValue(0);
+    if (swipeDirection === 0) reveal.set(0);
   }, [swipeDirection, reveal]);
 
   // --- Gestes ---
@@ -496,7 +498,7 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
         state.direction = direction;
         setSwipeDirection(direction);
       }
-      reveal.setValue(Math.min(1, Math.abs(dx) / width));
+      reveal.set(Math.min(1, Math.abs(dx) / width));
     },
     panEnd: (dx: number, velocityX: number) => {
       const state = touch.current;
@@ -608,10 +610,12 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
   };
 
   // La couche voisine arrive par un bord : le cadre glisse, l'image dedans reste immobile. Tout est
-  // animé par le moteur natif, sans repasser par React à chaque image.
+  // animé sur le fil de l'interface, sans repasser par React à chaque image.
   const side = swipeDirection === 1 ? 1 : -1;
-  const frameX = reveal.interpolate({ inputRange: [0, 1], outputRange: [side * width, 0] });
-  const contentX = reveal.interpolate({ inputRange: [0, 1], outputRange: [-side * width, 0] });
+  const frameSlide = useAnimatedStyle(() => ({ transform: [{ translateX: side * width * (1 - reveal.get()) }] }));
+  const contentSlide = useAnimatedStyle(() => ({ transform: [{ translateX: -side * width * (1 - reveal.get()) }] }));
+  const toastStyle = useAnimatedStyle(() => ({ opacity: toast.get(), transform: [{ scale: 0.96 + 0.04 * toast.get() }] }));
+  const trashStyle = useAnimatedStyle(() => ({ opacity: trash.get(), transform: [{ translateY: 24 * (1 - trash.get()) }, { scale: 1 + 0.25 * trashHover.get() }] }));
   const currentStamp = presetOf(filter).stamp;
 
   // Les calques, à l'écran (mesurés, animés) ou dans la copie de l'export (mêmes tailles, immobiles).
@@ -705,11 +709,11 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
           </>
         )}
         {size && neighbor && (
-          <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.clip, { transform: [{ translateX: frameX }] }]}>
-            <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ translateX: contentX }] }]}>
+          <Reanimated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.clip, frameSlide]}>
+            <Reanimated.View style={[StyleSheet.absoluteFill, contentSlide]}>
               <PhotoLayer uri={uri} id={neighbor} adjustments={adjustments} stamp={stamp} width={width} height={height} placement={placement} />
-            </Animated.View>
-          </Animated.View>
+            </Reanimated.View>
+          </Reanimated.View>
         )}
         <StrokesView strokes={strokes} width={width} height={height} />
         <View pointerEvents="none" style={StyleSheet.absoluteFill}>
@@ -728,28 +732,21 @@ export function MediaEditor({ uri, kind, takenAt, initialFilter = 'none', onTool
         </GestureDetector>
       </View>
 
-      <Animated.View pointerEvents="none" style={[styles.toast, { opacity: toast, transform: [{ scale: toast.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) }] }]}>
+      <Reanimated.View pointerEvents="none" style={[styles.toast, toastStyle]}>
         <Text style={styles.toastLabel}>{toastText}</Text>
-      </Animated.View>
+      </Reanimated.View>
 
-      <Animated.View
+      <Reanimated.View
         pointerEvents="none"
         style={[
           styles.trash,
-          {
-            left: trashCenter.x - TRASH_SIZE / 2,
-            top: trashCenter.y - TRASH_SIZE / 2,
-            opacity: trash,
-            transform: [
-              { translateY: trash.interpolate({ inputRange: [0, 1], outputRange: [24, 0] }) },
-              { scale: trashHover.interpolate({ inputRange: [0, 1], outputRange: [1, 1.25] }) },
-            ],
-          },
+          { left: trashCenter.x - TRASH_SIZE / 2, top: trashCenter.y - TRASH_SIZE / 2 },
+          trashStyle,
         ]}
       >
-        <Animated.View style={[StyleSheet.absoluteFill, styles.trashOn, { opacity: trashHover }]} />
+        <Reanimated.View style={[StyleSheet.absoluteFill, styles.trashOn, { opacity: trashHover }]} />
         <Trash2 size={24} color={colors.background} strokeWidth={1.75} />
-      </Animated.View>
+      </Reanimated.View>
 
       <Reanimated.View pointerEvents={busy ? 'none' : 'box-none'} style={[styles.header, { top: topInset + spacing.md }, headerShown]}>
         {actions ? (

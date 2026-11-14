@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Image, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import Reanimated, { Easing, useAnimatedStyle, useSharedValue, withTiming, interpolate, type SharedValue } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 import { haptics } from '../../haptics';
 import { getThumbnailAsync } from 'expo-video-thumbnails';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
@@ -32,7 +34,7 @@ type Props = {
   duration: number;
   trim: Trim;
   // Le temps lu en ce moment (secondes), pour la tête de lecture.
-  playhead: Animated.Value;
+  playhead: SharedValue<number>;
   bottom: number;
   onChange: (trim: Trim) => void;
   // Pendant qu'on tire une poignée : la vidéo s'arrête sur ce moment. null : elle repart du début gardé.
@@ -46,14 +48,15 @@ export function TrimPanel({ uri, duration, trim, playhead, bottom, onChange, onS
   const styles = useStyles();
   const { width: screenWidth } = useWindowDimensions();
   const [frames, setFrames] = useState<string[]>([]);
-  const progress = useRef(new Animated.Value(0)).current;
+  const progress = useSharedValue(0);
+  const panelIn = useAnimatedStyle(() => ({ opacity: progress.get(), transform: [{ translateY: 40 * (1 - progress.get()) }] }));
   const closing = useRef(false);
   const stripWidth = screenWidth - spacing.lg * 2;
   const end = trim.end ?? duration;
   const toX = (time: number) => (time / duration) * stripWidth;
 
   useEffect(() => {
-    Animated.timing(progress, { toValue: 1, duration: OPEN_MS, easing: EASING, useNativeDriver: true }).start();
+    progress.set(withTiming(1, { duration: OPEN_MS, easing: EASING }));
   }, [progress]);
 
   // Les images de la frise, réparties sur toute la vidéo, chargées une seule fois.
@@ -68,10 +71,14 @@ export function TrimPanel({ uri, duration, trim, playhead, bottom, onChange, onS
     };
   }, [uri, duration]);
 
+  const headStyle = useAnimatedStyle(() => ({ transform: [{ translateX: interpolate(playhead.get(), [0, duration], [0, stripWidth], 'clamp') }] }));
+
   const close = () => {
     if (closing.current) return;
     closing.current = true;
-    Animated.timing(progress, { toValue: 0, duration: OPEN_MS * 0.8, easing: EASING, useNativeDriver: true }).start(onClose);
+    progress.set(withTiming(0, { duration: OPEN_MS * 0.8, easing: EASING }, (finished) => {
+      if (finished) scheduleOnRN(onClose);
+    }));
   };
 
   // Le doigt prend la poignée la plus proche (début ou fin), qui suit sans croiser l'autre.
@@ -121,8 +128,8 @@ export function TrimPanel({ uri, duration, trim, playhead, bottom, onChange, onS
   const kept = end - trim.start;
 
   return (
-    <Animated.View
-      style={[styles.panel, { paddingBottom: bottom + spacing.md, opacity: progress, transform: [{ translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) }] }]}
+    <Reanimated.View
+      style={[styles.panel, { paddingBottom: bottom + spacing.md }, panelIn]}
     >
       <View style={styles.times}>
         <Text style={styles.time}>{formatTime(trim.start)}</Text>
@@ -148,9 +155,9 @@ export function TrimPanel({ uri, duration, trim, playhead, bottom, onChange, onS
               <View style={styles.grip} />
             </View>
           </View>
-          <Animated.View
+          <Reanimated.View
             pointerEvents="none"
-            style={[styles.playhead, { transform: [{ translateX: playhead.interpolate({ inputRange: [0, duration], outputRange: [0, stripWidth], extrapolate: 'clamp' }) }] }]}
+            style={[styles.playhead, headStyle]}
           />
         </View>
       </GestureDetector>
@@ -163,7 +170,7 @@ export function TrimPanel({ uri, duration, trim, playhead, bottom, onChange, onS
           <Text style={[styles.actionLabel, { color: colors.text }]}>{t('editeur.termine')}</Text>
         </Pressable>
       </View>
-    </Animated.View>
+    </Reanimated.View>
   );
 }
 
