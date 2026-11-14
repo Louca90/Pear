@@ -14,6 +14,10 @@ export type Lens = {
 
 export const NO_LENS = 'none';
 
+// Lentilles désactivées pour la mise à jour en cours (voir CLAUDE.md, « Lentilles ») : l'appareil photo
+// ne montre que les filtres de couleur, sans catégories. Mettre à true pour les réactiver.
+export const LENSES_ENABLED = false;
+
 export const LENS_CATEGORIES: { id: LensCategory; label: TextKey }[] = [
   { id: 'visage', label: 'lentilles.visage' },
   { id: 'reactions', label: 'lentilles.reactions' },

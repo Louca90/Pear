@@ -19,7 +19,7 @@ import { MediaEditor, MediaEditorHandle } from '../components/MediaEditor';
 import { FilteredView } from '../components/editor/FilteredView';
 import { FilterStrip, PASTILLE_SIZE, PastilleStrip } from '../components/editor/FilterStrip';
 import { LensCategories, LensHint, LensPastille, LensRing } from './camera/LensBar';
-import { LENSES, LensCategory, lensOf, NO_LENS } from './camera/lenses';
+import { LENSES, LENSES_ENABLED, LensCategory, lensOf, NO_LENS } from './camera/lenses';
 import { FilterId, NO_ADJUSTMENTS, presetOf, stepsOf } from '../components/editor/filters';
 import { getStampStyle, nextStampStyle, readAmbient } from '../components/editor/ambient';
 import { Ambient, formatStamp, NO_AMBIENT, StampMarks } from '../components/editor/stamps';
@@ -639,7 +639,7 @@ export function CameraScreen({ contacts, to, onSent, onRecordingChange }: Props)
                 ref={camera}
                 style={StyleSheet.absoluteFill}
                 active={live}
-                lens={lens}
+                lens={LENSES_ENABLED ? lens : NO_LENS}
                 facing={facing}
                 cameraId={facing === 'back' ? lensId : null}
                 zoom={zoom}
@@ -719,8 +719,8 @@ export function CameraScreen({ contacts, to, onSent, onRecordingChange }: Props)
       </View>
 
       <ModeTabs mode={mode} hidden={filming} bottom={tabsBottom} onChange={changeMode} />
-      <LensCategories value={lensCategory} hidden={filming} bottom={previewBottom + ZOOM_INSET + CATEGORIES_ABOVE_ZOOM} onChange={chooseCategory} />
-      {!filming && <LensHint text={lensOf(lens)?.hint ? t(lensOf(lens)!.hint!) : null} bottom={previewBottom + ZOOM_INSET + CATEGORIES_ABOVE_ZOOM + HINT_ABOVE_CATEGORIES} />}
+      {LENSES_ENABLED && <LensCategories value={lensCategory} hidden={filming} bottom={previewBottom + ZOOM_INSET + CATEGORIES_ABOVE_ZOOM} onChange={chooseCategory} />}
+      {LENSES_ENABLED && !filming && <LensHint text={lensOf(lens)?.hint ? t(lensOf(lens)!.hint!) : null} bottom={previewBottom + ZOOM_INSET + CATEGORIES_ABOVE_ZOOM + HINT_ABOVE_CATEGORIES} />}
 
       {/* La place de la miniature, puis la dernière photo qui s'y pose. */}
       <View pointerEvents="none" style={[styles.thumbPlace, { left: sideInset, bottom: rowBottom + (SHUTTER_SIZE - SIDE_BUTTON) / 2 }, filming && styles.hidden]} />
