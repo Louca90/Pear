@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, AppState, Easing, Pressable, ScrollView, Text, View } from 'react-native';
+import { AppState, Pressable, ScrollView, Text, View } from 'react-native';
+import Reanimated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { ChevronRight, CircleAlert, CircleCheck, FileText } from 'lucide-react-native';
 
 import { chat } from '../chat/manager';
@@ -36,7 +37,8 @@ export function DiagnosticScreen({ onBack }: { onBack: () => void }) {
   const colors = useColors();
   const styles = useStyles();
   const [data, setData] = useState<Diagnostics | null>(null);
-  const opacity = useRef(new Animated.Value(0)).current;
+  const opacity = useSharedValue(0);
+  const fade = useAnimatedStyle(() => ({ opacity: opacity.get() }));
   const [showPear, setShowPear] = useState(false);
 
   const refresh = useCallback(() => {
@@ -53,7 +55,7 @@ export function DiagnosticScreen({ onBack }: { onBack: () => void }) {
   }, [refresh]);
 
   useEffect(() => {
-    if (data) Animated.timing(opacity, { toValue: 1, duration: FADE_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    if (data) opacity.set(withTiming(1, { duration: FADE_MS, easing: Easing.out(Easing.cubic) }));
   }, [data, opacity]);
 
   const rows: Row[] = data
@@ -74,7 +76,7 @@ export function DiagnosticScreen({ onBack }: { onBack: () => void }) {
     <Screen>
       <Header title={t('diag.titre')} onBack={onBack} />
       <ScrollView contentContainerStyle={styles.content}>
-        <Animated.View style={[styles.rows, { opacity }]}>
+        <Reanimated.View style={[styles.rows, fade]}>
           {rows.map((row) => {
             const Icon = row.ok ? CircleCheck : CircleAlert;
             const content = (
@@ -109,7 +111,7 @@ export function DiagnosticScreen({ onBack }: { onBack: () => void }) {
             <Text style={styles.label}>{t('diag.poire')}</Text>
           </Pressable>
           {showPear ? <PearGallery /> : null}
-        </Animated.View>
+        </Reanimated.View>
       </ScrollView>
     </Screen>
   );

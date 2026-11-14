@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { Animated, Easing, KeyboardAvoidingView, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import Reanimated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { Ban, Check, ShieldQuestion, X } from 'lucide-react-native';
 
 import { Pear } from '../components/Pear';
@@ -42,7 +43,7 @@ function RequestCard({ request, onAccept, identity }: { request: PairingRequest;
   const colors = useColors();
   const styles = useStyles();
   const [name, setName] = useState(request.name);
-  const progress = useRef(new Animated.Value(0)).current;
+  const progress = useSharedValue(0);
   const [showCode, setShowCode] = useState(false);
   // Recalculé à la demande : seule la clé privée est stockée. Une clé invalide n'affiche rien.
   const code = useMemo(() => {
@@ -54,20 +55,19 @@ function RequestCard({ request, onAccept, identity }: { request: PairingRequest;
   }, [identity, request.from_key]);
 
   useEffect(() => {
-    Animated.timing(progress, { toValue: 1, duration: ENTER_MS, easing: EASING, useNativeDriver: true }).start();
+    progress.set(withTiming(1, { duration: ENTER_MS, easing: EASING }));
   }, [progress]);
 
   // La carte s'efface avant que la demande quitte la liste.
-  const leave = (action: () => void) =>
-    Animated.timing(progress, { toValue: 0, duration: LEAVE_MS, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(action);
-
-  const style = {
-    opacity: progress,
-    transform: [{ translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
+  const leave = (action: () => void) => {
+    progress.set(withTiming(0, { duration: LEAVE_MS, easing: Easing.in(Easing.cubic) }));
+    setTimeout(action, LEAVE_MS);
   };
 
+  const style = useAnimatedStyle(() => ({ opacity: progress.get(), transform: [{ translateY: 12 * (1 - progress.get()) }] }));
+
   return (
-    <Animated.View style={[styles.card, style]}>
+    <Reanimated.View style={[styles.card, style]}>
       <View style={styles.top}>
         <View style={styles.initials}>
           <Text style={styles.initialsText}>{initials(request.name)}</Text>
@@ -123,7 +123,7 @@ function RequestCard({ request, onAccept, identity }: { request: PairingRequest;
           <Text style={[styles.actionLabel, styles.danger]}>{t('demandes.bloquer')}</Text>
         </Pressable>
       </View>
-    </Animated.View>
+    </Reanimated.View>
   );
 }
 

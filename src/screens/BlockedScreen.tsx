@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
+import Reanimated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { ShieldCheck } from 'lucide-react-native';
 
 import { getBlockedKeys, unblockKey } from '../chat/database';
@@ -15,10 +16,11 @@ export function BlockedScreen({ onBack }: { onBack: () => void }) {
   const colors = useColors();
   const styles = useStyles();
   const [blocked, setBlocked] = useState(getBlockedKeys);
-  const opacity = useRef(new Animated.Value(0)).current;
+  const opacity = useSharedValue(0);
+  const fade = useAnimatedStyle(() => ({ opacity: opacity.get() }));
 
   useEffect(() => {
-    Animated.timing(opacity, { toValue: 1, duration: FADE_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    opacity.set(withTiming(1, { duration: FADE_MS, easing: Easing.out(Easing.cubic) }));
   }, [opacity]);
 
   const unblock = (key: string) => {
@@ -29,7 +31,7 @@ export function BlockedScreen({ onBack }: { onBack: () => void }) {
   return (
     <Screen>
       <Header title={t('reglages.bloques')} onBack={onBack} />
-      <Animated.View style={[styles.flex, { opacity }]}>
+      <Reanimated.View style={[styles.flex, fade]}>
         {blocked.length === 0 ? (
           <View style={styles.empty}>
             <ShieldCheck size={28} color={colors.text} strokeWidth={1.75} />
@@ -54,7 +56,7 @@ export function BlockedScreen({ onBack }: { onBack: () => void }) {
             ))}
           </ScrollView>
         )}
-      </Animated.View>
+      </Reanimated.View>
     </Screen>
   );
 }

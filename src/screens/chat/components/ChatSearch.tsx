@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, FlatList, StyleSheet, Text, View } from 'react-native';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
+import Reanimated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { EASE } from '../../../motion';
 import { ArrowLeft } from 'lucide-react-native';
 
 import { searchMessages } from '../../../chat/database';
@@ -25,22 +27,25 @@ export function ChatSearch({ contactKey, name, onClose, onPick }: Props) {
   const colors = useColors();
   const { top } = useInsets();
   const [query, setQuery] = useState('');
-  const opacity = useRef(new Animated.Value(0)).current;
+  const opacity = useSharedValue(0);
+  const fade = useAnimatedStyle(() => ({ opacity: opacity.get() }));
   const hits = useMemo(() => searchMessages(query, contactKey), [query, contactKey]);
 
   useEffect(() => {
-    Animated.timing(opacity, { toValue: 1, duration: motion.small, easing: motion.easing, useNativeDriver: true }).start();
+    opacity.set(withTiming(1, { duration: motion.small, easing: EASE }));
   }, [opacity]);
 
-  const close = (then?: () => void) =>
-    Animated.timing(opacity, { toValue: 0, duration: motion.small, easing: motion.easing, useNativeDriver: true }).start(() => {
+  const close = (then?: () => void) => {
+    opacity.set(withTiming(0, { duration: motion.small, easing: EASE }));
+    setTimeout(() => {
       onClose();
       then?.();
-    });
+    }, motion.small);
+  };
   useBackInterceptor(true, () => close());
 
   return (
-    <Animated.View style={[StyleSheet.absoluteFill, styles.overlay, { paddingTop: top, opacity }]}>
+    <Reanimated.View style={[StyleSheet.absoluteFill, styles.overlay, { paddingTop: top }, fade]}>
       <View style={styles.bar}>
         <IconButton onPress={() => close()} label={t('commun.retour')}>
           <ArrowLeft size={24} color={colors.text} strokeWidth={1.75} />
@@ -56,7 +61,7 @@ export function ChatSearch({ contactKey, name, onClose, onPick }: Props) {
         ListEmptyComponent={query.trim() ? <Text style={styles.empty}>{t('recherche.aucun')}</Text> : undefined}
         renderItem={({ item }) => <MessageHitRow hit={item} name={name} query={query} onPress={() => close(() => onPick(item.id))} />}
       />
-    </Animated.View>
+    </Reanimated.View>
   );
 }
 
