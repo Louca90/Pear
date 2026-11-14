@@ -36,8 +36,8 @@ function CheckBox({ checked }: { checked: boolean }) {
       style={[
         styles.box,
         {
-          backgroundColor: on.interpolate({ inputRange: [0, 1], outputRange: [colors.background, colors.accent] }),
-          borderColor: on.interpolate({ inputRange: [0, 1], outputRange: [colors.border, colors.accent] }),
+          backgroundColor: on.interpolate({ inputRange: [0, 1], outputRange: [colors.elevated, colors.signatureStrong] }),
+          borderColor: on.interpolate({ inputRange: [0, 1], outputRange: [colors.border, colors.signatureStrong] }),
         },
       ]}
     >
@@ -45,7 +45,7 @@ function CheckBox({ checked }: { checked: boolean }) {
         <AnimatedPath
           d="M5 12.5l4.5 4.5L19 7.5"
           fill="none"
-          stroke={colors.onAccent}
+          stroke={colors.onSignature}
           strokeWidth={3}
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -155,7 +155,7 @@ export function ContactPickerSheet({ title, contacts, onSend, onClose }: Props) 
           <Text style={[styles.sendLabel, selected.length === 0 && styles.sendLabelOff]}>
             {selected.length > 0 ? t('transfert.envoyerN', { n: selected.length }) : t('transfert.choisir')}
           </Text>
-          {selected.length > 0 && <ArrowUp size={18} color={colors.onAccent} strokeWidth={2} />}
+          {selected.length > 0 && <ArrowUp size={18} color={colors.background} strokeWidth={2} />}
         </Pressable>
       </Animated.View>
     </Modal>
@@ -172,16 +172,16 @@ const useStyles = createStyles((colors) => ({
     right: 0,
     bottom: 0,
     left: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    backgroundColor: colors.overlay,
   },
   sheet: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    backgroundColor: colors.background,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    backgroundColor: colors.elevated,
   },
   header: {
     paddingTop: spacing.sm,
@@ -195,8 +195,8 @@ const useStyles = createStyles((colors) => ({
     marginBottom: spacing.md,
   },
   title: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: '700',
     color: colors.text,
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.sm,
@@ -212,7 +212,8 @@ const useStyles = createStyles((colors) => ({
     paddingVertical: spacing.sm,
   },
   pressed: {
-    opacity: 0.6,
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
   },
   nameLine: {
     flex: 1,
@@ -228,8 +229,8 @@ const useStyles = createStyles((colors) => ({
   box: {
     width: 24,
     height: 24,
-    borderRadius: radius.full,
-    borderWidth: 1.5,
+    borderRadius: 8,
+    borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -244,19 +245,19 @@ const useStyles = createStyles((colors) => ({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    height: 52,
+    height: 54,
     marginHorizontal: spacing.lg,
     marginTop: spacing.md,
     borderRadius: radius.full,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.text,
   },
   sendOff: {
     backgroundColor: colors.surface,
   },
   sendLabel: {
     fontSize: 16,
-    fontWeight: '600',
-    color: colors.onAccent,
+    fontWeight: '700',
+    color: colors.background,
   },
   sendLabelOff: {
     color: colors.textMuted,

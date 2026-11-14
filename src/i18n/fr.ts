@@ -711,6 +711,7 @@ export const fr = {
     retirer: 'Appuyez pour retirer',
   },
   programme: {
+    demainSoir: 'Demain soir',
     titre: 'Programmer l’envoi',
     aujourdhui: 'Aujourd’hui',
     demain: 'Demain',

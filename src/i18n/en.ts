@@ -712,6 +712,7 @@ export const en: Dictionary = {
     retirer: 'Tap to remove',
   },
   programme: {
+    demainSoir: 'Tomorrow evening',
     titre: 'Schedule message',
     aujourdhui: 'Today',
     demain: 'Tomorrow',
