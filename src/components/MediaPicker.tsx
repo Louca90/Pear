@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { haptics } from '../haptics';
-import { Animated, Easing, FlatList, Linking, Modal, PixelRatio, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { FlatList, Linking, Modal, PixelRatio, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import Reanimated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { File } from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library/legacy';
 import { ArrowLeft, ArrowUp, Images, Play, Settings, X } from 'lucide-react-native';
@@ -34,7 +35,8 @@ export function Thumbnail({ asset, size, style }: { asset: MediaLibrary.Asset; s
   const video = asset.mediaType === MediaLibrary.MediaType.video;
   const key = `${asset.id}-${size}`;
   const [uri, setUri] = useState(() => thumbnails.get(key) ?? (thumbnail ? null : asset.uri));
-  const [shown] = useState(() => new Animated.Value(thumbnails.has(key) ? 1 : 0));
+  const shown = useSharedValue(thumbnails.has(key) ? 1 : 0);
+  const fade = useAnimatedStyle(() => ({ opacity: shown.get() }));
 
   useEffect(() => {
     if (uri || !thumbnail) return;
@@ -54,13 +56,13 @@ export function Thumbnail({ asset, size, style }: { asset: MediaLibrary.Asset; s
 
   if (!uri) return null;
   return (
-    <Animated.Image
+    <Reanimated.Image
       source={{ uri }}
-      style={[style, { opacity: shown }]}
+      style={[style, fade]}
       resizeMode="cover"
       resizeMethod="resize"
       fadeDuration={0}
-      onLoad={() => Animated.timing(shown, { toValue: 1, duration: 120, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start()}
+      onLoad={() => shown.set(withTiming(1, { duration: 120, easing: Easing.out(Easing.cubic) }))}
     />
   );
 }

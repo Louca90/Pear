@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, LayoutChangeEvent, Pressable, Text, View } from 'react-native';
+import { Easing, LayoutChangeEvent, Pressable, Text, View } from 'react-native';
+import Reanimated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { createStyles, radius } from '../theme';
 
@@ -21,28 +22,20 @@ export function SegmentedControl<T extends string>({ options, value, onChange }:
   const styles = useStyles();
   const [width, setWidth] = useState(0);
   const index = Math.max(0, options.findIndex((option) => option.value === value));
-  const position = useRef(new Animated.Value(index)).current;
+  const position = useSharedValue(index);
   const itemWidth = width > 0 ? (width - PADDING * 2) / options.length : 0;
 
   useEffect(() => {
-    Animated.timing(position, { toValue: index, duration: SLIDE_MS, easing: SLIDE_EASING, useNativeDriver: true }).start();
+    position.set(withTiming(index, { duration: SLIDE_MS, easing: SLIDE_EASING }));
   }, [index, position]);
 
+  const thumbStyle = useAnimatedStyle(() => ({ transform: [{ translateX: position.get() * itemWidth }] }));
   const onLayout = (event: LayoutChangeEvent) => setWidth(event.nativeEvent.layout.width);
 
   return (
     <View style={styles.track} onLayout={onLayout} accessibilityRole="radiogroup">
       {itemWidth > 0 && (
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            styles.thumb,
-            {
-              width: itemWidth,
-              transform: [{ translateX: position.interpolate({ inputRange: [0, Math.max(1, options.length - 1)], outputRange: [0, itemWidth * Math.max(1, options.length - 1)] }) }],
-            },
-          ]}
-        />
+        <Reanimated.View pointerEvents="none" style={[styles.thumb, { width: itemWidth }, thumbStyle]} />
       )}
       {options.map((option) => {
         const selected = option.value === value;

@@ -1,5 +1,6 @@
 import { ReactNode, useEffect, useRef } from 'react';
-import { Animated, Easing, Modal, Pressable, StyleSheet, Text, useWindowDimensions } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, useWindowDimensions } from 'react-native';
+import Reanimated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { LucideIcon } from 'lucide-react-native';
 import type { ComponentType } from 'react';
 import type { AnimatedIconProps } from '../../components/AnimatedIcons';
@@ -31,27 +32,34 @@ export function ConversationActions({ rect, row, actions, onClose }: Props) {
   const colors = useColors();
   const styles = useStyles();
   const { height } = useWindowDimensions();
-  const progress = useRef(new Animated.Value(0)).current;
+  const progress = useSharedValue(0);
   const menuHeight = actions.length * ITEM_HEIGHT + spacing.sm * 2;
   const below = rect.y + rect.height + MENU_GAP + menuHeight < height - spacing.lg;
 
   useEffect(() => {
-    Animated.timing(progress, { toValue: 1, duration: OPEN_MS, easing: EASING, useNativeDriver: true }).start();
+    progress.set(withTiming(1, { duration: OPEN_MS, easing: EASING }));
   }, [progress]);
 
-  const close = (then?: () => void) =>
-    Animated.timing(progress, { toValue: 0, duration: CLOSE_MS, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(() => {
+  const close = (then?: () => void) => {
+    progress.set(withTiming(0, { duration: CLOSE_MS, easing: Easing.in(Easing.cubic) }));
+    setTimeout(() => {
       onClose();
       then?.();
-    });
+    }, CLOSE_MS);
+  };
+  const fade = useAnimatedStyle(() => ({ opacity: progress.get() }));
+  const menuIn = useAnimatedStyle(() => ({
+    opacity: progress.get(),
+    transform: [{ translateY: (below ? -8 : 8) * (1 - progress.get()) }, { scale: 0.94 + 0.06 * progress.get() }],
+  }));
 
   const menuTop = below ? rect.y + rect.height + MENU_GAP : rect.y - MENU_GAP - menuHeight;
   return (
     <Modal transparent visible statusBarTranslucent navigationBarTranslucent animationType="none" onRequestClose={() => close()}>
-      <Animated.View style={[StyleSheet.absoluteFill, styles.dim, { opacity: progress }]}>
+      <Reanimated.View style={[StyleSheet.absoluteFill, styles.dim, fade]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={() => close()} accessibilityLabel={t('commun.fermer')} />
-      </Animated.View>
-      <Animated.View
+      </Reanimated.View>
+      <Reanimated.View
         pointerEvents="none"
         style={[
           styles.lifted,
@@ -60,28 +68,16 @@ export function ConversationActions({ rect, row, actions, onClose }: Props) {
       >
         {row}
         {/* Le liseré reste dans la ligne : elle ne grandit plus, rien ne dépasse de l'écran. */}
-        <Animated.View pointerEvents="none" style={[styles.ring, { opacity: progress }]} />
-      </Animated.View>
-      <Animated.View
-        style={[
-          styles.menu,
-          { top: menuTop, left: rect.x + spacing.md },
-          {
-            opacity: progress,
-            transform: [
-              { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [below ? -8 : 8, 0] }) },
-              { scale: progress.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1] }) },
-            ],
-          },
-        ]}
-      >
+        <Reanimated.View pointerEvents="none" style={[styles.ring, fade]} />
+      </Reanimated.View>
+      <Reanimated.View style={[styles.menu, { top: menuTop, left: rect.x + spacing.md }, menuIn]}>
         {actions.map(({ label, icon: Icon, animated: Animated_, onPress, danger }, index) => (
           <Pressable key={label} onPress={() => close(onPress)} style={({ pressed }) => [styles.item, pressed && styles.pressed]}>
             {Animated_ ? <Animated_ size={20} color={danger ? colors.danger : colors.text} strokeWidth={1.75} autoPlay delay={200 + index * 40} /> : <Icon size={20} color={danger ? colors.danger : colors.text} strokeWidth={1.75} />}
             <Text style={[styles.label, danger && styles.danger]}>{label}</Text>
           </Pressable>
         ))}
-      </Animated.View>
+      </Reanimated.View>
     </Modal>
   );
 }

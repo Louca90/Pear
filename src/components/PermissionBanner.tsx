@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { Animated, Easing, Pressable, Text } from 'react-native';
+import { Pressable, Text } from 'react-native';
+import Reanimated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { CircleAlert } from 'lucide-react-native';
 
 import { t } from '../i18n';
@@ -11,20 +12,21 @@ const FADE_MS = 240;
 export function PermissionBanner({ visible, onPress }: { visible: boolean; onPress: () => void }) {
   const colors = useColors();
   const styles = useStyles();
-  const progress = useRef(new Animated.Value(visible ? 1 : 0)).current;
+  const progress = useSharedValue(visible ? 1 : 0);
+  const style = useAnimatedStyle(() => ({ opacity: progress.get(), transform: [{ translateY: -8 * (1 - progress.get()) }] }));
 
   useEffect(() => {
-    Animated.timing(progress, { toValue: visible ? 1 : 0, duration: FADE_MS, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    progress.set(withTiming(visible ? 1 : 0, { duration: FADE_MS, easing: Easing.out(Easing.cubic) }));
   }, [visible, progress]);
 
   if (!visible) return null;
   return (
-    <Animated.View style={{ opacity: progress, transform: [{ translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [-8, 0] }) }] }}>
+    <Reanimated.View style={style}>
       <Pressable onPress={onPress} style={({ pressed }) => [styles.banner, pressed && styles.pressed]}>
         <CircleAlert size={18} color={colors.danger} strokeWidth={1.75} />
         <Text style={styles.text}>{t('priseEnMain.manque')}</Text>
       </Pressable>
-    </Animated.View>
+    </Reanimated.View>
   );
 }
 

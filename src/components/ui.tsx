@@ -1,11 +1,11 @@
 import { ReactNode, useEffect, useRef, useSyncExternalStore } from 'react';
-import { Animated, Image, Pressable, StyleProp, Text, View, ViewStyle } from 'react-native';
+import { Image, Pressable, StyleProp, Text, View, ViewStyle } from 'react-native';
 import { ArrowLeft, LucideIcon, NotebookPen, User } from 'lucide-react-native';
 
-import Reanimated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import Reanimated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { getInsets, subscribeInsets } from '../../modules/pear-native';
-import { DURATION, timing } from '../motion';
+import { DURATION, EASE, timing } from '../motion';
 import { useMediaUri } from '../chat/media';
 import { createStyles, motion, radius, spacing, useColors } from '../theme';
 import { t } from '../i18n';
@@ -99,20 +99,21 @@ export function Avatar({ uri, size = 44, notes }: { uri?: string | null; size?: 
 // Le sous-titre de l'en-tête (« Connecté », « écrit… ») change en fondu.
 function FadingSubtitle({ text, color }: { text: string; color?: string }) {
   const styles = useStyles();
-  const opacity = useRef(new Animated.Value(1)).current;
+  const opacity = useSharedValue(1);
+  const fade = useAnimatedStyle(() => ({ opacity: opacity.get() }));
   const first = useRef(true);
   useEffect(() => {
     if (first.current) {
       first.current = false;
       return;
     }
-    opacity.setValue(0);
-    Animated.timing(opacity, { toValue: 1, duration: motion.small, easing: motion.easing, useNativeDriver: true }).start();
+    opacity.set(0);
+    opacity.set(withTiming(1, { duration: motion.small, easing: EASE }));
   }, [text, opacity]);
   return (
-    <Animated.Text style={[styles.headerSubtitle, !!color && { color }, { opacity }]} numberOfLines={1}>
+    <Reanimated.Text style={[styles.headerSubtitle, !!color && { color }, fade]} numberOfLines={1}>
       {text}
-    </Animated.Text>
+    </Reanimated.Text>
   );
 }
 

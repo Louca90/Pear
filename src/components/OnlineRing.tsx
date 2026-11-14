@@ -1,11 +1,12 @@
 import { ReactNode, useEffect, useRef } from 'react';
-import { Animated, Easing, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import Reanimated, { Easing, useAnimatedProps, useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
 import Svg, { Circle } from 'react-native-svg';
 
 import { t } from '../i18n';
 import { useColors } from '../theme';
 
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+const AnimatedCircle = Reanimated.createAnimatedComponent(Circle);
 
 const STROKE = 2;
 const GAP = 2;
@@ -42,34 +43,39 @@ export function OnlineRing({ online, size, delay = 0, trace, children }: Props) 
   const outer = size + (GAP + STROKE) * 2;
   const radius = (outer - STROKE) / 2;
   const circumference = 2 * Math.PI * radius;
-  const progress = useRef(new Animated.Value(online && !trace ? 1 : 0)).current;
-  const opacity = useRef(new Animated.Value(online ? 1 : 0)).current;
+  const progress = useSharedValue(online && !trace ? 1 : 0);
+  const opacity = useSharedValue(online ? 1 : 0);
   const wasOnline = useRef(false);
 
   useEffect(() => {
     if (online && !wasOnline.current) {
       if (trace) {
-        progress.setValue(0);
-        opacity.setValue(1);
-        Animated.timing(progress, { toValue: 1, duration: TRACE_MS, delay, easing: EASING, useNativeDriver: false }).start();
+        progress.set(0);
+        opacity.set(1);
+        progress.set(withDelay(delay, withTiming(1, { duration: TRACE_MS, easing: EASING })));
       } else {
-        progress.setValue(1);
-        opacity.setValue(0);
-        Animated.timing(opacity, { toValue: 1, duration: FADE_MS, easing: EASING, useNativeDriver: true }).start();
+        progress.set(1);
+        opacity.set(0);
+        opacity.set(withTiming(1, { duration: FADE_MS, easing: EASING }));
       }
     } else if (!online) {
-      opacity.setValue(0);
-      progress.setValue(0);
+      opacity.set(0);
+      progress.set(0);
     }
     wasOnline.current = online;
     // `trace` est lu seulement quand l'état en ligne change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [online]);
 
+  const ringStyle = useAnimatedStyle(() => ({ opacity: opacity.get() }));
+  const circleProps = useAnimatedProps(() => ({ strokeDashoffset: circumference * (1 - progress.get()) }));
+
+  // Hors ligne, l'anneau est invisible : il n'est pas dessiné du tout (un SVG de moins par avatar).
   return (
     <View accessibilityLabel={online ? t('accueil.enLigne') : undefined}>
       {children}
-      <Animated.View pointerEvents="none" style={[styles.ring, { top: -(GAP + STROKE), left: -(GAP + STROKE), width: outer, height: outer, opacity }]}>
+      {online && (
+      <Reanimated.View pointerEvents="none" style={[styles.ring, { top: -(GAP + STROKE), left: -(GAP + STROKE), width: outer, height: outer }, ringStyle]}>
         <Svg width={outer} height={outer}>
           <AnimatedCircle
             cx={outer / 2}
@@ -80,13 +86,14 @@ export function OnlineRing({ online, size, delay = 0, trace, children }: Props) 
             fill="none"
             strokeLinecap="round"
             strokeDasharray={`${circumference} ${circumference}`}
-            strokeDashoffset={progress.interpolate({ inputRange: [0, 1], outputRange: [circumference, 0] })}
+            animatedProps={circleProps}
             rotation={-90}
             originX={outer / 2}
             originY={outer / 2}
           />
         </Svg>
-      </Animated.View>
+      </Reanimated.View>
+      )}
     </View>
   );
 }

@@ -53,6 +53,7 @@ export function matchesSearch(name: string, query: string): boolean {
 export const SWIPE_THRESHOLD = 72;
 
 export function swipeOutcome(dx: number, canMarkRead: boolean): 'pin' | 'read' | null {
+  'worklet';
   if (dx >= SWIPE_THRESHOLD) return 'pin';
   if (dx <= -SWIPE_THRESHOLD && canMarkRead) return 'read';
   return null;

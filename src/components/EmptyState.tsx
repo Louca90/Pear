@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react';
-import { Animated, Text } from 'react-native';
+import { Text } from 'react-native';
+import Reanimated from 'react-native-reanimated';
+import { enterUp } from '../motion';
 
 import { createStyles, motion, spacing, useColors } from '../theme';
 import { Pear } from './Pear';
@@ -8,15 +10,11 @@ import { Pear } from './Pear';
 export function EmptyState({ label }: { label: string }) {
   const colors = useColors();
   const styles = useStyles();
-  const appear = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.timing(appear, { toValue: 1, duration: motion.small, easing: motion.easing, useNativeDriver: true }).start();
-  }, [appear]);
   return (
-    <Animated.View style={[styles.empty, { opacity: appear, transform: [{ translateY: appear.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }] }]}>
+    <Reanimated.View entering={enterUp(8, motion.small)} style={styles.empty}>
       <Pear height={56} color={colors.textMuted} state="resting" />
       <Text style={styles.label}>{label}</Text>
-    </Animated.View>
+    </Reanimated.View>
   );
 }
 
