@@ -30,7 +30,7 @@ const thumbnails = new Map<string, string>();
 
 // La vignette d'Android à la taille de la case (en pixels), en cache ; sinon (ancien APK) la photo
 // décodée directement réduite par Fresco (resizeMethod).
-function Thumbnail({ asset, size, style }: { asset: MediaLibrary.Asset; size: number; style: object }) {
+export function Thumbnail({ asset, size, style }: { asset: MediaLibrary.Asset; size: number; style: object }) {
   const video = asset.mediaType === MediaLibrary.MediaType.video;
   const key = `${asset.id}-${size}`;
   const [uri, setUri] = useState(() => thumbnails.get(key) ?? (thumbnail ? null : asset.uri));
@@ -77,7 +77,7 @@ function formatDuration(seconds: number) {
 }
 
 // asset.uri suffit : getAssetInfoAsync lit aussi la position GPS et exigerait une autorisation de localisation.
-function toPickedFile(asset: MediaLibrary.Asset): PickedFile {
+export function toPickedFile(asset: MediaLibrary.Asset): PickedFile {
   return {
     uri: asset.uri,
     name: asset.filename,

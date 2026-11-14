@@ -63,6 +63,7 @@ export const fr = {
     vide: 'Vos messages restent sur vos deux téléphones.',
     maintenirMicro: 'Maintenez le micro pour enregistrer',
     photos: 'Photos',
+    galerie: 'Galerie',
     fichier: 'Fichier',
     vousHorsLigne: 'Vous êtes hors ligne',
     connecte: 'Connecté',

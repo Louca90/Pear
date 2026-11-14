@@ -64,6 +64,7 @@ export const en: Dictionary = {
     vide: 'Your messages stay on your two phones.',
     maintenirMicro: 'Hold the mic to record',
     photos: 'Photos',
+    galerie: 'Gallery',
     fichier: 'File',
     vousHorsLigne: 'You\'re offline',
     connecte: 'Connected',

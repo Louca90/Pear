@@ -1,4 +1,4 @@
-import { ComponentRef, RefObject, useEffect, useMemo, useRef, useState } from 'react';
+import { ComponentRef, RefObject, useMemo } from 'react';
 import { Animated, findNodeHandle, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { setIncognitoKeyboard } from '../../../../modules/pear-native';
 import { ArrowUp, Check, ChevronUp, Lock, Mic, Trash2 } from 'lucide-react-native';
@@ -13,7 +13,8 @@ import { useVoiceRecorder } from '../hooks/useVoiceRecorder';
 import { useChatStyles } from '../styles';
 import { ComposerModeCard } from './ComposerModeCard';
 import { RecordingRow } from './RecordingRow';
-import { ATTACH_CLOSE_EASING, ATTACH_CLOSE_MS, ATTACH_EASING, ATTACH_OPEN_MS, AttachPill } from './AttachMenu';
+import { AttachButton, AttachSheet } from './AttachMenu';
+import { PickedFile } from '../../../chat/manager';
 import { useBackInterceptor } from '../../../navigation/backInterceptors';
 import { t } from '../../../i18n';
 
@@ -30,7 +31,7 @@ type Props = {
   onSchedule: () => void;
   input: RefObject<ComponentRef<typeof TextInput> | null>;
   keyboardOpen: boolean;
-  // Pièces jointes : le trombone s'allonge en pilule (Photos, Fichier) sur le champ de texte.
+  // Pièces jointes : le « + » ouvre le menu Joindre au-dessus de la saisie.
   attachOpen: boolean;
   onToggleAttach: () => void;
   onCloseAttach: () => void;
@@ -38,6 +39,8 @@ type Props = {
   onFile: () => void;
   onLocation?: () => void;
   onStickers?: () => void;
+  // Photos récentes choisies dans le menu Joindre.
+  onSendRecent: (files: PickedFile[]) => void;
   onVoiceRecorded: (uri: string, seconds: number, wave?: string) => void;
   onVoiceTooShort: () => void;
 };
@@ -62,6 +65,7 @@ export function Composer({
   onFile,
   onLocation,
   onStickers,
+  onSendRecent,
   onVoiceRecorded,
   onVoiceTooShort,
 }: Props) {
@@ -69,22 +73,7 @@ export function Composer({
   const colors = useColors();
   const bottom = useNavigationBarHeight();
   const voice = useVoiceRecorder(onVoiceRecorded, onVoiceTooShort);
-  // La pilule vit dans la barre : elle suit le clavier et la barre sans rien mesurer dans la fenêtre.
-  const attachProgress = useRef(new Animated.Value(0)).current;
-  // Même progression, sur le fil natif : l'allongement du fond de la pilule. Le trombone, lui, dessine des
-  // tracés SVG, qui ne passent pas sur le fil natif : il garde `attachProgress`.
-  const attachSlide = useRef(new Animated.Value(0)).current;
-  const [fieldWidth, setFieldWidth] = useState(0);
   useBackInterceptor(attachOpen, onCloseAttach);
-  useEffect(() => {
-    const timing = {
-      toValue: attachOpen ? 1 : 0,
-      duration: attachOpen ? ATTACH_OPEN_MS : ATTACH_CLOSE_MS,
-      easing: attachOpen ? ATTACH_EASING : ATTACH_CLOSE_EASING,
-    };
-    Animated.timing(attachProgress, { ...timing, useNativeDriver: false }).start();
-    Animated.timing(attachSlide, { ...timing, useNativeDriver: true }).start();
-  }, [attachOpen, attachProgress, attachSlide]);
   // Le micro devient progressivement une poubelle, au fil du glissé vers la gauche.
   const trashAmount = voice.dragX.interpolate({ inputRange: [-VOICE_CANCEL_DISTANCE, -VOICE_CANCEL_DISTANCE * 0.2], outputRange: [1, 0], extrapolate: 'clamp' });
 
@@ -97,14 +86,14 @@ export function Composer({
     <View style={styles.composerArea}>
       {/* Comble l'espace qui peut rester entre la saisie et le clavier (ou le bas de l'écran) : le fond d'écran n'y transparaît plus. */}
       <View pointerEvents="none" style={styles.composerUnderlay} />
+      {attachOpen && <AttachSheet onPhotos={onPhotos} onFile={onFile} onLocation={onLocation} onStickers={onStickers} onSendRecent={onSendRecent} />}
       <ComposerModeCard mode={mode} name={name} onCancel={onCancelMode} onJump={onJump} />
       <View style={[styles.composer, { paddingBottom: keyboardOpen ? spacing.sm : bottom + spacing.sm }]}>
         {voice.phase !== 'idle' ? (
           <RecordingRow seconds={voice.seconds} locked={voice.phase === 'locked'} dragX={voice.dragX} level={voice.liveLevel} onDiscard={voice.discard} />
         ) : (
-          <View style={styles.field} onLayout={(event) => setFieldWidth(event.nativeEvent.layout.width)}>
-            {/* La place du trombone : c'est la pilule (plus bas) qui le dessine. */}
-            <View style={styles.attachSpace} />
+          <View style={styles.field}>
+            <AttachButton open={attachOpen} onToggle={onToggleAttach} />
             <TextInput
               ref={input}
               onLayout={() => {
@@ -119,7 +108,6 @@ export function Composer({
               maxLength={MAX_TEXT_LENGTH}
               multiline
             />
-            <AttachPill progress={attachProgress} slide={attachSlide} width={fieldWidth} open={attachOpen} onToggle={onToggleAttach} onPhotos={onPhotos} onFile={onFile} onLocation={onLocation} onStickers={onStickers} />
           </View>
         )}
         {voice.phase === 'holding' && (

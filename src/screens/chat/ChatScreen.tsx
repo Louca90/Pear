@@ -32,6 +32,7 @@ import { LOCATION_DURATIONS } from '../../chat/location';
 import { useEphemeralPull } from './hooks/useEphemeralPull';
 import { PullPear, PullView } from '../../components/pull';
 import { Composer } from './components/Composer';
+import { AttachScrim } from './components/AttachMenu';
 import { ComposerFade } from './components/ComposerFade';
 import { MediaViewer, Viewing } from './components/MediaViewer';
 import { Bubble, markMessagesShown } from './components/MessageBubble';
@@ -603,7 +604,7 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
           </PullView>
           <NewMessagesButton count={scroll.newCount} onPress={scroll.scrollToBottom} />
           {/* Menu des pièces jointes ouvert : un appui dans la conversation le referme seulement. */}
-          {attachOpen && <Pressable style={StyleSheet.absoluteFill} onPress={() => setAttachOpen(false)} accessibilityLabel={t('commun.fermer')} />}
+          {attachOpen && <AttachScrim onClose={() => setAttachOpen(false)} />}
           {toast && <Toast text={toast.text} token={toast.token} />}
           {scheduling && <ScheduleSheet onSchedule={schedule} onClose={() => setScheduling(false)} />}
           {showingReactions && (
@@ -672,6 +673,10 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
                 setGalleryOpen(true);
               }}
               onFile={pickDocument}
+              onSendRecent={(files) => {
+                setAttachOpen(false);
+                sendFromGallery(files);
+              }}
               onLocation={isSelf(contactKey) ? undefined : shareLocation}
               onStickers={() => {
                 setAttachOpen(false);
