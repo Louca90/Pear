@@ -1,7 +1,8 @@
 import { ComponentRef, useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, AppState, BackHandler, Easing, KeyboardAvoidingView, Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import Reanimated, { Easing, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
+import { AppState, BackHandler, KeyboardAvoidingView, Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { BatteryCharging, Bell, Camera, ChevronRight, Download, ImageIcon, LucideIcon, FileUp, MapPin } from 'lucide-react-native';
-import Reanimated from 'react-native-reanimated';
 
 import { chat } from '../chat/manager';
 import { LINK_NAME_LENGTH } from '../crypto/pairing';
@@ -66,16 +67,19 @@ export function OnboardingScreen({ mode, initialStep, onDone }: Props) {
   const bottom = useNavigationBarHeight();
   const theme = useThemePreference();
   const [step, setStep] = useState<OnboardingStep>(initialStep);
-  const position = useRef(new Animated.Value(initialStep)).current;
-  const content = useRef(new Animated.Value(0)).current;
-  const finishing = useRef(new Animated.Value(0)).current;
+  const position = useSharedValue<number>(initialStep);
+  const content = useSharedValue(0);
+  const finishing = useSharedValue(0);
   // La poire défile avec le contenu : elle ne passe jamais sur le texte.
-  const scrollY = useRef(new Animated.Value(0)).current;
+  const scrollY = useSharedValue(0);
+  const onScroll = useAnimatedScrollHandler((event) => {
+    scrollY.set(event.contentOffset.y);
+  });
   const scroll = useRef<ComponentRef<typeof ScrollView>>(null);
   // Entrée de la poire au premier affichage : elle arrive de la gauche en tournant légèrement.
-  const intro = useRef(new Animated.Value(initialStep === 0 ? 0 : 1)).current;
+  const intro = useSharedValue(initialStep === 0 ? 0 : 1);
   useEffect(() => {
-    Animated.timing(intro, { toValue: 1, duration: INTRO_MS, easing: EASING, useNativeDriver: true }).start();
+    intro.set(withTiming(1, { duration: INTRO_MS, easing: EASING }));
   }, [intro]);
   const [states, setStates] = useState<Partial<Record<PermissionId, PermissionState>> | null>(null);
   // La carte « apps inconnues » reste affichée une fois apparue, même accordée (sa coche se dessine).
@@ -108,20 +112,23 @@ export function OnboardingScreen({ mode, initialStep, onDone }: Props) {
 
   // Chaque étape entre en fondu glissé, pendant que la poire rejoint sa place.
   useEffect(() => {
-    content.setValue(0);
+    content.set(0);
     // Chaque étape repart du haut.
     scroll.current?.scrollTo({ y: 0, animated: false });
-    scrollY.setValue(0);
-    Animated.parallel([
-      Animated.timing(position, { toValue: step, duration: MOVE_MS, easing: EASING, useNativeDriver: true }),
-      Animated.timing(content, { toValue: 1, duration: FADE_MS, delay: 120, easing: EASING, useNativeDriver: true }),
-    ]).start();
+    scrollY.set(0);
+    position.set(withTiming(step, { duration: MOVE_MS, easing: EASING }));
+    content.set(withDelay(120, withTiming(1, { duration: FADE_MS, easing: EASING })));
     if (mode === 'full') saveOnboardingStep(step);
   }, [step, mode, position, content, scrollY]);
 
   const goTo = useCallback(
     (next: OnboardingStep) => {
-      Animated.timing(content, { toValue: 0, duration: FADE_MS / 2, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(() => setStep(next));
+      const go = () => setStep(next);
+      content.set(
+        withTiming(0, { duration: FADE_MS / 2, easing: Easing.in(Easing.cubic) }, (finished) => {
+          if (finished) scheduleOnRN(go);
+        }),
+      );
     },
     [content],
   );
@@ -168,10 +175,12 @@ export function OnboardingScreen({ mode, initialStep, onDone }: Props) {
 
   // La poire grandit au centre, l'écran s'efface, et l'app s'ouvre.
   const finish = () => {
-    Animated.parallel([
-      Animated.timing(finishing, { toValue: 1, duration: MOVE_MS, easing: EASING, useNativeDriver: true }),
-      Animated.timing(content, { toValue: 0, duration: FADE_MS, useNativeDriver: true }),
-    ]).start(onDone);
+    content.set(withTiming(0, { duration: FADE_MS }));
+    finishing.set(
+      withTiming(1, { duration: MOVE_MS, easing: EASING }, (finished) => {
+        if (finished) scheduleOnRN(onDone);
+      }),
+    );
   };
 
   const afterPermissions = () => (mode === 'full' ? goTo(2) : finish());
@@ -186,57 +195,48 @@ export function OnboardingScreen({ mode, initialStep, onDone }: Props) {
   const centerX = pearLeft + pearWidth / 2;
   const centerY = pearTop + pearHeight / 2;
   const smallCenterY = top + PEAR_TOP_MARGIN + SMALL_PEAR / 2;
-  const pearTranslateX = position.interpolate({ inputRange: [0, 1, 2, 3], outputRange: [0, width / 2 - centerX, width / 2 - centerX, width / 2 - centerX] });
-  const pearTranslateY = position.interpolate({ inputRange: [0, 1, 2, 3], outputRange: [0, smallCenterY - centerY, smallCenterY - centerY, height / 2 - centerY] });
-  const pearScale = position.interpolate({
-    inputRange: [0, 1, 2, 3],
-    outputRange: [1, SMALL_PEAR / pearHeight, SMALL_PEAR / pearHeight, FINAL_PEAR / pearHeight],
-  });
-  const pearRotate = position.interpolate({ inputRange: [0, 1, 2, 3], outputRange: ['-16deg', '0deg', '-10deg', '0deg'] });
   // Le texte de l'accueil commence sous la poire (bas du dessin, plus la marge due à l'inclinaison).
   const welcomeTextTop = pearTop + pearHeight + pearWidth * Math.sin((16 * Math.PI) / 180) + spacing.md;
-  const scrolled = Animated.multiply(scrollY, -1);
-  const introX = intro.interpolate({ inputRange: [0, 1], outputRange: [-width * 0.35, 0] });
-  const introRotate = intro.interpolate({ inputRange: [0, 1], outputRange: ['-12deg', '0deg'] });
-  const finishScale = finishing.interpolate({ inputRange: [0, 1], outputRange: [1, 1.5] });
-  const contentStyle = {
-    opacity: content,
-    transform: [{ translateY: content.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }],
-  };
+  const steps = [0, 1, 2, 3];
+  const xs = [0, width / 2 - centerX, width / 2 - centerX, width / 2 - centerX];
+  const ys = [0, smallCenterY - centerY, smallCenterY - centerY, height / 2 - centerY];
+  const scales = [1, SMALL_PEAR / pearHeight, SMALL_PEAR / pearHeight, FINAL_PEAR / pearHeight];
+  const turns = [-16, 0, -10, 0];
+  const introShift = -width * 0.35;
+  const pearStyle = useAnimatedStyle(() => {
+    const p = position.get();
+    const i = intro.get();
+    return {
+      opacity: i,
+      transform: [
+        { translateY: -scrollY.get() },
+        { translateX: interpolate(p, steps, xs) },
+        { translateX: introShift * (1 - i) },
+        { translateY: interpolate(p, steps, ys) },
+        { scale: interpolate(p, steps, scales) },
+        { scale: 1 + 0.5 * finishing.get() },
+        { rotate: `${interpolate(p, steps, turns)}deg` },
+        { rotate: `${-12 * (1 - i)}deg` },
+      ],
+    };
+  });
+  const screenStyle = useAnimatedStyle(() => ({ opacity: interpolate(finishing.get(), [0, 0.7, 1], [1, 1, 0]) }));
+  const contentStyle = useAnimatedStyle(() => ({ opacity: content.get(), transform: [{ translateY: 16 * (1 - content.get()) }] }));
 
   return (
-    <Animated.View style={[styles.screen, { opacity: finishing.interpolate({ inputRange: [0, 0.7, 1], outputRange: [1, 1, 0] }) }]}>
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.pear,
-          { left: pearLeft, top: pearTop },
-          {
-            opacity: intro,
-            transform: [
-              { translateY: scrolled },
-              { translateX: pearTranslateX },
-              { translateX: introX },
-              { translateY: pearTranslateY },
-              { scale: pearScale },
-              { scale: finishScale },
-              { rotate: pearRotate },
-              { rotate: introRotate },
-            ],
-          },
-        ]}
-      >
+    <Reanimated.View style={[styles.screen, screenStyle]}>
+      <Reanimated.View pointerEvents="none" style={[styles.pear, { left: pearLeft, top: pearTop }, pearStyle]}>
         <Pear height={pearHeight} color={colors.text} />
-      </Animated.View>
+      </Reanimated.View>
       <KeyboardAvoidingView behavior="padding" style={styles.flex}>
-        <Animated.ScrollView
+        <Reanimated.ScrollView
           ref={scroll}
-          onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
+          onScroll={onScroll}
           scrollEventThrottle={16}
           contentContainerStyle={[styles.content, { paddingTop: step === 0 ? welcomeTextTop : top + PEAR_TOP_MARGIN + SMALL_PEAR + spacing.md, paddingBottom: bottom + spacing.lg }]}
           keyboardShouldPersistTaps="handled"
         >
-          <Animated.View style={[styles.flex, contentStyle]}>
+          <Reanimated.View style={[styles.flex, contentStyle]}>
             {step === 0 && (
               <View style={styles.block}>
                 <Text style={styles.title}>{t('priseEnMain.bienvenue')}</Text>
@@ -319,8 +319,8 @@ export function OnboardingScreen({ mode, initialStep, onDone }: Props) {
                 <Button label={t('priseEnMain.ouvrir')} icon={ChevronRight} onPress={finish} />
               </View>
             )}
-          </Animated.View>
-        </Animated.ScrollView>
+          </Reanimated.View>
+        </Reanimated.ScrollView>
       </KeyboardAvoidingView>
       {restoring && <BackupSheet mode="import" onClose={() => setRestoring(false)} />}
       {galleryOpen && (
@@ -342,7 +342,7 @@ export function OnboardingScreen({ mode, initialStep, onDone }: Props) {
           onClose={() => setCropping(null)}
         />
       )}
-    </Animated.View>
+    </Reanimated.View>
   );
 }
 

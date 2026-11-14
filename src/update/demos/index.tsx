@@ -1,5 +1,7 @@
 import { ComponentType, ReactNode, useEffect, useRef, useState } from 'react';
-import { Animated, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
+import Reanimated, { cancelAnimation, interpolate, useAnimatedProps, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
+import { EASE } from '../../motion';
 import Svg, { Circle } from 'react-native-svg';
 import { Bell, Search } from 'lucide-react-native';
 
@@ -64,11 +66,12 @@ function SignatureDemo() {
 
 // Un élément qui apparaît ou s'efface en fondu (180 ms), sans changer la mise en page.
 function Fade({ shown, children }: { shown: boolean; children: ReactNode }) {
-  const opacity = useRef(new Animated.Value(shown ? 1 : 0)).current;
+  const opacity = useSharedValue(shown ? 1 : 0);
   useEffect(() => {
-    Animated.timing(opacity, { toValue: shown ? 1 : 0, duration: motion.small, easing: motion.easing, useNativeDriver: true }).start();
+    opacity.set(withTiming(shown ? 1 : 0, { duration: motion.small, easing: EASE }));
   }, [shown, opacity]);
-  return <Animated.View style={{ opacity }}>{children}</Animated.View>;
+  const style = useAnimatedStyle(() => ({ opacity: opacity.get() }));
+  return <Reanimated.View style={style}>{children}</Reanimated.View>;
 }
 
 const STEPS = [0, 1, 2, 3, 4, 5];
@@ -134,16 +137,17 @@ function OnceDemo() {
   const styles = useStyles();
   const opened = useCycle([false, false, true], 1300);
   const palette = bubblePalette(colors.bubbleTheirs);
-  const badge = useRef(new Animated.Value(1)).current;
+  const badge = useSharedValue(1);
   useEffect(() => {
-    Animated.timing(badge, { toValue: opened ? 0.45 : 1, duration: motion.small, easing: motion.easing, useNativeDriver: true }).start();
+    badge.set(withTiming(opened ? 0.45 : 1, { duration: motion.small, easing: EASE }));
   }, [opened, badge]);
+  const badgeStyle = useAnimatedStyle(() => ({ opacity: badge.get() }));
   return (
     <PhoneFrame>
       <View style={[styles.bubble, styles.once, { backgroundColor: palette.background }]}>
-        <Animated.View style={[styles.onceBadge, { borderColor: palette.text, opacity: badge }]}>
+        <Reanimated.View style={[styles.onceBadge, { borderColor: palette.text }, badgeStyle]}>
           <Text style={[styles.onceDigit, { color: palette.text }]}>1</Text>
-        </Animated.View>
+        </Reanimated.View>
         <View>
           <Text style={{ color: palette.text, fontSize: 14, fontWeight: '500' }}>{t('unique.photo')}</Text>
           <Text style={{ color: palette.muted, fontSize: 12 }}>{opened ? t('unique.ouverte') : t('unique.voir')}</Text>
@@ -153,7 +157,7 @@ function OnceDemo() {
   );
 }
 
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+const AnimatedCircle = Reanimated.createAnimatedComponent(Circle);
 const CUT_RADIUS = 46;
 const CUT_LENGTH = 2 * Math.PI * CUT_RADIUS;
 
@@ -161,30 +165,31 @@ const CUT_LENGTH = 2 * Math.PI * CUT_RADIUS;
 function StickerDemo() {
   const colors = useColors();
   const styles = useStyles();
-  const cut = useRef(new Animated.Value(0)).current;
-  const lift = useRef(new Animated.Value(0)).current;
+  const cut = useSharedValue(0);
+  const lift = useSharedValue(0);
   useEffect(() => {
     if (motion.reduced) {
-      cut.setValue(1);
+      cut.set(1);
       return;
     }
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(cut, { toValue: 1, duration: 1100, easing: motion.easing, useNativeDriver: false }),
-        Animated.timing(lift, { toValue: 1, duration: motion.mascot, easing: motion.easing, useNativeDriver: true }),
-        Animated.delay(900),
-        Animated.timing(lift, { toValue: 0, duration: motion.small, easing: motion.easing, useNativeDriver: true }),
-        Animated.timing(cut, { toValue: 0, duration: 0, useNativeDriver: false }),
-        Animated.delay(300),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
+    // Un cycle : le trait entoure (1,1 s), le sticker se détache, reste, revient, puis une courte pause.
+    const ease = (duration: number) => ({ duration, easing: EASE });
+    const now = { duration: 0 };
+    const held = motion.mascot + 900 + motion.small;
+    cut.set(withRepeat(withSequence(withTiming(1, ease(1100)), withDelay(held, withTiming(0, now)), withDelay(300, withTiming(0, now))), -1));
+    lift.set(withRepeat(withSequence(withDelay(1100, withTiming(1, ease(motion.mascot))), withDelay(900, withTiming(0, ease(motion.small))), withDelay(300, withTiming(0, now))), -1));
+    return () => {
+      cancelAnimation(cut);
+      cancelAnimation(lift);
+    };
   }, [cut, lift]);
+  const lineStyle = useAnimatedStyle(() => ({ opacity: 1 - lift.get() }));
+  const stickerStyle = useAnimatedStyle(() => ({ transform: [{ scale: 1 + 0.18 * lift.get() }] }));
+  const circleProps = useAnimatedProps(() => ({ strokeDashoffset: CUT_LENGTH * (1 - cut.get()) }));
   return (
     <PhoneFrame>
       <View style={styles.cutArea}>
-        <Animated.View style={[styles.cutLine, { opacity: lift.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }]}>
+        <Reanimated.View style={[styles.cutLine, lineStyle]}>
           <Svg width={110} height={110} viewBox="0 0 110 110">
             <AnimatedCircle
               cx={55}
@@ -195,14 +200,14 @@ function StickerDemo() {
               strokeWidth={2.5}
               strokeLinecap="round"
               strokeDasharray={CUT_LENGTH}
-              strokeDashoffset={cut.interpolate({ inputRange: [0, 1], outputRange: [CUT_LENGTH, 0] })}
+              animatedProps={circleProps}
               transform="rotate(-90 55 55)"
             />
           </Svg>
-        </Animated.View>
-        <Animated.View style={{ transform: [{ scale: lift.interpolate({ inputRange: [0, 1], outputRange: [1, 1.18] }) }] }}>
+        </Reanimated.View>
+        <Reanimated.View style={stickerStyle}>
           <Pear height={62} color={colors.text} />
-        </Animated.View>
+        </Reanimated.View>
       </View>
     </PhoneFrame>
   );
