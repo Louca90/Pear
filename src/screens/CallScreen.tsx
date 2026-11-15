@@ -1,5 +1,5 @@
-import { ComponentType, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { findNodeHandle, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ComponentType, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Reanimated, { FadeIn, FadeOut, interpolateColor, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { Bluetooth, ChevronDown, Ear, Headphones, Mic, MicOff, Phone, PhoneOff, SwitchCamera, Video, VideoOff, Volume2 } from 'lucide-react-native';
 import { RTCView } from 'react-native-webrtc';
@@ -13,7 +13,8 @@ import { useBackInterceptor } from '../navigation/backInterceptors';
 import { DURATION, EASE, enterUp, timing } from '../motion';
 import { createStyles, fixed, radius, spacing, useColors } from '../theme';
 import { t, TextKey } from '../i18n';
-import { addPipListener, setVideoCorner } from '../../modules/pear-native';
+import { addPipListener } from '../../modules/pear-native';
+import { PearVideoView } from '../../modules/pear-native/video';
 import { SnapDraggable } from './call/SnapDraggable';
 
 // L'écran d'un appel (vague 5), par-dessus tout le reste, même l'écran de verrouillage de Pear.
@@ -188,8 +189,12 @@ function CallPip({ call, name }: { call: CallState; name: string }) {
     <View style={[StyleSheet.absoluteFill, styles.pip0, (remote || local) && styles.dark]}>
       {remote && local ? (
         <View style={styles.pipStack}>
-          <RTCView streamURL={call.remoteUrl!} objectFit="cover" zOrder={0} style={styles.pipHalf} />
-          <RTCView streamURL={call.localUrl!} objectFit="cover" mirror={call.front} zOrder={0} style={styles.pipHalf} />
+          <View style={styles.pipHalf}>
+            <RoundedVideo url={call.remoteUrl!} mirror={false} radius={6} />
+          </View>
+          <View style={styles.pipHalf}>
+            <RoundedVideo url={call.localUrl!} mirror={call.front} radius={6} />
+          </View>
         </View>
       ) : remote ? (
         <RTCView streamURL={call.remoteUrl!} objectFit="cover" zOrder={0} style={StyleSheet.absoluteFill} />
@@ -215,15 +220,10 @@ function CallPip({ call, name }: { call: CallState; name: string }) {
   );
 }
 
-// Une vidéo aux coins arrondis : la SurfaceView est arrondie par Android lui-même (le rognage de React
-// Native ne l'atteint pas), dès qu'elle est posée.
+// Une vidéo aux coins arrondis : dessinée dans une vue ordinaire (PearVideo, TextureView), que les
+// coins rognent vraiment, contrairement à la SurfaceView de RTCView.
 function RoundedVideo({ url, mirror, radius }: { url: string; mirror: boolean; radius: number }) {
-  const ref = useRef(null);
-  const round = () => {
-    const tag = findNodeHandle(ref.current);
-    if (tag) setVideoCorner(tag, radius).catch(() => undefined);
-  };
-  return <RTCView ref={ref} streamURL={url} objectFit="cover" mirror={mirror} zOrder={1} onLayout={round} style={[StyleSheet.absoluteFill, { borderRadius: radius }]} />;
+  return <PearVideoView streamURL={url} mirror={mirror} radius={radius} style={StyleSheet.absoluteFill} />;
 }
 
 // L'appel vidéo : une image en grand, l'autre en vignette arrondie qu'on déplace et qui se range dans

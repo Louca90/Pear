@@ -35,4 +35,6 @@ dependencies {
   // Suivi du visage (478 points, expressions) : MediaPipe Face Landmarker, Apache 2.0. Le modèle
   // (face_landmarker.task, Google, Apache 2.0) est dans src/main/assets.
   implementation "com.google.mediapipe:tasks-vision:0.10.35"
+  // Appels (vague 5) : la vue vidéo aux coins arrondis lit les pistes de react-native-webrtc (déjà dans l'app).
+  compileOnly project(":react-native-webrtc")
 }

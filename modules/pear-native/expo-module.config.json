@@ -5,7 +5,8 @@
   "android": {
     "modules": [
       "expo.modules.pearnative.PearNativeModule",
-      "expo.modules.pearnative.PearCameraModule"
+      "expo.modules.pearnative.PearCameraModule",
+      "expo.modules.pearnative.PearVideoModule"
     ]
   }
 }
