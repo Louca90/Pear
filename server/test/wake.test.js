@@ -50,6 +50,15 @@ const { state, loadHandler, call, reset } = require('./harness');
   for (let i = 0; i < 30; i++) assert.equal(await code({ body: { token: 'b'.repeat(120) + i } }), 204);
   assert.equal(await code({ body: { token: 'c'.repeat(150) } }), 429);
 
+  // Appel (vague 5) : priorité haute, gardé une minute au plus par FCM.
+  reset();
+  assert.equal(await code({ body: { token, type: 'call', payload: 'tagtagtag~a.b' } }), 204);
+  const ring = state.pushes[state.pushes.length - 1];
+  assert.deepEqual(ring.data, { type: 'call', v: '1', payload: 'tagtagtag~a.b' });
+  assert.equal(ring.android.priority, 'high');
+  assert.equal(ring.android.ttl, 60000);
+  assert.equal(await code({ body: { token, type: 'call', payload: 'A'.repeat(3501) } }), 400);
+
   // Token expiré : 410.
   reset();
   state.pushError = Object.assign(new Error('x'), { code: 'messaging/registration-token-not-registered' });

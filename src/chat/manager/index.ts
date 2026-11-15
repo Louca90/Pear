@@ -32,6 +32,9 @@ import { downloadRelayFile, relayPending } from './relay';
 import { acceptPairing, blockPairing, declinePairing, requestPairing, startPairing, syncPairRequests } from './pairing';
 import { deliverNow, sendStatusNow, settlePushAcks, wakeIfNeeded } from './wake';
 import { notifyMessage } from './notify';
+import { acceptCall, callKeepsAwake, declineCall, getCall, hangUp, receiveCallPush, startCall, subscribeCall, switchCamera, toggleCamera, toggleMute, toggleSpeaker } from './calls';
+
+export type { CallEnd, CallPhase, CallState } from './calls';
 
 export { MAX_PROFILE_NAME_LENGTH, MAX_TEXT_LENGTH } from './types';
 export type { PickedFile } from './types';
@@ -42,6 +45,37 @@ const TYPING_EVERY_MS = 3000;
 const TEXT_RELAY_CHECK_MS = 3500;
 
 class ChatManager extends ChatCore {
+  reconcileNow = () => reconcile(this);
+
+  // --- Appels (vague 5) ---
+  getCall = getCall;
+  subscribeCall = subscribeCall;
+  startCall(contact: string, video: boolean) {
+    return startCall(this, contact, video);
+  }
+  acceptCall() {
+    return acceptCall(this);
+  }
+  declineCall() {
+    declineCall(this);
+  }
+  hangUp() {
+    hangUp(this);
+  }
+  toggleMute = toggleMute;
+  toggleSpeaker = toggleSpeaker;
+  toggleCamera() {
+    return toggleCamera(this);
+  }
+  switchCamera = switchCamera;
+  // Push « call » reçu app fermée : le contact à joindre, ou null.
+  receiveCallPush(data: { [key: string]: unknown } | undefined) {
+    return receiveCallPush(this, data);
+  }
+  callKeepsAwake() {
+    return callKeepsAwake(this);
+  }
+
   // Ouvre les connexions des nouveaux contacts et ferme celles des contacts supprimés.
   sync(identity: Identity, contacts: Contact[]) {
     this.identity = identity;

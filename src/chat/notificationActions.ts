@@ -24,6 +24,15 @@ export async function handleNotificationEvent({ type, detail }: Event) {
     }
     return;
   }
+  // Appel (vague 5) : Répondre ouvre Pear et décroche, Refuser et Raccrocher n'ouvrent rien.
+  if (typeof data?.call === 'string') {
+    if (type !== EventType.ACTION_PRESS) return;
+    const action = detail.pressAction?.id;
+    if (action === 'call-accept') await chat.acceptCall();
+    else if (action === 'call-decline') chat.declineCall();
+    else if (action === 'call-end') chat.hangUp();
+    return;
+  }
   const contact = detail.notification?.data?.contact;
   if (typeof contact !== 'string') return;
   if (type === EventType.DISMISSED || type === EventType.PRESS) deleteCover(contact);

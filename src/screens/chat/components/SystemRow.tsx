@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
+import { Phone, PhoneMissed, Video } from 'lucide-react-native';
 import Reanimated, { FadeIn } from 'react-native-reanimated';
 
 import { Message } from '../../../chat/database';
 import { chat } from '../../../chat/manager';
 import { parseEphemeralSystem } from '../../../chat/ephemeral';
+import { callRecordText, parseCallRecord } from '../../../chat/callText';
 import { Pear } from '../../../components/Pear';
 import { createStyles, useColors } from '../../../theme';
 
@@ -19,6 +21,19 @@ export function SystemRow({ message, name, hasWallpaper }: { message: Message; n
   const colors = useColors();
   const textStyle = [styles.systemText, hasWallpaper && { color: colors.onMedia }];
   if (message.text === SESSION_BROKEN) return <RepairRow contact={message.contact} name={name} hasWallpaper={hasWallpaper} />;
+  const call = message.kind === 'system' ? parseCallRecord(message.text) : null;
+  if (call) {
+    // Appel (vague 5) : une petite icône et l'issue, en rouge pour un appel manqué.
+    const missed = call.outcome === 'missed';
+    const color = hasWallpaper ? colors.onMedia : missed ? colors.danger : colors.textMuted;
+    const Icon = missed ? PhoneMissed : call.video ? Video : Phone;
+    return (
+      <View style={[styles.systemRow, hasWallpaper && styles.metaPill, styles.withIcon]}>
+        <Icon size={13} color={color} strokeWidth={2} />
+        <Text style={[textStyle, { color }]}>{callRecordText(call)}</Text>
+      </View>
+    );
+  }
   const standalone = message.text === UPDATE_REQUIRED || message.text === SESSION_REPAIRED;
   const author = message.mine === 1 ? t('chat.vousAvez') : t('chat.contactA', { nom: name });
   const text = message.text === SESSION_REPAIRED ? t('chat.sessionReparee') : systemAction(message);

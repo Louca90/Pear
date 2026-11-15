@@ -18,7 +18,8 @@ const PAYLOAD = /^[A-Za-z0-9+/=_.~-]+$/;
 const MAX_WAKE_TAG_LENGTH = 64;
 // Un simple réveil n'a plus d'intérêt après quelques minutes ; un message ou un fichier, si (FCM garde
 // jusqu'à 4 semaines un push pour un téléphone éteint).
-const TTL_MS = { wake: 5 * 60000, msg: 7 * 24 * 3600000, file: 7 * 24 * 3600000 };
+// Un appel (vague 5) n'a plus de sens après une minute : FCM l'oublie s'il n'a pas pu le livrer.
+const TTL_MS = { wake: 5 * 60000, msg: 7 * 24 * 3600000, file: 7 * 24 * 3600000, call: 60000 };
 const PROTOCOL_VERSION = 1;
 
 // Le destinataire est désigné par l'empreinte de son token : le token lui-même n'est jamais stocké.

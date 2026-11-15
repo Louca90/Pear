@@ -40,7 +40,7 @@ export function wakeIfNeeded(core: ChatCore, contact: string) {
 
 // Le token du contact : celui reçu en direct, sinon celui qu'il a publié (chiffré) dans Firebase. Relu
 // au plus une fois par minute, par exemple après un token périmé.
-async function resolveToken(core: ChatCore, contact: string) {
+export async function resolveToken(core: ChatCore, contact: string) {
   const known = getContactToken(contact);
   if (known) return known;
   if (!core.identity || Date.now() - (core.tokenFetches.get(contact) ?? 0) < WAKE_INTERVAL_MS) return null;

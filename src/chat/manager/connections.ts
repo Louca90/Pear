@@ -8,6 +8,7 @@ import { publishTokens } from '../../network/tokens';
 import { recordPush } from '../../diagnostics';
 
 import { stopOpenLocations } from './location';
+import { callLinkStatus, callRemoteMedia, receiveCall, receiveCallPush } from './calls';
 import { ChatCore } from './core';
 import { receivePush } from './incoming';
 import { receive } from './messageIO';
@@ -49,6 +50,7 @@ export function connect(core: ChatCore, identity: Identity, contact: string) {
           flush(core, contact);
           maybeRekey(core, contact);
         }
+        callLinkStatus(core, contact, status);
         core.notify();
       },
       onRoute: (route) => {
@@ -64,7 +66,11 @@ export function connect(core: ChatCore, identity: Identity, contact: string) {
         if (fg) link.presenceTimer = setTimeout(() => core.notify(), PRESENCE_MS + 100);
         if (core.isContactOnline(contact) !== before) core.notify();
       },
-      onMessage: (message) => receive(core, contact, message),
+      onMessage: (message) => {
+        if ((message as { type?: unknown } | null)?.type === 'call') receiveCall(core, contact, message);
+        else receive(core, contact, message);
+      },
+      onRemoteMedia: (media) => callRemoteMedia(contact, media),
       onBytes: (bytes) => {
         // Un fichier en cours de réception garde la connexion ouverte.
         core.keepConnected(contact, AFTER_ACTIVITY_MS);
@@ -107,6 +113,7 @@ export function watch(core: ChatCore) {
     recordPush(String(message.data?.type ?? 'wake'));
     if (message.data?.type === 'msg' || message.data?.type === 'pair') receivePush(core, message.data);
     else if (message.data?.type === 'update') checkForUpdate(true);
+    else if (message.data?.type === 'call') receiveCallPush(core, message.data);
     else retryAll(core);
   });
   onTokenRefresh(messaging, (token) => setMyToken(core, token));

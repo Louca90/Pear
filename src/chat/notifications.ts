@@ -1,4 +1,4 @@
-import notifee, { AndroidForegroundServiceType, AndroidImportance, AndroidStyle, AndroidVisibility } from '@notifee/react-native';
+import notifee, { AndroidCategory, AndroidForegroundServiceType, AndroidImportance, AndroidStyle, AndroidVisibility } from '@notifee/react-native';
 import { Directory, File, Paths } from 'expo-file-system';
 
 import { log } from '../log';
@@ -196,6 +196,11 @@ export function clearFileProgress(id: string) {
   activeFiles.delete(id);
   enqueue(id, async () => {
     if (activeFiles.size > 0) return;
+    // Un appel en cours garde le service (une seule notification de service pour Notifee).
+    if (callService) {
+      await notifee.cancelNotification(FILE_NOTIFICATION_ID);
+      return;
+    }
     await notifee.stopForegroundService();
     await notifee.cancelNotification(FILE_NOTIFICATION_ID);
   });
@@ -212,5 +217,107 @@ export function showFilePaused() {
       title: t('notifications.receptionPause'),
       android: { channelId: NOTIFICATION_CHANNEL_ID, smallIcon: NOTIFICATION_SMALL_ICON, pressAction: { id: 'default' } },
     });
+  });
+}
+
+// --- Appels (vague 5) ---
+// Canal à part, sans son : la sonnerie est celle du téléphone (module natif), qui respecte le mode
+// silencieux et s'arrête dès qu'on répond.
+
+const CALL_CHANNEL_ID = 'appels';
+const MISSED_CHANNEL_ID = NOTIFICATION_CHANNEL_ID;
+const callId = (contact: string) => `call:${contact}`;
+let callService = false;
+
+async function ensureCallChannel() {
+  await notifee.createChannel({
+    id: CALL_CHANNEL_ID,
+    name: t('appel.canal'),
+    importance: AndroidImportance.HIGH,
+    visibility: AndroidVisibility.PRIVATE,
+    vibration: false,
+  });
+}
+
+// Appel reçu : notification plein écran (téléphone verrouillé, elle ouvre l'écran de l'appel), avec
+// Répondre (ouvre Pear) et Refuser (sans ouvrir).
+export async function showIncomingCall(contact: string, name: string, photoUri: string | null, video: boolean) {
+  await ensureCallChannel();
+  await notifee.displayNotification({
+    id: callId(contact),
+    title: name,
+    body: t(video ? 'appel.entrantVideo' : 'appel.entrantAudio'),
+    data: { call: contact },
+    android: {
+      channelId: CALL_CHANNEL_ID,
+      category: AndroidCategory.CALL,
+      visibility: AndroidVisibility.PRIVATE,
+      smallIcon: NOTIFICATION_SMALL_ICON,
+      ...(photoUri ? { largeIcon: photoUri, circularLargeIcon: true } : {}),
+      ongoing: true,
+      autoCancel: false,
+      timeoutAfter: 60 * 1000,
+      pressAction: { id: 'default', launchActivity: 'default' },
+      fullScreenAction: { id: 'default', launchActivity: 'default' },
+      actions: [
+        { title: t('appel.refuser'), pressAction: { id: 'call-decline' } },
+        { title: t('appel.repondre'), pressAction: { id: 'call-accept', launchActivity: 'default' } },
+      ],
+    },
+  });
+}
+
+// Appel en cours : service de premier plan (micro, et caméra en vidéo), sans quoi Android coupe le
+// micro dès que Pear passe en arrière-plan. Un appui ramène à l'appel ; « Raccrocher » y met fin.
+export async function showOngoingCall(contact: string, name: string, video: boolean, startedAt: number) {
+  await ensureCallChannel();
+  callService = true;
+  await notifee.displayNotification({
+    id: callId(contact),
+    title: name,
+    body: t(video ? 'appel.enCoursVideo' : 'appel.enCoursAudio'),
+    data: { call: contact },
+    android: {
+      channelId: CALL_CHANNEL_ID,
+      category: AndroidCategory.CALL,
+      smallIcon: NOTIFICATION_SMALL_ICON,
+      ongoing: true,
+      onlyAlertOnce: true,
+      autoCancel: false,
+      asForegroundService: true,
+      foregroundServiceTypes: [
+        AndroidForegroundServiceType.FOREGROUND_SERVICE_TYPE_MICROPHONE,
+        ...(video ? [AndroidForegroundServiceType.FOREGROUND_SERVICE_TYPE_CAMERA] : []),
+      ],
+      showChronometer: true,
+      timestamp: startedAt,
+      pressAction: { id: 'default', launchActivity: 'default' },
+      actions: [{ title: t('appel.raccrocher'), pressAction: { id: 'call-end' } }],
+    },
+  });
+}
+
+export async function clearCallNotification(contact: string) {
+  if (callService) {
+    callService = false;
+    if (activeFiles.size === 0) await notifee.stopForegroundService();
+  }
+  await notifee.cancelNotification(callId(contact));
+}
+
+export async function showMissedCall(contact: string, name: string, video: boolean) {
+  await ensureChannel();
+  await notifee.displayNotification({
+    id: `missed:${contact}`,
+    title: t('appel.manqueTitre'),
+    body: t(video ? 'appel.manqueVideo' : 'appel.manqueAudio', { nom: name }),
+    data: { contact },
+    android: {
+      channelId: MISSED_CHANNEL_ID,
+      category: AndroidCategory.MESSAGE,
+      visibility: AndroidVisibility.PRIVATE,
+      smallIcon: NOTIFICATION_SMALL_ICON,
+      pressAction: { id: 'default' },
+    },
   });
 }

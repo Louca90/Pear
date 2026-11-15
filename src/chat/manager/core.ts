@@ -50,6 +50,10 @@ export class ChatCore {
   watching = false;
   myToken: string | null = null;
   openConversation: string | null = null;
+  // Contact de l'appel en cours ou attendu (vague 5) : sa connexion passe avant toutes les autres.
+  callContact: string | null = null;
+  // Rouvre les connexions voulues (strategy.ts), branché par la façade : calls.ts ne peut pas l'importer.
+  reconcileNow: () => void = () => undefined;
   // Vrai quand la conversation ouverte est affichée tout en bas : on lit vraiment les derniers messages.
   atBottom = true;
   lastActivity = 0;

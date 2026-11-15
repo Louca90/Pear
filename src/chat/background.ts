@@ -35,6 +35,16 @@ export async function handleWake(message: { data?: { [key: string]: unknown } })
     return;
   }
 
+  // Appel (vague 5) : se connecter à l'appelant ; son invitation fait sonner. On reste éveillé tant que
+  // l'appel sonne ou dure (le service de premier plan de l'appel garde ensuite le processus).
+  if (message.data?.type === 'call') {
+    if (!chat.receiveCallPush(message.data)) return;
+    chat.sync(identity, contacts);
+    while (chat.callKeepsAwake() && AppState.currentState !== 'active') await sleep(500);
+    if (AppState.currentState !== 'active') chat.stopAll();
+    return;
+  }
+
   const target = chat.contactForWake(message.data);
   chat.sync(identity, contacts);
   chat.connectForWake(target ? [target] : contacts.map((contact) => contact.publicKey));

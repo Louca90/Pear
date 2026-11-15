@@ -1,7 +1,7 @@
 const { withAndroidManifest } = require('expo/config-plugins');
 
 // Notifee déclare son service de premier plan en « shortService » (arrêté par Android après 3 minutes).
-// Une réception de fichier app fermée est une synchronisation de données : on remplace le type.
+// Une réception de fichier app fermée est une synchronisation de données ; un appel utilise le micro et la caméra.
 module.exports = (config) =>
   withAndroidManifest(config, (result) => {
     const manifest = result.modResults.manifest;
@@ -12,7 +12,8 @@ module.exports = (config) =>
       $: {
         'android:name': 'app.notifee.core.ForegroundService',
         'android:exported': 'false',
-        'android:foregroundServiceType': 'dataSync',
+        // Appels (vague 5) : micro, et caméra en vidéo.
+        'android:foregroundServiceType': 'dataSync|microphone|camera',
         'tools:replace': 'android:foregroundServiceType',
       },
     });

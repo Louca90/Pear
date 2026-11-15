@@ -162,7 +162,11 @@ class PearNativeModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("PearNative")
 
-    Events("onBack", "onDownloadProgress", "onInsetsChange", "onShare")
+    Events("onBack", "onDownloadProgress", "onInsetsChange", "onShare", "onHeadset")
+
+    OnCreate {
+      CallAudio.onHeadsetChange = { kind -> sendEvent("onHeadset", mapOf("kind" to kind)) }
+    }
 
     // Photos et vidéos partagées depuis une autre app (menu « Partager », lot 12) : Pear déjà ouvert
     // reçoit l'intention ici ; au lancement, elle est lue dans celle de l'activité.
@@ -222,6 +226,22 @@ class PearNativeModule : Module() {
         ?: throw IllegalStateException("Application introuvable.")
       val host = app.reactHost ?: throw IllegalStateException("Hôte React introuvable.")
       host.reload("langue")
+      Unit
+    }.runOnQueue(Queues.MAIN)
+
+    // Appels (vague 5) : son de l'appel, sonnerie, écran par-dessus le verrou.
+    Function("setCallAudio") { route: String ->
+      appContext.reactContext?.let { CallAudio.setRoute(it, route) }
+      Unit
+    }
+    Function("startRinging") {
+      appContext.reactContext?.let { CallAudio.startRinging(it) }
+      Unit
+    }
+    Function("stopRinging") { CallAudio.stopRinging() }
+    Function("callHeadset") { appContext.reactContext?.let { CallAudio.headset(it) } ?: "" }
+    AsyncFunction("showOverLock") { on: Boolean ->
+      appContext.currentActivity?.let { CallAudio.showOverLock(it, on) }
       Unit
     }.runOnQueue(Queues.MAIN)
 

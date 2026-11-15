@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Reanimated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { DURATION, EASE, timing } from '../../../motion';
-import { Search, Timer } from 'lucide-react-native';
+import { Phone, Search, Timer, Video } from 'lucide-react-native';
 import { DotsIcon } from '../../../components/AnimatedIcons';
 
 import { getContactProfile } from '../../../chat/database';
@@ -101,6 +101,16 @@ export function ChatHeader({ contactKey, name, onBack, onInfo, onCustomize, onSe
         }
         action={
           <View style={styles.headerActions}>
+            {!notes && (
+              <>
+                <IconButton onPress={() => chat.startCall(contactKey, false)} label={t('appel.appelerAudio')}>
+                  <Phone size={21} color={colors.text} strokeWidth={1.75} />
+                </IconButton>
+                <IconButton onPress={() => chat.startCall(contactKey, true)} label={t('appel.appelerVideo')}>
+                  <Video size={23} color={colors.text} strokeWidth={1.75} />
+                </IconButton>
+              </>
+            )}
             <IconButton onPress={onSearch} label={t('recherche.dansConversation')}>
               <Search size={22} color={colors.text} strokeWidth={1.75} />
             </IconButton>

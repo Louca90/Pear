@@ -19,6 +19,7 @@ export function reconcile(core: ChatCore) {
   const pinned = getPinnedContacts();
   const recent = getRecentContacts(now - RECENT_MS);
   const priority = (contact: string) => {
+    if (contact === core.callContact) return 5;
     if (contact === core.openConversation) return 4;
     if ((core.keepUntil.get(contact) ?? 0) > now) return 3;
     if (pinned.has(contact)) return 2;

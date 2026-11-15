@@ -1,3 +1,4 @@
+import { callRecordText, parseCallRecord } from './callText';
 import { File, Paths } from 'expo-file-system';
 import { SQLiteDatabase } from 'expo-sqlite';
 
@@ -816,6 +817,10 @@ export function describeMessage(message: Message): string {
   if (message.kind === 'system' && message.text === UPDATE_REQUIRED) return t('chat.majRequise');
   if (message.kind === 'system' && message.text === SESSION_BROKEN) return t('apercu.sessionCassee');
   if (message.kind === 'system' && message.text === SESSION_REPAIRED) return t('apercu.sessionReparee');
+  if (message.kind === 'system' && message.text.startsWith('call:')) {
+    const record = parseCallRecord(message.text);
+    if (record) return callRecordText(record);
+  }
   if (message.kind === 'system' && message.text.startsWith('saved:')) return message.text.includes(':video') ? t('apercu.videoEnregistree') : t('apercu.photoEnregistree');
   if (message.kind === 'system') return t('apercu.fondRetire');
   if (message.kind === 'image') return t('apercu.photo');

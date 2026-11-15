@@ -59,6 +59,7 @@ import { isTabSwipeLocked } from './src/components/tabSwipeLock';
 import { markCameraRequested } from './src/screens/cameraTiming';
 import { isCameraLive, setCameraShown, wakeCamera } from './src/screens/cameraStandby';
 import { ShareReceiver } from './src/components/ShareReceiver';
+import { CallLayer } from './src/screens/CallScreen';
 import { t } from './src/i18n';
 
 type Route =
@@ -866,6 +867,8 @@ function App() {
       <DialogHost />
       {themeFade}
       {locked !== false && <LockScreen waiting={locked === null} onUnlock={() => setLocked(false)} />}
+      {/* Appel (vague 5) : au-dessus de tout, même du verrouillage de Pear (il ne montre aucun message). */}
+      {identity && <CallLayer nameOf={(publicKey) => contacts.find((contact) => contact.publicKey === publicKey)?.name ?? t('app.contact')} />}
     </>
   );
 }

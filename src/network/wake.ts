@@ -3,7 +3,7 @@ import { getAuth, getIdToken } from '@react-native-firebase/auth';
 import { log } from '../log';
 import { wakeUrl } from '../remoteConfig';
 
-export type PushType = 'wake' | 'msg';
+export type PushType = 'wake' | 'msg' | 'call';
 // expired : le token FCM du destinataire n'existe plus (app désinstallée ou token renouvelé).
 export type PushResult = 'sent' | 'expired' | 'limited' | 'failed';
 

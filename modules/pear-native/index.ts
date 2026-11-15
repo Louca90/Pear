@@ -11,7 +11,7 @@ export type VideoEdit = { overlayUri?: string; matrix?: number[]; startMs?: numb
 
 export type SharedMedia = { uri: string; mime: string; size: number; contact?: string };
 
-declare class PearNativeModule extends NativeModule<{ onBack: (event: BackEvent) => void; onDownloadProgress: (event: DownloadProgress) => void; onInsetsChange: (event: Insets) => void; onShare: () => void }> {
+declare class PearNativeModule extends NativeModule<{ onBack: (event: BackEvent) => void; onDownloadProgress: (event: DownloadProgress) => void; onInsetsChange: (event: Insets) => void; onShare: () => void; onHeadset: (event: { kind: Headset }) => void }> {
   takeSharedMedia?(): Promise<SharedMedia[]>;
   setShareShortcuts?(contacts: { key: string; name: string; photo?: string }[]): Promise<void>;
   burnOverlay(videoUri: string, overlayUri: string, bitrate: number): Promise<string>;
@@ -44,6 +44,11 @@ declare class PearNativeModule extends NativeModule<{ onBack: (event: BackEvent)
   authenticate?(title: string): Promise<'ok' | 'cancelled' | 'unavailable'>;
   setIncognitoKeyboard?(tag: number): Promise<void>;
   cropImage?(inputUri: string, outputUri: string, rect: number[], rotation: number, maxSize: number, quality: number): Promise<string>;
+  setCallAudio?(route: string): void;
+  startRinging?(): void;
+  stopRinging?(): void;
+  showOverLock?(on: boolean): Promise<void>;
+  callHeadset?(): string;
 }
 
 const PearNative = requireNativeModule<PearNativeModule>('PearNative');
@@ -229,4 +234,39 @@ export function setIncognitoKeyboard(tag: number) {
 // Recharge l'interface de Pear (après un changement de langue).
 export function reloadApp() {
   return PearNative.reloadApp();
+}
+
+// --- Appels (vague 5). Sans effet sur un APK plus ancien. ---
+
+export type CallRoute = 'off' | 'earpiece' | 'speaker';
+// Le casque qui remplace l'écouteur pendant un appel ; '' sans casque.
+export type Headset = 'bluetooth' | 'wired' | '';
+
+export function callHeadset(): Headset {
+  const kind = PearNative.callHeadset?.();
+  return kind === 'bluetooth' || kind === 'wired' ? kind : '';
+}
+
+// Un casque arrive ou part pendant l'appel (le son y bascule tout seul).
+export function addHeadsetListener(listener: (kind: Headset) => void) {
+  return PearNative.addListener('onHeadset', (event) => listener(event.kind));
+}
+
+// Son de l'appel : écouteur (écran éteint contre l'oreille, un casque passe avant), haut-parleur, ou fin d'appel.
+export function setCallAudio(route: CallRoute) {
+  PearNative.setCallAudio?.(route);
+}
+
+// Sonnerie du téléphone en boucle, avec vibration ; rien en mode silencieux, vibration seule en vibreur.
+export function startRinging() {
+  PearNative.startRinging?.();
+}
+
+export function stopRinging() {
+  PearNative.stopRinging?.();
+}
+
+// L'écran de l'appel passe par-dessus le verrouillage du téléphone et l'allume.
+export function showOverLock(on: boolean) {
+  return PearNative.showOverLock?.(on) ?? Promise.resolve();
 }

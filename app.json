@@ -29,7 +29,12 @@
         "android.permission.REQUEST_INSTALL_PACKAGES",
         "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
         "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_DATA_SYNC"
+        "android.permission.FOREGROUND_SERVICE_DATA_SYNC",
+        "android.permission.FOREGROUND_SERVICE_MICROPHONE",
+        "android.permission.FOREGROUND_SERVICE_CAMERA",
+        "android.permission.USE_FULL_SCREEN_INTENT",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.WAKE_LOCK"
       ],
       "blockedPermissions": [
         "android.permission.SYSTEM_ALERT_WINDOW"

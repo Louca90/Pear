@@ -1,4 +1,4 @@
-import { RTCIceCandidate, RTCPeerConnection, RTCSessionDescription } from 'react-native-webrtc';
+import { MediaStreamTrack, RTCIceCandidate, RTCPeerConnection, RTCRtpTransceiver, RTCSessionDescription } from 'react-native-webrtc';
 import type RTCDataChannel from 'react-native-webrtc/lib/typescript/RTCDataChannel';
 import { randombytes_buf, to_base64 } from 'react-native-libsodium';
 
@@ -20,6 +20,12 @@ type Signal =
   | { kind: 'offer' | 'answer'; session: string; sdp: { type: string; sdp: string } }
   | { kind: 'candidate'; session: string; candidate: IceCandidateInit };
 
+// Appels (vague 5) : les pistes du micro et de la caméra passent dans la même connexion que les messages.
+export type CallMedia = { audio: MediaStreamTrack | null; video: MediaStreamTrack | null };
+// La renégociation des pistes passe par le canal de données, déjà chiffré : seul le rôle « a » propose,
+// « b » demande (« need ») ; il n'y a jamais deux propositions croisées.
+type RtcMessage = { type: 'rtc'; kind: 'need' } | { type: 'rtc'; kind: 'offer' | 'answer'; sdp: { type: string; sdp: string } };
+
 type IceCandidateInit = { candidate?: string; sdpMLineIndex?: number | null; sdpMid?: string | null };
 
 // Ce que les statistiques WebRTC donnent sur le chemin utilisé.
@@ -34,6 +40,8 @@ type Callbacks = {
   isForeground: () => boolean;
   // Battement reçu : `fg` vaut null pour un téléphone d'une ancienne version (sans le champ).
   onPresence: (fg: boolean | null) => void;
+  // Les pistes reçues de l'autre téléphone pendant un appel (null : pas encore de piste de ce type).
+  onRemoteMedia?: (media: CallMedia) => void;
 };
 
 export class PeerLink {
@@ -48,6 +56,8 @@ export class PeerLink {
   private lastSeen = 0;
   private lastAttempt = 0;
   private stopped = false;
+  // Les pistes à envoyer pendant un appel ; null hors appel. Réappliquées à chaque nouvelle connexion.
+  private media: CallMedia | null = null;
   // Change à chaque nouvelle connexion : un envoi de fichier en cours sait alors qu'il doit s'arrêter.
   epoch = 0;
 
@@ -96,6 +106,12 @@ export class PeerLink {
     if (!this.isCurrent(epoch) || !this.channel) return false;
     this.channel.send(bytes);
     return true;
+  }
+
+  // Pistes de l'appel en cours (null : fin de l'appel, plus rien n'est envoyé).
+  setMedia(media: CallMedia | null) {
+    this.media = media;
+    this.enqueue(() => this.applyMedia());
   }
 
   isOpen() {
@@ -176,6 +192,9 @@ export class PeerLink {
       if (this.pc === pc && pc.connectionState === 'failed') this.markOffline();
     });
     pc.addEventListener('datachannel', (event) => this.attachChannel(event.channel, pc));
+    pc.addEventListener('track', () => {
+      if (this.pc === pc) this.reportRemote(pc);
+    });
     return pc;
   }
 
@@ -189,6 +208,7 @@ export class PeerLink {
       this.beat();
       this.signaling.clearSent();
       this.reportRoute(pc);
+      if (this.media) this.enqueue(() => this.applyMedia());
     });
     channel.addEventListener('close', () => {
       if (this.pc === pc && !this.stopped) this.markOffline();
@@ -202,7 +222,8 @@ export class PeerLink {
           return;
         }
         const message = JSON.parse(open(event.data, this.messageKey, CONTEXT));
-        if (message.type === 'heartbeat') this.callbacks.onPresence(typeof message.fg === 'boolean' ? message.fg : null);
+        if (message.type === 'rtc') this.enqueue(() => this.handleRtc(message as RtcMessage, pc));
+        else if (message.type === 'heartbeat') this.callbacks.onPresence(typeof message.fg === 'boolean' ? message.fg : null);
         else this.callbacks.onMessage(message);
       } catch (e) {
         log.warn('message illisible', e);
@@ -257,6 +278,78 @@ export class PeerLink {
       if (this.pc.remoteDescription) await this.pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
       else this.pendingCandidates.push(signal.candidate);
     }
+  }
+
+  // --- Appels ---
+
+  // Les deux transceivers de l'appel (audio et vidéo), créés une fois par connexion. Ils restent ensuite :
+  // allumer ou couper la caméra, finir puis refaire un appel ne demandent qu'un changement de piste.
+  private mediaTransceivers(pc: RTCPeerConnection): { audio: RTCRtpTransceiver; video: RTCRtpTransceiver } | null {
+    const list = pc.getTransceivers().filter((transceiver) => !transceiver.stopped);
+    const audio = list.find((transceiver) => transceiver.receiver.track?.kind === 'audio');
+    const video = list.find((transceiver) => transceiver.receiver.track?.kind === 'video');
+    return audio && video ? { audio, video } : null;
+  }
+
+  private async applyMedia() {
+    const pc = this.pc;
+    if (this.stopped || !pc || this.channel?.readyState !== 'open') return;
+    if (this.mediaTransceivers(pc)) {
+      await this.attachTracks(pc);
+      return;
+    }
+    if (!this.media) return;
+    if (this.role === 'a') await this.addTransceivers(pc);
+    else this.send({ type: 'rtc', kind: 'need' });
+  }
+
+  private async addTransceivers(pc: RTCPeerConnection) {
+    if (!this.mediaTransceivers(pc)) {
+      pc.addTransceiver('audio', { direction: 'sendrecv' });
+      pc.addTransceiver('video', { direction: 'sendrecv' });
+    }
+    await this.attachTracks(pc);
+    const offer = await pc.createOffer({});
+    await pc.setLocalDescription(offer);
+    this.send({ type: 'rtc', kind: 'offer', sdp: { type: offer.type, sdp: offer.sdp } });
+  }
+
+  private async attachTracks(pc: RTCPeerConnection) {
+    const transceivers = this.mediaTransceivers(pc);
+    if (!transceivers || this.pc !== pc) return;
+    await transceivers.audio.sender.replaceTrack(this.media?.audio ?? null);
+    await transceivers.video.sender.replaceTrack(this.media?.video ?? null);
+    this.reportRemote(pc);
+  }
+
+  private async handleRtc(message: RtcMessage, pc: RTCPeerConnection) {
+    if (this.stopped || this.pc !== pc) return;
+    if (message.kind === 'need') {
+      if (this.role === 'a') await this.addTransceivers(pc);
+      return;
+    }
+    if (typeof message.sdp?.sdp !== 'string' || typeof message.sdp?.type !== 'string') return;
+    if (message.kind === 'offer' && this.role === 'b') {
+      await pc.setRemoteDescription(new RTCSessionDescription(message.sdp));
+      const transceivers = this.mediaTransceivers(pc);
+      if (transceivers) {
+        // Créés par la proposition en réception seule : on envoie aussi.
+        transceivers.audio.direction = 'sendrecv';
+        transceivers.video.direction = 'sendrecv';
+      }
+      await this.attachTracks(pc);
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      this.send({ type: 'rtc', kind: 'answer', sdp: { type: answer.type, sdp: answer.sdp } });
+    } else if (message.kind === 'answer' && this.role === 'a' && pc.signalingState === 'have-local-offer') {
+      await pc.setRemoteDescription(new RTCSessionDescription(message.sdp));
+      this.reportRemote(pc);
+    }
+  }
+
+  private reportRemote(pc: RTCPeerConnection) {
+    const transceivers = this.mediaTransceivers(pc);
+    this.callbacks.onRemoteMedia?.({ audio: transceivers?.audio.receiver.track ?? null, video: transceivers?.video.receiver.track ?? null });
   }
 
   private async flushCandidates(pc: RTCPeerConnection) {
