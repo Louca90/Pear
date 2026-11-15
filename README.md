@@ -7,13 +7,13 @@ Messagerie Android privée, chiffrée de bout en bout. Les messages vont directe
 - Photos, vidéos, vocaux, fichiers, réactions, réponses, modification et suppression.
 - Mise à jour automatique depuis les releases GitHub.
 
-## A note on how this was made
+## Une note sur la façon dont Pear a été fait
 
-Pear is entirely coded by AI (Claude). I'm a French student: I had this app idea in my head but I don't have the skills to build it myself yet, and I'm going to study this field to get there.
+Pear est entièrement codé par une IA (Claude). Je suis un étudiant français : j'avais cette idée d'application en tête, mais je n'ai pas encore les compétences pour la construire moi-même, et je vais étudier ce domaine pour y arriver.
 
-I make every decision about the features, the UI, the animations and the network architecture, and the AI writes the code. I'm upfront about it everywhere (README, commits, posts), so if you're against vibe coding, this project isn't for you and that's fine.
+Je prends chaque décision sur les fonctionnalités, l'interface, les animations et l'architecture réseau, et l'IA écrit le code. Je suis transparent là-dessus partout (README, commits, publications). Si vous êtes contre le vibe coding, ce projet n'est pas fait pour vous, et ce n'est pas grave.
 
-I take no credit for writing the app. I just brought a personal project I care about to life with the help of AI.
+Je ne m'attribue aucun mérite pour avoir écrit l'application. J'ai simplement donné vie, avec l'aide de l'IA, à un projet personnel qui me tient à cœur.
 
 ## Installer une version
 
