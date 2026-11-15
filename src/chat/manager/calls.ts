@@ -131,6 +131,14 @@ function sendCall(core: ChatCore, contact: string, message: Payload) {
 function attachMedia(core: ChatCore) {
   if (!state) return;
   core.links.get(state.contact)?.peer.setMedia({ audio: audioTrack, video: videoTrack });
+  pullRemote(core);
+}
+
+// Va chercher la vidéo reçue (début d'appel, l'autre allume sa caméra) sans attendre un signal de la connexion.
+function pullRemote(core: ChatCore) {
+  if (!state) return;
+  const media = core.links.get(state.contact)?.peer.remoteMedia();
+  if (media) callRemoteMedia(state.contact, media);
 }
 
 function startTimer(ms: number, action: () => void) {
@@ -442,7 +450,9 @@ export function receiveCall(core: ChatCore, contact: string, raw: unknown) {
   } else if (message.action === 'end') {
     finish(core, state.phase === 'incoming' ? 'missed' : 'remoteHungUp', true);
   } else if (message.action === 'media' && typeof message.camera === 'boolean') {
+    log.info('caméra du contact', message.camera ? 'allumée' : 'coupée');
     set({ remoteCamera: message.camera });
+    pullRemote(core);
   }
 }
 
@@ -549,9 +559,11 @@ export function callLinkStatus(core: ChatCore, contact: string, status: PeerStat
 export function callRemoteMedia(contact: string, media: CallMedia) {
   if (!state || state.contact !== contact) return;
   const video = media.video;
-  if (!video || video.id === remoteVideoId) return;
+  if (!video || (video.id === remoteVideoId && state.remoteUrl)) return;
   remoteVideoId = video.id;
-  set({ remoteUrl: new MediaStream([video]).toURL() });
+  const remoteUrl = new MediaStream([video]).toURL();
+  log.info('vidéo du contact branchée');
+  set({ remoteUrl });
 }
 
 // --- Fin ---

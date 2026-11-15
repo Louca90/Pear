@@ -40,11 +40,12 @@ const useCall = () => useSyncExternalStore(chat.subscribeCall, chat.getCall);
 // Pear est-il dans la fenêtre flottante d'Android (on a quitté l'app pendant l'appel) ?
 function usePip() {
   const [pip, setPip] = useState(false);
+  const { width } = useWindowDimensions();
   useEffect(() => {
     const subscription = addPipListener(setPip);
     return () => subscription.remove();
   }, []);
-  return pip;
+  return pip || width < 300;
 }
 
 export function CallLayer({ nameOf }: { nameOf: (contact: string) => string }) {
@@ -185,13 +186,16 @@ function CallPip({ call, name }: { call: CallState; name: string }) {
   const status = statusText(call);
   return (
     <View style={[StyleSheet.absoluteFill, styles.pip0, (remote || local) && styles.dark]}>
-      {remote && <RTCView streamURL={call.remoteUrl!} objectFit="cover" zOrder={0} style={StyleSheet.absoluteFill} />}
-      {!remote && local && <RTCView streamURL={call.localUrl!} objectFit="cover" mirror={call.front} zOrder={0} style={StyleSheet.absoluteFill} />}
-      {remote && local && (
-        <View style={styles.pipThumb}>
-          <RoundedVideo url={call.localUrl!} mirror={call.front} radius={8} />
+      {remote && local ? (
+        <View style={styles.pipStack}>
+          <RTCView streamURL={call.remoteUrl!} objectFit="cover" zOrder={0} style={styles.pipHalf} />
+          <RTCView streamURL={call.localUrl!} objectFit="cover" mirror={call.front} zOrder={0} style={styles.pipHalf} />
         </View>
-      )}
+      ) : remote ? (
+        <RTCView streamURL={call.remoteUrl!} objectFit="cover" zOrder={0} style={StyleSheet.absoluteFill} />
+      ) : local ? (
+        <RTCView streamURL={call.localUrl!} objectFit="cover" mirror={call.front} zOrder={0} style={StyleSheet.absoluteFill} />
+      ) : null}
       {!remote && !local && (
         <View style={styles.pipAudio}>
           <Avatar uri={photo} size={56} />
@@ -362,9 +366,9 @@ function CallPill({ call, name, onPress }: { call: CallState; name: string; onPr
   return (
     <Reanimated.View entering={FadeIn.duration(DURATION.small).easing(EASE)} exiting={FadeOut.duration(DURATION.small).easing(EASE)} style={StyleSheet.absoluteFill} pointerEvents="box-none">
       <SnapDraggable slots={slots} initial={1} onTap={onPress}>
-      <View onLayout={(event) => setPillWidth(event.nativeEvent.layout.width)} accessibilityRole="button" accessibilityLabel={t('appel.revenir')} style={styles.pill}>
+      <View onLayout={(event) => setPillWidth(event.nativeEvent.layout.width)} accessibilityRole="button" accessibilityLabel={t('appel.revenir')} style={[styles.pill, { maxWidth: width - 24 }]}>
         <View style={[styles.pillDot, { backgroundColor: call.reconnecting ? colors.textMuted : colors.signatureStrong }]} />
-        <Text style={styles.pillText} numberOfLines={1}>
+        <Text style={[styles.pillText, styles.pillName]} numberOfLines={1}>
           {name}
         </Text>
         {status ? <Text style={styles.pillText}>· {status}</Text> : call.startedAt ? <Chrono since={call.startedAt} style={styles.pillText} /> : null}
@@ -478,14 +482,12 @@ const useStyles = createStyles((colors) => ({
     borderRadius: 18,
     overflow: 'hidden',
   },
-  pipThumb: {
-    position: 'absolute',
-    right: 6,
-    bottom: 6,
-    width: '30%',
-    aspectRatio: 9 / 16,
-    borderRadius: 8,
-    overflow: 'hidden',
+  pipStack: {
+    flex: 1,
+    gap: 2,
+  },
+  pipHalf: {
+    flex: 1,
   },
   pip0: {
     backgroundColor: colors.background,
@@ -509,7 +511,6 @@ const useStyles = createStyles((colors) => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    maxWidth: '80%',
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: radius.full,
@@ -517,7 +518,11 @@ const useStyles = createStyles((colors) => ({
     shadowColor: colors.shadow,
     elevation: 6,
   },
+  pillName: {
+    flexShrink: 1,
+  },
   pillDot: {
+    flexShrink: 0,
     width: 8,
     height: 8,
     borderRadius: radius.full,

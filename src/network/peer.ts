@@ -347,6 +347,12 @@ export class PeerLink {
     }
   }
 
+  // Les pistes reçues de l'autre téléphone, lues tout de suite (null hors connexion).
+  remoteMedia(): CallMedia | null {
+    const transceivers = this.pc ? this.mediaTransceivers(this.pc) : null;
+    return transceivers ? { audio: transceivers.audio.receiver.track ?? null, video: transceivers.video.receiver.track ?? null } : null;
+  }
+
   private reportRemote(pc: RTCPeerConnection) {
     const transceivers = this.mediaTransceivers(pc);
     this.callbacks.onRemoteMedia?.({ audio: transceivers?.audio.receiver.track ?? null, video: transceivers?.video.receiver.track ?? null });
