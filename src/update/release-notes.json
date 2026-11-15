@@ -1,7 +1,7 @@
 {
-  "version": "1.7.1",
-  "versionCode": 11,
-  "summary": "- Un message qui n'est pas encore arrivé dit enfin ce qui se passe : « En attente du contact » avec l'heure du dernier essai, ou « Pas encore envoyé » si rien n'a pu partir.\n- Après 5 minutes sans nouvelle, un bouton « Réessayer » apparaît sous le message. Aucune promesse de livraison : elle dépend du téléphone de votre contact.\n- Un texte long arrive maintenant même si l'autre téléphone est éteint ou hors ligne, sans doublon.\n- Un message renvoyé après une coupure n'est jamais reçu deux fois.",
+  "version": "1.8.0",
+  "versionCode": 12,
+  "summary": "- Appels audio et vidéo : deux boutons dans l'en-tête de la conversation. L'appel passe en direct entre les deux téléphones, chiffré, sans serveur au milieu.\n- Si l'autre téléphone est fermé ou en veille, il sonne quand même, même verrouillé. Si la connexion directe est impossible, Pear le dit au lieu de sonner dans le vide.\n- Quitter Pear pendant un appel garde l'appel dans une petite fenêtre flottante. En vidéo, déplacez votre image où vous voulez ; appuyez dessus pour l'échanger avec celle de l'autre.\n- Les appels fonctionnent avec un casque Bluetooth ou filaire, et l'appel en cours apparaît dans la Now Bar des Samsung. Pour appeler quelqu'un, il faut que lui aussi ait la 1.8.0.",
   "pages": {
     "1.6.0": [
       {
