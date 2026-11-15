@@ -76,6 +76,7 @@
       "./plugins/with-short-native-build",
       "./plugins/with-share-intent",
       "./plugins/with-file-service",
+      "./plugins/with-call-pip",
       "./plugins/with-notification-icon",
       [
         "expo-navigation-bar",

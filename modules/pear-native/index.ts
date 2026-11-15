@@ -11,7 +11,7 @@ export type VideoEdit = { overlayUri?: string; matrix?: number[]; startMs?: numb
 
 export type SharedMedia = { uri: string; mime: string; size: number; contact?: string };
 
-declare class PearNativeModule extends NativeModule<{ onBack: (event: BackEvent) => void; onDownloadProgress: (event: DownloadProgress) => void; onInsetsChange: (event: Insets) => void; onShare: () => void; onHeadset: (event: { kind: Headset }) => void }> {
+declare class PearNativeModule extends NativeModule<{ onBack: (event: BackEvent) => void; onDownloadProgress: (event: DownloadProgress) => void; onInsetsChange: (event: Insets) => void; onShare: () => void; onHeadset: (event: { kind: Headset }) => void; onPip: (event: { active: boolean }) => void }> {
   takeSharedMedia?(): Promise<SharedMedia[]>;
   setShareShortcuts?(contacts: { key: string; name: string; photo?: string }[]): Promise<void>;
   burnOverlay(videoUri: string, overlayUri: string, bitrate: number): Promise<string>;
@@ -49,6 +49,7 @@ declare class PearNativeModule extends NativeModule<{ onBack: (event: BackEvent)
   stopRinging?(): void;
   showOverLock?(on: boolean): Promise<void>;
   callHeadset?(): string;
+  setCallPip?(enabled: boolean, width: number, height: number): Promise<void>;
 }
 
 const PearNative = requireNativeModule<PearNativeModule>('PearNative');
@@ -269,4 +270,14 @@ export function stopRinging() {
 // L'écran de l'appel passe par-dessus le verrouillage du téléphone et l'allume.
 export function showOverLock(on: boolean) {
   return PearNative.showOverLock?.(on) ?? Promise.resolve();
+}
+
+// Fenêtre flottante de l'appel (Android 12 et plus) : quitter Pear pendant l'appel l'ouvre, au format donné.
+export function setCallPip(enabled: boolean, width = 9, height = 16) {
+  return PearNative.setCallPip?.(enabled, width, height) ?? Promise.resolve();
+}
+
+// Pear passe dans la fenêtre flottante, ou en sort.
+export function addPipListener(listener: (active: boolean) => void) {
+  return PearNative.addListener('onPip', (event) => listener(event.active));
 }

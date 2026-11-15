@@ -1,6 +1,9 @@
 package expo.modules.pearnative
 
+import android.app.PictureInPictureParams
 import android.content.Intent
+import android.util.Rational
+import androidx.core.app.PictureInPictureModeChangedInfo
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
@@ -159,10 +162,12 @@ class PearNativeModule : Module() {
     null
   }
 
+  private var pipListening = false
+
   override fun definition() = ModuleDefinition {
     Name("PearNative")
 
-    Events("onBack", "onDownloadProgress", "onInsetsChange", "onShare", "onHeadset")
+    Events("onBack", "onDownloadProgress", "onInsetsChange", "onShare", "onHeadset", "onPip")
 
     OnCreate {
       CallAudio.onHeadsetChange = { kind -> sendEvent("onHeadset", mapOf("kind" to kind)) }
@@ -239,6 +244,30 @@ class PearNativeModule : Module() {
       Unit
     }
     Function("stopRinging") { CallAudio.stopRinging() }
+    // Appel en cours : quitter Pear (accueil, autre app) ouvre la fenêtre flottante de l'appel, à ce format.
+    // Android 12 et plus ; enabled = false à la fin de l'appel.
+    AsyncFunction("setCallPip") { enabled: Boolean, width: Int, height: Int ->
+      val activity = appContext.currentActivity as? ComponentActivity ?: return@AsyncFunction
+      if (!pipListening) {
+        pipListening = true
+        activity.addOnPictureInPictureModeChangedListener { info: PictureInPictureModeChangedInfo ->
+          sendEvent("onPip", mapOf("active" to info.isInPictureInPictureMode))
+        }
+      }
+      if (Build.VERSION.SDK_INT >= 31) {
+        try {
+          activity.setPictureInPictureParams(
+            PictureInPictureParams.Builder()
+              .setAutoEnterEnabled(enabled)
+              .setAspectRatio(Rational(width.coerceAtLeast(1), height.coerceAtLeast(1)))
+              .build(),
+          )
+        } catch (e: Exception) {
+          Log.w("PearCall", "fenêtre flottante", e)
+        }
+      }
+      Unit
+    }.runOnQueue(Queues.MAIN)
     Function("callHeadset") { appContext.reactContext?.let { CallAudio.headset(it) } ?: "" }
     AsyncFunction("showOverLock") { on: Boolean ->
       appContext.currentActivity?.let { CallAudio.showOverLock(it, on) }

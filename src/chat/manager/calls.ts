@@ -7,7 +7,7 @@ import type { CallMedia, PeerStatus } from '../../network/peer';
 import { callPushTag, decodeCallPush, encodeCallPush, isCallId } from '../callPayload';
 import { getContactProfile, isBlocked } from '../database';
 import { clearCallNotification, showIncomingCall, showMissedCall, showOngoingCall } from '../notifications';
-import { addHeadsetListener, callHeadset, Headset, setCallAudio, showOverLock, startRinging, stopRinging } from '../../../modules/pear-native';
+import { addHeadsetListener, callHeadset, Headset, setCallAudio, setCallPip, showOverLock, startRinging, stopRinging } from '../../../modules/pear-native';
 import { log } from '../../log';
 
 import { ChatCore } from './core';
@@ -100,6 +100,20 @@ function set(patch: Partial<CallState>) {
   if (!state) return;
   state = { ...state, ...patch };
   listeners.forEach((listener) => listener());
+  updatePip();
+}
+
+// Quitter Pear pendant un appel (lancé ou en cours, pas quand il sonne chez nous) ouvre la fenêtre
+// flottante : en hauteur s'il y a une image à montrer, carrée pour un appel audio.
+let pipConfig = '';
+function updatePip() {
+  const on = !!state && (state.phase === 'calling' || state.phase === 'ringing' || state.phase === 'connecting' || state.phase === 'active');
+  const tall = !!state && (state.cameraOn || (state.phase === 'active' && state.remoteCamera && state.video));
+  const config = on ? (tall ? '9:16' : '1:1') : 'off';
+  if (config === pipConfig) return;
+  pipConfig = config;
+  const [width, height] = tall ? [9, 16] : [1, 1];
+  setCallPip(on, width, height).catch((e) => log.warn('fenêtre flottante', e));
 }
 
 const live = () => !!state && state.phase !== 'ended';
@@ -169,7 +183,7 @@ function releaseMedia() {
 // Écran de l'appel par-dessus le verrouillage, et service de premier plan (micro, caméra).
 function showActive(core: ChatCore) {
   if (!state) return;
-  showOngoingCall(state.contact, nameOf(core, state.contact), state.video, state.startedAt ?? Date.now()).catch((e) => log.warn('notification d’appel', e));
+  showOngoingCall(state.contact, nameOf(core, state.contact), state.video, state.startedAt).catch((e) => log.warn('notification d’appel', e));
 }
 
 // --- Appeler ---
@@ -215,6 +229,7 @@ export async function startCall(core: ChatCore, contact: string, video: boolean)
   if (!live()) return;
   startAudio(video);
   showOverLock(true).catch(() => undefined);
+  showActive(core);
   invite(core);
   startTimer(CONNECT_MS, () => {
     if (state?.phase !== 'calling') return;
@@ -557,6 +572,7 @@ function finish(core: ChatCore, end: CallEnd, record = false) {
   if (end === 'missed') showMissedCall(current.contact, nameOf(core, current.contact), current.video).catch((e) => log.warn('notification d’appel', e));
 
   set({ phase: 'ended', end, reconnecting: false });
+  updatePip();
   clearTimeout(clearTimer);
   clearTimer = setTimeout(() => {
     if (state?.phase !== 'ended') return;

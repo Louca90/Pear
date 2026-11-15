@@ -13,6 +13,7 @@ import { useBackInterceptor } from '../navigation/backInterceptors';
 import { DURATION, EASE, timing } from '../motion';
 import { createStyles, fixed, radius, spacing, useColors } from '../theme';
 import { t, TextKey } from '../i18n';
+import { addPipListener } from '../../modules/pear-native';
 
 // L'écran d'un appel (vague 5), par-dessus tout le reste, même l'écran de verrouillage de Pear.
 // Audio : fond blanc, photo du contact au centre avec un anneau qui respire tant que ça sonne.
@@ -35,8 +36,19 @@ const END_TEXT: Record<CallEnd, TextKey> = {
 
 const useCall = () => useSyncExternalStore(chat.subscribeCall, chat.getCall);
 
+// Pear est-il dans la fenêtre flottante d'Android (on a quitté l'app pendant l'appel) ?
+function usePip() {
+  const [pip, setPip] = useState(false);
+  useEffect(() => {
+    const subscription = addPipListener(setPip);
+    return () => subscription.remove();
+  }, []);
+  return pip;
+}
+
 export function CallLayer({ nameOf }: { nameOf: (contact: string) => string }) {
   const call = useCall();
+  const pip = usePip();
   const [minimized, setMinimized] = useState(false);
   const callId = call?.id;
   useEffect(() => setMinimized(false), [callId]);
@@ -46,6 +58,8 @@ export function CallLayer({ nameOf }: { nameOf: (contact: string) => string }) {
   useBackInterceptor(full && call?.phase !== 'incoming', () => setMinimized(true));
   if (!call) return null;
   const name = getContactProfile(call.contact).name ?? nameOf(call.contact);
+  // Fenêtre flottante : seulement l'image du contact (ou la nôtre), ou sa photo, son nom et la durée.
+  if (pip) return <CallPip call={call} name={name} />;
   return full ? (
     <Reanimated.View key="full" entering={FadeIn.duration(DURATION.screen).easing(EASE)} exiting={FadeOut.duration(DURATION.screen).easing(EASE)} style={StyleSheet.absoluteFill}>
       <CallFull call={call} name={name} onMinimize={() => setMinimized(true)} />
@@ -161,6 +175,36 @@ function CallFull({ call, name, onMinimize }: { call: CallState; name: string; o
           </View>
         )}
       </View>
+    </View>
+  );
+}
+
+function CallPip({ call, name }: { call: CallState; name: string }) {
+  const styles = useStyles();
+  const colors = useColors();
+  const photo = getContactProfile(call.contact).photo_uri;
+  const remote = call.phase === 'active' && call.remoteCamera && !!call.remoteUrl && !call.reconnecting;
+  const local = !remote && call.cameraOn && !!call.localUrl;
+  const status = statusText(call);
+  return (
+    <View style={[StyleSheet.absoluteFill, styles.pip0, (remote || local) && styles.dark]}>
+      {remote && <RTCView streamURL={call.remoteUrl!} objectFit="cover" zOrder={0} style={StyleSheet.absoluteFill} />}
+      {local && <RTCView streamURL={call.localUrl!} objectFit="cover" mirror={call.front} zOrder={0} style={StyleSheet.absoluteFill} />}
+      {!remote && !local && (
+        <View style={styles.pipAudio}>
+          <Avatar uri={photo} size={56} />
+          <Text style={[styles.pipName, { color: colors.text }]} numberOfLines={1}>
+            {name}
+          </Text>
+          {status ? (
+            <Text style={[styles.pipStatus, { color: colors.textMuted }]} numberOfLines={1}>
+              {status}
+            </Text>
+          ) : (
+            call.startedAt && <Chrono since={call.startedAt} style={[styles.pipStatus, { color: colors.textMuted }]} />
+          )}
+        </View>
+      )}
     </View>
   );
 }
@@ -343,6 +387,24 @@ const useStyles = createStyles((colors) => ({
     overflow: 'hidden',
     backgroundColor: fixed.black,
     zIndex: 2,
+  },
+  pip0: {
+    backgroundColor: colors.background,
+  },
+  pipAudio: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    padding: 8,
+  },
+  pipName: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  pipStatus: {
+    fontSize: 12,
+    fontVariant: ['tabular-nums'],
   },
   pillWrap: {
     position: 'absolute',

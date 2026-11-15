@@ -269,13 +269,14 @@ export async function showIncomingCall(contact: string, name: string, photoUri: 
 
 // Appel en cours : service de premier plan (micro, et caméra en vidéo), sans quoi Android coupe le
 // micro dès que Pear passe en arrière-plan. Un appui ramène à l'appel ; « Raccrocher » y met fin.
-export async function showOngoingCall(contact: string, name: string, video: boolean, startedAt: number) {
+// startedAt null : l'appel est lancé, l'autre n'a pas encore répondu (pas de chronomètre).
+export async function showOngoingCall(contact: string, name: string, video: boolean, startedAt: number | null) {
   await ensureCallChannel();
   callService = true;
   await notifee.displayNotification({
     id: callId(contact),
     title: name,
-    body: t(video ? 'appel.enCoursVideo' : 'appel.enCoursAudio'),
+    body: startedAt ? t(video ? 'appel.enCoursVideo' : 'appel.enCoursAudio') : t('appel.appel'),
     data: { call: contact },
     android: {
       channelId: CALL_CHANNEL_ID,
@@ -289,8 +290,7 @@ export async function showOngoingCall(contact: string, name: string, video: bool
         AndroidForegroundServiceType.FOREGROUND_SERVICE_TYPE_MICROPHONE,
         ...(video ? [AndroidForegroundServiceType.FOREGROUND_SERVICE_TYPE_CAMERA] : []),
       ],
-      showChronometer: true,
-      timestamp: startedAt,
+      ...(startedAt ? { showChronometer: true, timestamp: startedAt } : {}),
       pressAction: { id: 'default', launchActivity: 'default' },
       actions: [{ title: t('appel.raccrocher'), pressAction: { id: 'call-end' } }],
     },
