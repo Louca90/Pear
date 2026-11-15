@@ -164,14 +164,50 @@ class PearNativeModule : Module() {
 
   private var pipListening = false
 
+  private fun findSurface(view: View): android.view.SurfaceView? {
+    if (view is android.view.SurfaceView) return view
+    if (view is android.view.ViewGroup) {
+      for (i in 0 until view.childCount) findSurface(view.getChildAt(i))?.let { return it }
+    }
+    return null
+  }
+
   override fun definition() = ModuleDefinition {
     Name("PearNative")
 
-    Events("onBack", "onDownloadProgress", "onInsetsChange", "onShare", "onHeadset", "onPip")
+    Events("onBack", "onDownloadProgress", "onInsetsChange", "onShare", "onHeadset", "onPip", "onCallHangUp")
 
     OnCreate {
       CallAudio.onHeadsetChange = { kind -> sendEvent("onHeadset", mapOf("kind" to kind)) }
+      PearCallService.onHangUp = { sendEvent("onCallHangUp", emptyMap<String, Any>()) }
     }
+
+    // Notification de l'appel en cours (service de premier plan). info : name, photo, video, startedAt
+    // (0 = pas encore répondu), text, channelName, hangUpLabel.
+    Function("startCallService") { info: Map<String, Any?> ->
+      appContext.reactContext?.let { PearCallService.start(it, info) }
+      Unit
+    }
+    Function("stopCallService") {
+      appContext.reactContext?.let { PearCallService.stop(it) }
+      Unit
+    }
+
+    // Coins arrondis d'une vidéo (RTCView) : la vidéo est une SurfaceView, que le rognage de React Native
+    // ne touche pas. Android sait arrondir la surface elle-même (méthode cachée, présente depuis Android 12).
+    AsyncFunction("setVideoCorner") { tag: Int, radius: Double ->
+      val context = appContext.reactContext as? ReactContext ?: return@AsyncFunction false
+      val root = UIManagerHelper.getUIManagerForReactTag(context, tag)?.resolveView(tag) ?: return@AsyncFunction false
+      val surface = findSurface(root) ?: return@AsyncFunction false
+      try {
+        val method = android.view.SurfaceView::class.java.getMethod("setCornerRadius", Float::class.javaPrimitiveType)
+        method.invoke(surface, (radius * context.resources.displayMetrics.density).toFloat())
+        true
+      } catch (e: Exception) {
+        Log.w("PearCall", "coins de la vidéo", e)
+        false
+      }
+    }.runOnQueue(Queues.MAIN)
 
     // Photos et vidéos partagées depuis une autre app (menu « Partager », lot 12) : Pear déjà ouvert
     // reçoit l'intention ici ; au lancement, elle est lue dans celle de l'activité.

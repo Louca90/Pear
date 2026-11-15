@@ -1,5 +1,5 @@
-import { ComponentType, useEffect, useState, useSyncExternalStore } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ComponentType, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { findNodeHandle, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Reanimated, { FadeIn, FadeOut, interpolateColor, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { Bluetooth, ChevronDown, Ear, Headphones, Mic, MicOff, Phone, PhoneOff, SwitchCamera, Video, VideoOff, Volume2 } from 'lucide-react-native';
 import { RTCView } from 'react-native-webrtc';
@@ -10,10 +10,11 @@ import { getContactProfile } from '../chat/database';
 import { formatCallDuration } from '../chat/callText';
 import { Avatar, useInsets, usePressFeedback } from '../components/ui';
 import { useBackInterceptor } from '../navigation/backInterceptors';
-import { DURATION, EASE, timing } from '../motion';
+import { DURATION, EASE, enterUp, timing } from '../motion';
 import { createStyles, fixed, radius, spacing, useColors } from '../theme';
 import { t, TextKey } from '../i18n';
-import { addPipListener } from '../../modules/pear-native';
+import { addPipListener, setVideoCorner } from '../../modules/pear-native';
+import { SnapDraggable } from './call/SnapDraggable';
 
 // L'écran d'un appel (vague 5), par-dessus tout le reste, même l'écran de verrouillage de Pear.
 // Audio : fond blanc, photo du contact au centre avec un anneau qui respire tant que ça sonne.
@@ -95,8 +96,8 @@ function CallFull({ call, name, onMinimize }: { call: CallState; name: string; o
   const { top, bottom } = useInsets();
   const photo = getContactProfile(call.contact).photo_uri;
   const showRemote = call.phase === 'active' && call.remoteCamera && !!call.remoteUrl && !call.reconnecting;
-  const showLocalFull = !showRemote && call.cameraOn && !!call.localUrl;
-  const onVideo = showRemote || showLocalFull;
+  const showLocal = call.cameraOn && !!call.localUrl;
+  const onVideo = showRemote || showLocal;
   const ended = call.phase === 'ended';
   const waiting = call.phase === 'calling' || call.phase === 'ringing' || call.phase === 'incoming';
   const status = statusText(call);
@@ -106,13 +107,7 @@ function CallFull({ call, name, onMinimize }: { call: CallState; name: string; o
   return (
     <View style={[styles.root, onVideo && styles.dark]}>
       <StatusBar style={onVideo ? 'light' : 'auto'} />
-      {showRemote && <RTCView streamURL={call.remoteUrl!} objectFit="cover" zOrder={0} style={StyleSheet.absoluteFill} />}
-      {showLocalFull && <RTCView streamURL={call.localUrl!} objectFit="cover" mirror={call.front} zOrder={0} style={StyleSheet.absoluteFill} />}
-      {showRemote && call.cameraOn && call.localUrl && (
-        <Reanimated.View entering={FadeIn.duration(DURATION.small).easing(EASE)} style={[styles.pip, { top: top + 56 }]}>
-          <RTCView streamURL={call.localUrl} objectFit="cover" mirror={call.front} zOrder={1} style={StyleSheet.absoluteFill} />
-        </Reanimated.View>
-      )}
+      {onVideo && <VideoStage call={call} showRemote={showRemote} showLocal={showLocal} top={top} bottom={bottom} />}
 
       <View style={[styles.topBar, { paddingTop: top + spacing.sm }]}>
         {call.phase !== 'incoming' && !ended ? (
@@ -147,19 +142,20 @@ function CallFull({ call, name, onMinimize }: { call: CallState; name: string; o
       <View style={[styles.controls, { paddingBottom: bottom + 32 }]}>
         {call.phase === 'incoming' ? (
           <View style={styles.answerRow}>
-            <RoundButton icon={PhoneOff} label={t('appel.refuser')} variant="danger" onPress={() => chat.declineCall()} onVideo={onVideo} big />
-            <RoundButton icon={call.video ? Video : Phone} label={t('appel.repondre')} variant="accept" onPress={() => chat.acceptCall()} onVideo={onVideo} big />
+            <RoundButton icon={PhoneOff} label={t('appel.refuser')} variant="danger" onPress={() => chat.declineCall()} onVideo={onVideo} big delay={0} />
+            <RoundButton icon={call.video ? Video : Phone} label={t('appel.repondre')} variant="accept" onPress={() => chat.acceptCall()} onVideo={onVideo} big delay={60} />
           </View>
         ) : (
           <View style={[styles.activeControls, ended && styles.disabled]} pointerEvents={ended ? 'none' : 'auto'}>
             <View style={styles.optionRow}>
-              <RoundButton icon={call.muted ? MicOff : Mic} label={t(call.muted ? 'appel.microCoupe' : 'appel.micro')} active={call.muted} onPress={chat.toggleMute} onVideo={onVideo} />
+              <RoundButton icon={call.muted ? MicOff : Mic} label={t(call.muted ? 'appel.microCoupe' : 'appel.micro')} active={call.muted} onPress={chat.toggleMute} onVideo={onVideo} delay={0} />
               <RoundButton
                 icon={call.speaker ? Volume2 : call.headset === 'bluetooth' ? Bluetooth : call.headset === 'wired' ? Headphones : Ear}
                 label={t(call.speaker ? 'appel.hautParleur' : call.headset ? 'appel.casque' : 'appel.hautParleurCoupe')}
                 active={call.speaker}
                 onPress={chat.toggleSpeaker}
                 onVideo={onVideo}
+                delay={40}
               />
               <RoundButton
                 icon={call.cameraOn ? Video : VideoOff}
@@ -168,10 +164,11 @@ function CallFull({ call, name, onMinimize }: { call: CallState; name: string; o
                 disabled={call.phase !== 'active'}
                 onPress={() => chat.toggleCamera()}
                 onVideo={onVideo}
+                delay={80}
               />
-              {call.cameraOn && <RoundButton icon={SwitchCamera} label={t('appel.retourner')} onPress={chat.switchCamera} onVideo={onVideo} />}
+              {call.cameraOn && <RoundButton icon={SwitchCamera} label={t('appel.retourner')} onPress={chat.switchCamera} onVideo={onVideo} delay={0} />}
             </View>
-            <RoundButton icon={PhoneOff} label={t('appel.raccrocher')} variant="danger" onPress={() => chat.hangUp()} onVideo={onVideo} big />
+            <RoundButton icon={PhoneOff} label={t('appel.raccrocher')} variant="danger" onPress={() => chat.hangUp()} onVideo={onVideo} big delay={120} />
           </View>
         )}
       </View>
@@ -184,12 +181,17 @@ function CallPip({ call, name }: { call: CallState; name: string }) {
   const colors = useColors();
   const photo = getContactProfile(call.contact).photo_uri;
   const remote = call.phase === 'active' && call.remoteCamera && !!call.remoteUrl && !call.reconnecting;
-  const local = !remote && call.cameraOn && !!call.localUrl;
+  const local = call.cameraOn && !!call.localUrl;
   const status = statusText(call);
   return (
     <View style={[StyleSheet.absoluteFill, styles.pip0, (remote || local) && styles.dark]}>
       {remote && <RTCView streamURL={call.remoteUrl!} objectFit="cover" zOrder={0} style={StyleSheet.absoluteFill} />}
-      {local && <RTCView streamURL={call.localUrl!} objectFit="cover" mirror={call.front} zOrder={0} style={StyleSheet.absoluteFill} />}
+      {!remote && local && <RTCView streamURL={call.localUrl!} objectFit="cover" mirror={call.front} zOrder={0} style={StyleSheet.absoluteFill} />}
+      {remote && local && (
+        <View style={styles.pipThumb}>
+          <RoundedVideo url={call.localUrl!} mirror={call.front} radius={8} />
+        </View>
+      )}
       {!remote && !local && (
         <View style={styles.pipAudio}>
           <Avatar uri={photo} size={56} />
@@ -206,6 +208,72 @@ function CallPip({ call, name }: { call: CallState; name: string }) {
         </View>
       )}
     </View>
+  );
+}
+
+// Une vidéo aux coins arrondis : la SurfaceView est arrondie par Android lui-même (le rognage de React
+// Native ne l'atteint pas), dès qu'elle est posée.
+function RoundedVideo({ url, mirror, radius }: { url: string; mirror: boolean; radius: number }) {
+  const ref = useRef(null);
+  const round = () => {
+    const tag = findNodeHandle(ref.current);
+    if (tag) setVideoCorner(tag, radius).catch(() => undefined);
+  };
+  return <RTCView ref={ref} streamURL={url} objectFit="cover" mirror={mirror} zOrder={1} onLayout={round} style={[StyleSheet.absoluteFill, { borderRadius: radius }]} />;
+}
+
+// L'appel vidéo : une image en grand, l'autre en vignette arrondie qu'on déplace et qui se range dans
+// le coin le plus proche. Un appui sur la vignette échange les deux (passage par un bref fondu).
+const THUMB_W = 108;
+const THUMB_H = 160;
+const CONTROLS_H = 250;
+
+function VideoStage({ call, showRemote, showLocal, top, bottom }: { call: CallState; showRemote: boolean; showLocal: boolean; top: number; bottom: number }) {
+  const styles = useStyles();
+  const { width, height } = useWindowDimensions();
+  const [localMain, setLocalMain] = useState(false);
+  const both = showRemote && showLocal;
+  useEffect(() => {
+    if (!both) setLocalMain(false);
+  }, [both]);
+  const veil = useSharedValue(0);
+  const veilStyle = useAnimatedStyle(() => ({ opacity: veil.get() }));
+  const swap = () => {
+    veil.set(1);
+    setLocalMain((value) => !value);
+    veil.set(timing(0, 240));
+  };
+  const slots = useMemo(() => {
+    const left = 16;
+    const right = width - THUMB_W - 16;
+    const high = top + 64;
+    const low = Math.max(high, height - bottom - CONTROLS_H - THUMB_H);
+    return [
+      { x: right, y: high },
+      { x: left, y: high },
+      { x: right, y: low },
+      { x: left, y: low },
+    ];
+  }, [width, height, top, bottom]);
+  const mainLocal = showLocal && (!showRemote || localMain);
+  return (
+    <>
+      <RTCView
+        streamURL={mainLocal ? call.localUrl! : call.remoteUrl!}
+        objectFit="cover"
+        mirror={mainLocal && call.front}
+        zOrder={0}
+        style={StyleSheet.absoluteFill}
+      />
+      <Reanimated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.dark, veilStyle]} />
+      {both && (
+        <SnapDraggable slots={slots} onTap={swap} style={styles.thumbWrap}>
+          <Reanimated.View entering={FadeIn.duration(DURATION.small).easing(EASE)} style={styles.thumb}>
+            <RoundedVideo url={localMain ? call.remoteUrl! : call.localUrl!} mirror={!localMain && call.front} radius={18} />
+          </Reanimated.View>
+        </SnapDraggable>
+      )}
+    </>
   );
 }
 
@@ -232,6 +300,7 @@ function RoundButton({
   big = false,
   disabled = false,
   onVideo,
+  delay,
 }: {
   icon: IconComponent;
   label: string;
@@ -241,6 +310,8 @@ function RoundButton({
   big?: boolean;
   disabled?: boolean;
   onVideo: boolean;
+  // Arrivée en cascade (ms) ; sans valeur, pas d'animation d'entrée.
+  delay?: number;
 }) {
   const styles = useStyles();
   const colors = useColors();
@@ -256,6 +327,7 @@ function RoundButton({
   const solid = variant === 'danger' ? colors.danger : variant === 'accept' ? colors.signatureStrong : null;
   const iconColor = solid ? fixed.white : active ? (onVideo ? fixed.black : colors.background) : onVideo ? colors.onMedia : colors.text;
   return (
+    <Reanimated.View entering={delay === undefined ? undefined : enterUp(14, DURATION.screen, delay)}>
     <Pressable onPress={onPress} onPressIn={feedback.onPressIn} onPressOut={feedback.onPressOut} disabled={disabled} accessibilityRole="button" accessibilityLabel={label} style={[styles.buttonWrap, disabled && styles.disabled]}>
       <Reanimated.View style={[{ width: size, height: size, borderRadius: size / 2 }, styles.button, solid ? { backgroundColor: solid } : fill, feedback.style]}>
         <Icon size={big ? 30 : 24} color={iconColor} strokeWidth={1.75} />
@@ -264,24 +336,40 @@ function RoundButton({
         {label}
       </Text>
     </Pressable>
+    </Reanimated.View>
   );
 }
 
 // Appel réduit : une pastille en haut de l'écran, nom et durée ; un appui ramène l'appel.
+// La pastille se déplace au doigt et se range en haut ou en bas de l'écran, à gauche, au milieu ou à
+// droite ; un appui ramène l'appel.
+const PILL_HEIGHT = 36;
+
 function CallPill({ call, name, onPress }: { call: CallState; name: string; onPress: () => void }) {
   const styles = useStyles();
   const colors = useColors();
-  const { top } = useInsets();
+  const { top, bottom } = useInsets();
+  const { width, height } = useWindowDimensions();
   const status = statusText(call);
+  const [pillWidth, setPillWidth] = useState(0);
+  const slots = useMemo(() => {
+    const w = pillWidth || 200;
+    const xs = [12, (width - w) / 2, width - w - 12];
+    // En bas : au-dessus de la barre des onglets.
+    const ys = [top + 4, height - bottom - PILL_HEIGHT - 84];
+    return ys.flatMap((y) => xs.map((x) => ({ x, y })));
+  }, [pillWidth, width, height, top, bottom]);
   return (
-    <Reanimated.View entering={FadeIn.duration(DURATION.small).easing(EASE)} exiting={FadeOut.duration(DURATION.small).easing(EASE)} style={[styles.pillWrap, { top: top + 4 }]} pointerEvents="box-none">
-      <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={t('appel.revenir')} style={styles.pill}>
+    <Reanimated.View entering={FadeIn.duration(DURATION.small).easing(EASE)} exiting={FadeOut.duration(DURATION.small).easing(EASE)} style={StyleSheet.absoluteFill} pointerEvents="box-none">
+      <SnapDraggable slots={slots} initial={1} onTap={onPress}>
+      <View onLayout={(event) => setPillWidth(event.nativeEvent.layout.width)} accessibilityRole="button" accessibilityLabel={t('appel.revenir')} style={styles.pill}>
         <View style={[styles.pillDot, { backgroundColor: call.reconnecting ? colors.textMuted : colors.signatureStrong }]} />
         <Text style={styles.pillText} numberOfLines={1}>
           {name}
         </Text>
         {status ? <Text style={styles.pillText}>· {status}</Text> : call.startedAt ? <Chrono since={call.startedAt} style={styles.pillText} /> : null}
-      </Pressable>
+      </View>
+      </SnapDraggable>
     </Reanimated.View>
   );
 }
@@ -378,15 +466,26 @@ const useStyles = createStyles((colors) => ({
   buttonLabel: {
     fontSize: 12,
   },
-  pip: {
-    position: 'absolute',
-    right: spacing.md,
-    width: 108,
-    height: 160,
-    borderRadius: radius.lg,
-    overflow: 'hidden',
-    backgroundColor: fixed.black,
+  thumbWrap: {
     zIndex: 2,
+    shadowColor: fixed.black,
+    shadowRadius: 12,
+    elevation: 0,
+  },
+  thumb: {
+    width: THUMB_W,
+    height: THUMB_H,
+    borderRadius: 18,
+    overflow: 'hidden',
+  },
+  pipThumb: {
+    position: 'absolute',
+    right: 6,
+    bottom: 6,
+    width: '30%',
+    aspectRatio: 9 / 16,
+    borderRadius: 8,
+    overflow: 'hidden',
   },
   pip0: {
     backgroundColor: colors.background,
@@ -405,12 +504,6 @@ const useStyles = createStyles((colors) => ({
   pipStatus: {
     fontSize: 12,
     fontVariant: ['tabular-nums'],
-  },
-  pillWrap: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    alignItems: 'center',
   },
   pill: {
     flexDirection: 'row',

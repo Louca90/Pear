@@ -7,7 +7,8 @@ import type { CallMedia, PeerStatus } from '../../network/peer';
 import { callPushTag, decodeCallPush, encodeCallPush, isCallId } from '../callPayload';
 import { getContactProfile, isBlocked } from '../database';
 import { clearCallNotification, showIncomingCall, showMissedCall, showOngoingCall } from '../notifications';
-import { addHeadsetListener, callHeadset, Headset, setCallAudio, setCallPip, showOverLock, startRinging, stopRinging } from '../../../modules/pear-native';
+import { addCallHangUpListener, addHeadsetListener, callHeadset, Headset, setCallAudio, setCallPip, showOverLock, startCallService, startRinging, stopCallService, stopRinging } from '../../../modules/pear-native';
+import { t } from '../../i18n';
 import { log } from '../../log';
 
 import { ChatCore } from './core';
@@ -181,9 +182,30 @@ function releaseMedia() {
 }
 
 // Écran de l'appel par-dessus le verrouillage, et service de premier plan (micro, caméra).
+// Notification de l'appel en cours au format appel d'Android (Now Bar de Samsung, puce de la barre
+// d'état), par le service natif ; un APK plus ancien garde celle de Notifee.
+let hangUpWatch: { remove: () => void } | null = null;
+let nativeService = false;
+
 function showActive(core: ChatCore) {
   if (!state) return;
-  showOngoingCall(state.contact, nameOf(core, state.contact), state.video, state.startedAt).catch((e) => log.warn('notification d’appel', e));
+  const name = nameOf(core, state.contact);
+  const camera = state.video || state.cameraOn;
+  nativeService = startCallService({
+    name,
+    photo: getContactProfile(state.contact).photo_uri ?? '',
+    video: camera,
+    startedAt: state.startedAt ?? 0,
+    text: state.startedAt ? t(camera ? 'appel.enCoursVideo' : 'appel.enCoursAudio') : t('appel.appel'),
+    channelName: t('appel.enCoursAudio'),
+    hangUpLabel: t('appel.raccrocher'),
+  });
+  if (nativeService) {
+    hangUpWatch ??= addCallHangUpListener(() => hangUp(core));
+    clearCallNotification(state.contact).catch(() => undefined);
+  } else {
+    showOngoingCall(state.contact, name, state.video, state.startedAt).catch((e) => log.warn('notification d’appel', e));
+  }
 }
 
 // --- Appeler ---
@@ -367,6 +389,8 @@ export async function toggleCamera(core: ChatCore) {
   sendCall(core, state.contact, { action: 'media', id: state.id, camera: !!videoTrack });
   // Caméra allumée : le son passe au haut-parleur, comme pour un appel vidéo.
   if (videoTrack && !state.speaker) toggleSpeaker();
+  // Le service doit déclarer la caméra pour qu'elle continue Pear en arrière-plan.
+  showActive(core);
 }
 
 export function switchCamera() {
@@ -559,6 +583,9 @@ function finish(core: ChatCore, end: CallEnd, record = false) {
   setCallAudio('off');
   showOverLock(false).catch(() => undefined);
   clearCallNotification(current.contact).catch((e) => log.warn('notification d’appel', e));
+  stopCallService();
+  hangUpWatch?.remove();
+  hangUpWatch = null;
   if (core.callContact === current.contact) core.callContact = null;
   log.info('appel fini', end);
   // Pear en arrière-plan : la connexion gardée pour l'appel n'a plus de raison de rester ouverte.

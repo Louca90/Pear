@@ -1,5 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <application>
+    <!-- Appel en cours (vague 5) : notification au format appel, affichée par la Now Bar de Samsung. -->
+    <service
+      android:name="expo.modules.pearnative.PearCallService"
+      android:exported="false"
+      android:foregroundServiceType="microphone|camera" />
     <!-- Donne à l'installeur d'Android l'accès à l'APK de mise à jour téléchargé dans le cache. -->
     <provider
       android:name="expo.modules.pearnative.PearUpdateProvider"

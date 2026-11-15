@@ -34,7 +34,8 @@
         "android.permission.FOREGROUND_SERVICE_CAMERA",
         "android.permission.USE_FULL_SCREEN_INTENT",
         "android.permission.MODIFY_AUDIO_SETTINGS",
-        "android.permission.WAKE_LOCK"
+        "android.permission.WAKE_LOCK",
+        "android.permission.POST_PROMOTED_NOTIFICATIONS"
       ],
       "blockedPermissions": [
         "android.permission.SYSTEM_ALERT_WINDOW"

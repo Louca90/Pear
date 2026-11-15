@@ -11,7 +11,7 @@ export type VideoEdit = { overlayUri?: string; matrix?: number[]; startMs?: numb
 
 export type SharedMedia = { uri: string; mime: string; size: number; contact?: string };
 
-declare class PearNativeModule extends NativeModule<{ onBack: (event: BackEvent) => void; onDownloadProgress: (event: DownloadProgress) => void; onInsetsChange: (event: Insets) => void; onShare: () => void; onHeadset: (event: { kind: Headset }) => void; onPip: (event: { active: boolean }) => void }> {
+declare class PearNativeModule extends NativeModule<{ onBack: (event: BackEvent) => void; onDownloadProgress: (event: DownloadProgress) => void; onInsetsChange: (event: Insets) => void; onShare: () => void; onHeadset: (event: { kind: Headset }) => void; onPip: (event: { active: boolean }) => void; onCallHangUp: () => void }> {
   takeSharedMedia?(): Promise<SharedMedia[]>;
   setShareShortcuts?(contacts: { key: string; name: string; photo?: string }[]): Promise<void>;
   burnOverlay(videoUri: string, overlayUri: string, bitrate: number): Promise<string>;
@@ -50,6 +50,9 @@ declare class PearNativeModule extends NativeModule<{ onBack: (event: BackEvent)
   showOverLock?(on: boolean): Promise<void>;
   callHeadset?(): string;
   setCallPip?(enabled: boolean, width: number, height: number): Promise<void>;
+  startCallService?(info: Record<string, string | number | boolean>): void;
+  stopCallService?(): void;
+  setVideoCorner?(tag: number, radius: number): Promise<boolean>;
 }
 
 const PearNative = requireNativeModule<PearNativeModule>('PearNative');
@@ -280,4 +283,27 @@ export function setCallPip(enabled: boolean, width = 9, height = 16) {
 // Pear passe dans la fenêtre flottante, ou en sort.
 export function addPipListener(listener: (active: boolean) => void) {
   return PearNative.addListener('onPip', (event) => listener(event.active));
+}
+
+export type CallServiceInfo = { name: string; photo: string; video: boolean; startedAt: number; text: string; channelName: string; hangUpLabel: string };
+
+// Notification de l'appel en cours au format appel d'Android (Now Bar de Samsung) ; false avec un ancien APK.
+export function startCallService(info: CallServiceInfo) {
+  if (!PearNative.startCallService) return false;
+  PearNative.startCallService(info);
+  return true;
+}
+
+export function stopCallService() {
+  PearNative.stopCallService?.();
+}
+
+// Raccrocher depuis la notification ou la Now Bar.
+export function addCallHangUpListener(listener: () => void) {
+  return PearNative.addListener('onCallHangUp', listener);
+}
+
+// Arrondit les coins d'une vidéo RTCView (tag React de la vue), en points.
+export function setVideoCorner(tag: number, radius: number) {
+  return PearNative.setVideoCorner?.(tag, radius) ?? Promise.resolve(false);
 }
