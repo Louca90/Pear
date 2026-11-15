@@ -7,6 +7,14 @@ Messagerie Android privée, chiffrée de bout en bout. Les messages vont directe
 - Photos, vidéos, vocaux, fichiers, réactions, réponses, modification et suppression.
 - Mise à jour automatique depuis les releases GitHub.
 
+## A note on how this was made
+
+Pear is entirely coded by AI (Claude). I'm a French student: I had this app idea in my head but I don't have the skills to build it myself yet, and I'm going to study this field to get there.
+
+I make every decision about the features, the UI, the animations and the network architecture, and the AI writes the code. I'm upfront about it everywhere (README, commits, posts), so if you're against vibe coding, this project isn't for you and that's fine.
+
+I take no credit for writing the app. I just brought a personal project I care about to life with the help of AI.
+
 ## Installer une version
 
 Télécharger `pear-X.Y.Z.apk` depuis la [dernière release](https://github.com/Louca90/Pear/releases/latest) et l'ouvrir sur le téléphone (Android demande d'autoriser l'installation d'apps inconnues). Les versions suivantes s'installent ensuite depuis l'app.
