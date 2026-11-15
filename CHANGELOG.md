@@ -1,5 +1,40 @@
 # Journal des versions
 
+## 1.8.0 (versionCode 12)
+
+### Résumé
+
+- Appels audio et vidéo : deux boutons dans l'en-tête de la conversation. L'appel passe en direct entre les deux téléphones, chiffré, sans serveur au milieu.
+- Si l'autre téléphone est fermé ou en veille, il sonne quand même, même verrouillé. Si la connexion directe est impossible, Pear le dit au lieu de sonner dans le vide.
+- Quitter Pear pendant un appel garde l'appel dans une petite fenêtre flottante. En vidéo, déplacez votre image où vous voulez ; appuyez dessus pour l'échanger avec celle de l'autre.
+- Les appels fonctionnent avec un casque Bluetooth ou filaire, et l'appel en cours apparaît dans la Now Bar des Samsung. Pour appeler quelqu'un, il faut que lui aussi ait la 1.8.0.
+
+### Détails
+
+#### Nouveautés
+
+- Appel audio ou vidéo depuis l'en-tête d'une conversation. L'appelé reçoit un push qui le réveille et le connecte ; il ne sonne qu'une fois la connexion directe établie (sonnerie du téléphone, qui respecte le silencieux et le vibreur, et notification plein écran Répondre / Refuser par-dessus le verrouillage).
+- Pendant l'appel : micro coupé, haut-parleur ou écouteur (l'écran s'éteint contre l'oreille), changement de caméra, caméra allumée ou coupée en cours d'appel. Quand l'autre allume sa caméra, Pear propose d'allumer la vôtre.
+- Casque Bluetooth ou filaire : il prend le son automatiquement, et le son y bascule si vous le branchez en plein appel.
+- Vidéo : l'image de l'autre en grand, la vôtre en vignette aux coins arrondis, que l'on déplace et qui se range dans le coin le plus proche.
+- Quitter Pear pendant l'appel : fenêtre flottante d'Android (les deux caméras l'une sous l'autre en vidéo, la photo du contact en audio). La connexion directe reste ouverte pour que l'appel ne se coupe pas.
+- Revenir dans Pear : l'appel se réduit en une pastille déplaçable, qui se range en haut ou en bas de l'écran.
+- Appel en cours : notification au format appel d'Android avec la durée et Raccrocher, affichée dans la Now Bar des Samsung.
+- Historique dans la conversation et sur l'accueil : « Appel audio · 3:07 », « Appel manqué » (en rouge), « Appel refusé », « Appel impossible sur ce réseau », et une notification pour un appel manqué.
+- Textes des appels en français, anglais, espagnol, allemand, italien, portugais et néerlandais.
+
+#### Corrections
+
+- Aucune.
+
+#### Technique
+
+- Même connexion WebRTC que les messages : les pistes audio et vidéo y sont ajoutées et renégociées par le canal de données chiffré (seul le téléphone « a » propose). Invitation, réponse, fin d'appel passent par ce canal.
+- Nouveau type de push `call` côté serveur (priorité haute, gardé 60 secondes), chiffré de bout en bout avec les clés des autres pushs.
+- Module natif : son et sonnerie (`CallAudio.kt`), service de premier plan micro et caméra au format appel (`PearCallService.kt`), fenêtre flottante, vue vidéo aux coins arrondis dans une vue ordinaire (`PearVideoView.kt`).
+- Nouvelles autorisations Android : service de premier plan micro et caméra, notification plein écran, réglage du son, notification mise en avant (Android 16). Aucune nouvelle bibliothèque.
+- Sans serveur TURN : si la connexion directe est impossible, l'appel n'aboutit pas et le dit.
+
 ## 1.7.1 (versionCode 11)
 
 ### Résumé
