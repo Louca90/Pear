@@ -1,7 +1,7 @@
 {
-  "version": "1.7.0",
-  "versionCode": 10,
-  "summary": "- Pear change de look : accueil, conversation, réglages, profil, appareil photo et éditeur ont été entièrement redessinés, avec des animations plus douces partout.\n- Nouvelle carte de vos proches, hors ligne et en clair ou sombre : leur position en direct, la vôtre, et « Envoyer seulement ma position actuelle ».\n- Appareil photo plus rapide à ouvrir, envoi direct à un contact depuis une conversation, et photos « vue unique » en un geste.\n- Conversations plus rapides à ouvrir, nouvelle sélection d'un message et bouton pour revenir en bas.",
+  "version": "1.7.1",
+  "versionCode": 11,
+  "summary": "- Un message qui n'est pas encore arrivé dit enfin ce qui se passe : « En attente du contact » avec l'heure du dernier essai, ou « Pas encore envoyé » si rien n'a pu partir.\n- Après 5 minutes sans nouvelle, un bouton « Réessayer » apparaît sous le message. Aucune promesse de livraison : elle dépend du téléphone de votre contact.\n- Un texte long arrive maintenant même si l'autre téléphone est éteint ou hors ligne, sans doublon.\n- Un message renvoyé après une coupure n'est jamais reçu deux fois.",
   "pages": {
     "1.6.0": [
       {
