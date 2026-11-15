@@ -247,8 +247,14 @@ class ChatManager extends ChatCore {
   stopAll() {
     clearInterval(this.wakeTimer);
     this.wakeTimer = undefined;
-    this.links.forEach((link) => link.peer.stop());
-    this.links.clear();
+    // Un appel en cours (ou qui sonne, ou attendu) garde sa connexion directe : Pear en arrière-plan ou
+    // dans la fenêtre flottante, l'appel continue. Elle se ferme à la fin de l'appel (calls.ts).
+    const keep = this.callKeepsAwake() ? this.callContact : null;
+    this.links.forEach((link, contact) => {
+      if (contact === keep) return;
+      link.peer.stop();
+      this.links.delete(contact);
+    });
     closeIncomingFiles(this);
     this.notify();
   }

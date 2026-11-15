@@ -561,6 +561,16 @@ function finish(core: ChatCore, end: CallEnd, record = false) {
   clearCallNotification(current.contact).catch((e) => log.warn('notification d’appel', e));
   if (core.callContact === current.contact) core.callContact = null;
   log.info('appel fini', end);
+  // Pear en arrière-plan : la connexion gardée pour l'appel n'a plus de raison de rester ouverte.
+  // Petit délai : le message de fin part d'abord.
+  setTimeout(() => {
+    if (AppState.currentState === 'active' || live()) return;
+    const link = core.links.get(current.contact);
+    if (link) {
+      link.peer.stop();
+      core.links.delete(current.contact);
+    }
+  }, 1500);
 
   if (record && end !== 'permission') {
     const code = systemCode(current, end);
