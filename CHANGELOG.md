@@ -1,5 +1,35 @@
 # Journal des versions
 
+## 1.7.1 (versionCode 11)
+
+### Résumé
+
+- Un message qui n'est pas encore arrivé dit enfin ce qui se passe : « En attente du contact » avec l'heure du dernier essai, ou « Pas encore envoyé » si rien n'a pu partir.
+- Après 5 minutes sans nouvelle, un bouton « Réessayer » apparaît sous le message. Aucune promesse de livraison : elle dépend du téléphone de votre contact.
+- Un texte long arrive maintenant même si l'autre téléphone est éteint ou hors ligne, sans doublon.
+- Un message renvoyé après une coupure n'est jamais reçu deux fois.
+
+### Détails
+
+#### Nouveautés
+
+- Sous un message pas encore distribué : « Envoi… » (contact connecté), « En attente du contact · dernier essai 14:32 » (un essai est parti, on attend son téléphone) ou « Pas encore envoyé · pas de connexion » (rien n'a pu partir de chez vous). L'heure est absolue, elle ne se périme pas.
+- Bouton « Réessayer » après 5 minutes sans essai, 3 essais au plus par heure. Appuyer sans réseau ne consomme rien.
+- Texte trop long pour une notification chiffrée : il est déposé chiffré dans le relais, le contact le récupère à son réveil puis il est effacé du relais.
+
+#### Corrections
+
+- Un message renvoyé (accusé perdu, reconnexion, « Réessayer ») repart à l'identique : le chiffrement n'avance plus à chaque renvoi, ce qui évite d'user les clés du destinataire.
+- Le destinataire reconnaît un message déjà reçu et renvoie seulement l'accusé, au lieu d'échouer à le déchiffrer une deuxième fois.
+- Après un changement de session (mise à niveau du chiffrement, réparation de la conversation), les messages en attente sont rechiffrés avec la nouvelle session.
+- Le texte d'aide de l'autorisation de position précise qu'elle est approximative et lue sur le téléphone.
+
+#### Technique
+
+- Base de données : migration 18 sans perte (dernier essai, nombre d'essais et paquet chiffré de chaque message, paquets déjà reçus, clé des textes du relais).
+- Le serveur de réveil accepte un champ facultatif « quiet » (priorité normale). L'application ne l'utilise pas : en test, l'accusé en priorité normale arrivait trop tard.
+- Aucune nouvelle dépendance native.
+
 ## 1.7.0 (versionCode 10)
 
 ### Résumé
