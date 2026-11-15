@@ -19,11 +19,11 @@ import { storedSize } from '../media';
 import { parseMeta } from '../meta';
 
 import { ChatCore } from './core';
-import { sendSecure } from './secure';
+import { noteAttempt, sendSealedText, sendSecure } from './secure';
 import { FILE_KEY_BYTES } from './types';
 import { isSelf } from '../self';
 import { DEFAULT_EPHEMERAL, ephemeralSystemText, nextSettingTime, validTtl } from '../ephemeral';
-import { fileExtras, textPayload } from './payloads';
+import { fileExtras } from './payloads';
 
 // --- Messages éphémères (lot 4.7) ---
 
@@ -86,7 +86,8 @@ export function addSystemMessage(contact: string, mine: number, text = '', id = 
 }
 
 // Tout ce qui n'a pas été confirmé repart, une fois par connexion : l'autre téléphone ignore les doublons
-// grâce à l'id. Dans une même connexion, le canal est fiable : renvoyer ne ferait que consommer des clés.
+// grâce à l'id. Dans une même connexion, le canal est fiable : renvoyer ne servirait à rien. Un texte
+// repart avec l'enveloppe chiffrée à son premier essai (src/chat/packets.ts) : le ratchet n'avance pas.
 export function flush(core: ChatCore, contact: string) {
   const peer = core.links.get(contact)?.peer;
   if (!peer) return;
@@ -96,6 +97,11 @@ export function flush(core: ChatCore, contact: string) {
     if (!send()) return false;
     core.sentOnce.add(contact, epoch, id);
     return true;
+  };
+  // Parti dans le canal : c'est un essai (heure affichée sous le message).
+  const attempt = (id: string, sent: boolean) => {
+    if (sent) noteAttempt(core, contact, id);
+    return sent;
   };
   for (const message of getUndelivered(contact)) {
     if (core.sentOnce.has(contact, epoch, message.id)) continue;
@@ -128,8 +134,8 @@ export function flush(core: ChatCore, contact: string) {
         ...(message.album ? { album: message.album } : {}),
         ...fileExtras(message),
       };
-      if (!once(message.id, () => sendSecure(core, contact, offer))) return;
-    } else if (!once(message.id, () => sendSecure(core, contact, textPayload(message)))) {
+      if (!once(message.id, () => attempt(message.id, sendSecure(core, contact, offer)))) return;
+    } else if (!once(message.id, () => attempt(message.id, sendSealedText(core, contact, message)))) {
       return;
     }
   }

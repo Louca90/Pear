@@ -18,6 +18,11 @@ export class SentOnce {
     sent.ids.add(id);
   }
 
+  // « Réessayer » : ce message pourra repartir dans la connexion en cours.
+  drop(contact: string, id: string) {
+    this.byContact.get(contact)?.ids.delete(id);
+  }
+
   // Session réparée : ce qui attend repart tout de suite, chiffré avec la nouvelle session.
   forget(contact: string) {
     this.byContact.delete(contact);

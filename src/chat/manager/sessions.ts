@@ -1,7 +1,7 @@
 import { createEphemeral, createSessionV2, decryptWithSessions, isRetiredSessionExpired, isSessionV2, retireSession } from '../../crypto/rekey';
 import { RatchetState } from '../../crypto/ratchet';
 import { deleteRatchet, loadEphemeral, loadRatchet, saveEphemeral, saveRatchet } from '../../storage';
-import { deleteSystemMessages, getSetting, setSetting } from '../database';
+import { clearSealedPackets, deleteSystemMessages, getSetting, setSetting } from '../database';
 import { SESSION_BROKEN, SESSION_REPAIRED } from '../protocol';
 
 import { ChatCore } from './core';
@@ -70,6 +70,8 @@ export function decryptIncoming(core: ChatCore, contact: string, envelope: unkno
     saveRatchet(previousKey(contact), retireSession(current));
     saveRatchet(contact, result.state);
     deleteRatchet(pendingKey(contact));
+    // Les textes chiffrés d'avance l'étaient dans l'ancienne session : ils seront rechiffrés.
+    clearSealedPackets(contact);
     log.info('session v2 active');
   } else if (result.slot === 'current') {
     saveRatchet(contact, result.state);
@@ -115,6 +117,7 @@ export function receiveRekeyAck(core: ChatCore, contact: string, data: Payload) 
   saveRatchet(previousKey(contact), retireSession(loadOrCreateRatchet(core, contact)));
   saveRatchet(contact, createSessionV2(core.identity, contact, secretFor(core, contact), ephemeral, data.e));
   saveEphemeral(contact, null);
+  clearSealedPackets(contact);
   // Premier message v2 : l'autre téléphone bascule en le recevant.
   sendSecure(core, contact, { type: 'rekey-done' });
   log.info('session v2 active');
@@ -170,6 +173,7 @@ function replaceSession(core: ChatCore, contact: string, session: RatchetState) 
   deleteRatchet(pendingKey(contact));
   saveEphemeral(contact, null);
   setSetting(failuresKey(contact), null);
+  clearSealedPackets(contact);
   log.info('session réparée');
 }
 

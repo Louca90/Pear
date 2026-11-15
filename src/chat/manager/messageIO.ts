@@ -4,7 +4,11 @@ import {
   setMessagePinned,
   activateContact,
   addMessage,
+  addRelayText,
+  deleteRelayIncoming,
   deleteUpload,
+  findReceivedPacket,
+  getRelayTexts,
   getPeerState,
   isBlocked,
   setPeerState,
@@ -13,6 +17,8 @@ import {
   editMessage,
   getMessage,
   markRefused,
+  RelayText,
+  rememberReceivedPacket,
   removeOutboxEvent,
   setContactProfileField,
   setContactToken,
@@ -31,7 +37,8 @@ import { addSystemMessage, applyEphemeral, flush } from './outbox';
 import { expiryFor, validEphemeralSetting, validTtl } from '../ephemeral';
 import { receiveLocation } from './location';
 import { reshareProfile } from './profile';
-import { receiveRelayOffer } from './relay';
+import { deleteRelayText, downloadRelayText, isRelayTextOffer, receiveRelayOffer } from './relay';
+import { receiveOnce } from '../packets';
 import { decryptIncoming, receiveRekey, receiveRekeyAck, receiveRepair, receiveRepairAck } from './sessions';
 import { queuePushAck } from './wake';
 import { dropIncomingFile, receiveFileOffer, setProgress, streamFile } from './transfers';
@@ -39,11 +46,25 @@ import { AFTER_ACTIVITY_MS, asPayload, isCount, isSupportedVersion, UPDATE_REQUI
 import { log } from '../../log';
 
 // L'état n'est enregistré que si le message est authentique : un message forgé ne change rien.
-// Appelée pour ce qui arrive en direct comme pour ce qui arrive dans un push.
+// Appelée pour ce qui arrive en direct comme pour ce qui arrive dans un push. Un texte renvoyé à
+// l'identique (accusé perdu, « Réessayer ») est reconnu avant le déchiffrement, qui échouerait : il
+// est seulement réacquitté (src/chat/packets.ts).
 export function receiveRatchet(core: ChatCore, contact: string, envelope: unknown) {
+  receiveOnce(
+    { find: (fingerprint) => findReceivedPacket(contact, fingerprint), remember: (fingerprint, id) => rememberReceivedPacket(contact, fingerprint, id) },
+    envelope,
+    (id) => {
+      if (!isBlocked(contact)) acknowledge(core, contact, { id });
+    },
+    () => openRatchet(core, contact, envelope),
+  );
+}
+
+// Rend l'identifiant du texte reçu, s'il y en avait un.
+function openRatchet(core: ChatCore, contact: string, envelope: unknown): string | null {
   const text = decryptIncoming(core, contact, envelope);
   // Un contact bloqué ne peut plus rien nous faire parvenir.
-  if (isBlocked(contact)) return;
+  if (isBlocked(contact)) return null;
   // Un message authentique de ce contact prouve qu'il nous a enregistré : la demande est acceptée.
   if (activateContact(contact)) {
     reshareProfile(core, contact);
@@ -55,16 +76,17 @@ export function receiveRatchet(core: ChatCore, contact: string, envelope: unknow
     const id = typeof message.id === 'string' ? `${UPDATE_REQUIRED}:${message.id}` : undefined;
     addSystemMessage(contact, 0, UPDATE_REQUIRED, id);
     core.notify();
-    return;
+    return null;
   }
+  if (message?.type === 'message') return receiveText(core, contact, message);
   if (message?.type === 'file-offer') receiveFileOffer(core, contact, message);
-  else if (message?.type === 'message') receiveText(core, contact, message);
   else if (message?.type === 'event') receiveEvent(core, contact, message);
   else if (message?.type === 'acks') receiveAcks(core, contact, message);
   else if (message?.type === 'status') receiveStatus(core, contact, message);
   else if (message?.type === 'location') receiveLocation(core, contact, message);
   else if (message?.type === 'rekey') receiveRekey(core, contact, message);
   else if (message?.type === 'rekey-ack') receiveRekeyAck(core, contact, message);
+  return null;
 }
 
 // L'autre nous a supprimé, bloqué ou débloqué : la conversation l'affiche, et on prévient par une notification.
@@ -124,6 +146,9 @@ function receiveEvent(core: ChatCore, contact: string, data: Payload) {
   } else if (data.action === 'relay') {
     // Un fichier qui attend dans le relais (l'expéditeur ne nous joignait pas en direct).
     receiveRelayOffer(core, contact, data);
+  } else if (data.action === 'relay-text') {
+    // Un texte trop long pour un push, qui attend dans le relais.
+    receiveRelayText(core, contact, data);
   } else if (data.action === 'accepted') {
     // Notre demande de pairing est acceptée : le contact passe d'« en attente » à actif.
     if (activateContact(contact)) {
@@ -156,8 +181,9 @@ function receiveTyping(core: ChatCore, contact: string, typing: boolean) {
   core.notify();
 }
 
-function receiveText(core: ChatCore, contact: string, data: Payload) {
-  if (typeof data.id !== 'string' || typeof data.text !== 'string') return;
+// Rend l'identifiant du message (déjà reçu ou nouveau), null si le contenu n'est pas valable.
+function receiveText(core: ChatCore, contact: string, data: Payload): string | null {
+  if (typeof data.id !== 'string' || typeof data.text !== 'string') return null;
   // Il nous écrit de nouveau : s'il nous avait supprimé, il nous a rajouté.
   if (getPeerState(contact) === 'removed') setPeerState(contact, null);
   const foreground = AppState.currentState === 'active';
@@ -183,6 +209,50 @@ function receiveText(core: ChatCore, contact: string, data: Payload) {
   const message = getMessage(data.id, contact);
   if (isNew && !foreground && message) notifyMessage(core, contact);
   core.notify();
+  return data.id;
+}
+
+// --- Textes trop longs pour un push, déposés dans le relais par l'expéditeur ---
+
+function receiveRelayText(core: ChatCore, contact: string, data: Payload) {
+  if (!isRelayTextOffer(data)) return;
+  // Déjà reçu (en direct, ou par un premier avis) : on confirme de nouveau et on libère le relais.
+  if (getMessage(data.id, contact)) {
+    acknowledge(core, contact, { id: data.id });
+    deleteRelayText(data.relay);
+    return;
+  }
+  const row = { file_id: data.relay, contact, message_id: data.id, key: data.key };
+  addRelayText(row);
+  core.track(fetchRelayText(core, row));
+}
+
+// Les textes pas encore récupérés (réseau coupé au premier essai) : relancé régulièrement, app ouverte.
+export function resumeRelayTexts(core: ChatCore) {
+  for (const row of getRelayTexts()) {
+    if (core.names.has(row.contact)) core.track(fetchRelayText(core, row));
+  }
+}
+
+async function fetchRelayText(core: ChatCore, row: RelayText) {
+  if (core.relaying.has(row.message_id)) return;
+  core.relaying.add(row.message_id);
+  try {
+    const result = await downloadRelayText(row.file_id, row.key);
+    // Réseau coupé : on garde la ligne, ce sera repris plus tard.
+    if (result === 'retry') return;
+    const payload = result === 'expired' ? null : asPayload(result);
+    // Le contenu doit être le texte annoncé, de ce contact, dans une version qu'on comprend.
+    if (payload && isSupportedVersion(payload) && payload.type === 'message' && payload.id === row.message_id && !isBlocked(row.contact)) {
+      receiveText(core, row.contact, payload);
+    }
+    deleteRelayIncoming(row.message_id, row.contact);
+    deleteRelayText(row.file_id);
+  } catch (e) {
+    log.warn('texte du relais', e);
+  } finally {
+    core.relaying.delete(row.message_id);
+  }
 }
 
 // Le contenu n'est accepté que par le ratchet : ici, seulement des messages de contrôle.

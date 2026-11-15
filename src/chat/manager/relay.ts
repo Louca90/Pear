@@ -1,7 +1,7 @@
 import { AppState } from 'react-native';
-import { from_base64, to_base64 } from 'react-native-libsodium';
+import { from_base64, randombytes_buf, to_base64 } from 'react-native-libsodium';
 
-import { openBytes, sealBytes } from '../../crypto/box';
+import { open, openBytes, seal, sealBytes } from '../../crypto/box';
 import { deleteRelay, downloadRelayChunk, RELAY_CHUNK_BYTES, RELAY_MAX_BYTES, reserveRelay, uploadRelayChunk } from '../../network/relay';
 import {
   addMessage,
@@ -12,7 +12,6 @@ import {
   getMessage,
   getPendingIncomingBytes,
   getRelayIncoming,
-  getSetting,
   getUndelivered,
   getUpload,
   Message,
@@ -26,11 +25,12 @@ import { encodeMeta, parseMeta, sanitizeMeta } from '../meta';
 import { ChatCore } from './core';
 import { notifyMessage } from './notify';
 import { sendEvent } from './outbox';
-import { fileExtras } from './payloads';
+import { fileExtras, textPayload } from './payloads';
+import { noteAttempt } from './secure';
 import { expiryFor, validTtl } from '../ephemeral';
 import { setProgress } from './transfers';
-import { FILE_KEY_BYTES, isCount, isFileKind, Payload } from './types';
-import { queuePushAck } from './wake';
+import { FILE_KEY_BYTES, isCount, isFileKind, Payload, PROTOCOL_VERSION } from './types';
+import { isRelayEnabled, queuePushAck, textPushPayload } from './wake';
 import { t } from '../../i18n';
 import { log } from '../../log';
 
@@ -48,13 +48,22 @@ const relayContext = (relayId: string, index: number) => `pear-relay-v1.${relayI
 const chunkCount = (size: number) => Math.ceil(size / RELAY_CHUNK_BYTES);
 const isConnected = (core: ChatCore, contact: string) => core.links.get(contact)?.status === 'connected';
 
-// Réglage « Relais des fichiers » : activé tant qu'il n'a pas été coupé.
-export const isRelayEnabled = () => getSetting('relay_enabled') !== '0';
+export { isRelayEnabled };
+// Un texte trop long pour un push part par le relais s'il n'est pas parti en direct après ce délai.
+const TEXT_RELAY_DELAY_MS = 3 * 1000;
 
 // Appelée régulièrement (app ouverte) : les fichiers qui n'ont pas pu partir en direct passent par le relais.
 export function relayPending(core: ChatCore, contact: string) {
   if (!isRelayEnabled() || !core.online || isConnected(core, contact)) return;
   for (const message of getUndelivered(contact)) {
+    if (message.kind === 'text') {
+      if (!relayTextNeeded(core, contact, message)) continue;
+      core.relaying.add(message.id);
+      uploadText(core, contact, message)
+        .catch((e) => log.warn('texte par le relais', e))
+        .finally(() => core.relaying.delete(message.id));
+      return;
+    }
     if (!RELAY_KINDS.includes(message.kind) || core.relaying.has(message.id)) continue;
     if (!message.file_uri || !message.file_key || !message.file_size || message.file_size > RELAY_MAX_BYTES) continue;
     if (Date.now() - message.created_at < RELAY_DELAY_MS || getUpload(message.id, contact)?.state === 'uploaded') continue;
@@ -115,6 +124,64 @@ async function upload(core: ChatCore, contact: string, message: Message) {
     ...(message.album ? { album: message.album } : {}),
     ...fileExtras(message),
   });
+}
+
+// --- Textes trop longs pour un push ---
+// Le texte est chiffré avec une clé à usage unique, déposé en un seul morceau, puis annoncé dans un
+// événement chiffré par le ratchet (la clé ne voyage que là). Le destinataire le récupère, l'efface du
+// relais et l'acquitte comme un texte reçu en direct ; un doublon est ignoré grâce à l'identifiant.
+
+const textContext = (relayId: string) => `pear-relay-text-v1.${relayId}`;
+
+function relayTextNeeded(core: ChatCore, contact: string, message: Message) {
+  if (core.relaying.has(message.id) || Date.now() - message.created_at < TEXT_RELAY_DELAY_MS) return false;
+  if (getUpload(message.id, contact)?.state === 'uploaded') return false;
+  return textPushPayload(core, contact, message) === null;
+}
+
+async function uploadText(core: ChatCore, contact: string, message: Message) {
+  const key = randombytes_buf(FILE_KEY_BYTES);
+  const plain = JSON.stringify({ v: PROTOCOL_VERSION, ...textPayload(message) });
+  // On réserve la taille du texte chiffré : c'est elle qui compte dans le budget du relais.
+  const probe = seal(plain, key, textContext('0'.repeat(22)));
+  const reservation = await reserveRelay(probe.length);
+  if (!reservation) return;
+  const sealed = seal(plain, key, textContext(reservation.id));
+  await uploadRelayChunk(reservation.id, 0, sealed);
+  saveUpload({ file_id: reservation.id, message_id: message.id, contact, parts_done: 1, state: 'uploaded', size: sealed.length });
+  sendEvent(core, contact, { action: 'relay-text', id: message.id, relay: reservation.id, key: to_base64(key) });
+  noteAttempt(core, contact, message.id);
+}
+
+export function isRelayTextOffer(data: Payload): data is Payload & { id: string; relay: string; key: string } {
+  return (
+    isValidFileId(data.id) &&
+    typeof data.relay === 'string' &&
+    RELAY_ID.test(data.relay) &&
+    typeof data.key === 'string' &&
+    from_base64(data.key).length === FILE_KEY_BYTES
+  );
+}
+
+// Le contenu déchiffré, 'expired' s'il n'est plus là ou illisible, 'retry' si le réseau a manqué.
+export async function downloadRelayText(relayId: string, key: string): Promise<unknown> {
+  let data: string | null;
+  try {
+    data = await downloadRelayChunk(relayId, 0);
+  } catch (e) {
+    log.warn('texte du relais', e);
+    return 'retry';
+  }
+  if (!data) return 'expired';
+  try {
+    return JSON.parse(open(data, from_base64(key), textContext(relayId)));
+  } catch {
+    return 'expired';
+  }
+}
+
+export function deleteRelayText(relayId: string) {
+  deleteRelay(relayId).catch((e) => log.warn('suppression du relais', e));
 }
 
 // Un fichier annoncé par le relais.

@@ -159,6 +159,23 @@ describe('migrate', () => {
     expect(db.getFirstSync("SELECT my_bubble, ephemeral FROM conversation_settings WHERE contact = 'alice'")).toEqual({ my_bubble: '#112233', ephemeral: null });
   });
 
+  it('messages en attente : essais, paquet scellé et paquets reçus arrivent vides, les messages restent', () => {
+    const db = oldDatabase(4);
+    db.execSync("INSERT INTO messages (id, contact, mine, text, status, created_at) VALUES ('m2', 'alice', 1, 'En route', 'sending', 2)");
+    migrate(db);
+    expect(columns(db, 'messages')).toEqual(expect.arrayContaining(['last_attempt_at', 'attempts', 'sealed_packet']));
+    expect(columns(db, 'relay_incoming')).toContain('key');
+    expect(tables(db)).toContain('received_packets');
+    expect(db.getFirstSync("SELECT text, status, last_attempt_at, attempts, sealed_packet FROM messages WHERE id = 'm2'")).toEqual({
+      text: 'En route',
+      status: 'sending',
+      last_attempt_at: null,
+      attempts: 0,
+      sealed_packet: null,
+    });
+    expect(db.getFirstSync("SELECT text FROM messages WHERE id = 'm1'")).toEqual({ text: 'Salut' });
+  });
+
   it('ne refait rien sur une base déjà à jour', () => {
     const db = memoryDb();
     migrate(db);

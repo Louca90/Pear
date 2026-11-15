@@ -74,6 +74,12 @@ export type Message = {
   expires_at?: number | null;
   // Média à vue unique : 1 = à voir une fois, 2 = déjà ouvert (le fichier est effacé).
   view_once?: number;
+  // Message pas encore distribué : heure du dernier essai réellement parti du téléphone (envoi direct
+  // réussi, push accepté par le serveur, dépôt dans le relais), nombre de ces essais.
+  last_attempt_at?: number | null;
+  attempts?: number;
+  // Le texte chiffré une seule fois (enveloppe du ratchet en JSON), renvoyé tel quel à chaque essai.
+  sealed_packet?: string | null;
 };
 
 export type NewMessage = Pick<Message, 'id' | 'contact' | 'mine' | 'text' | 'status' | 'created_at'> & Partial<Message>;
@@ -337,8 +343,56 @@ export function getSpentOnce(): { id: string; contact: string }[] {
 
 // "mine" vérifie l'auteur : un téléphone ne peut modifier que ses propres messages, ici comme chez l'autre.
 export function editMessage(id: string, contact: string, mine: number, text: string) {
-  // L'aperçu de lien de l'ancien texte ne vaut plus pour le nouveau.
-  db().runSync("UPDATE messages SET text = ?, edited = 1, meta = NULL WHERE id = ? AND contact = ? AND mine = ? AND kind = 'text'", text, id, contact, mine);
+  // L'aperçu de lien de l'ancien texte ne vaut plus pour le nouveau. Un message pas encore distribué
+  // sera rechiffré avec son nouveau texte.
+  db().runSync(
+    "UPDATE messages SET text = ?, edited = 1, meta = NULL, sealed_packet = NULL WHERE id = ? AND contact = ? AND mine = ? AND kind = 'text'",
+    text,
+    id,
+    contact,
+    mine,
+  );
+}
+
+// --- Messages en attente ---
+
+// Un essai est réellement parti (envoi direct, push accepté, dépôt dans le relais). Rien n'est noté
+// quand l'envoi échoue sur le téléphone : c'est ce qui distingue « pas encore envoyé » d'« en attente ».
+export function recordAttempt(id: string, contact: string, at = Date.now()) {
+  db().runSync(
+    "UPDATE messages SET last_attempt_at = ?, attempts = attempts + 1 WHERE id = ? AND contact = ? AND mine = 1 AND status NOT IN ('delivered', 'read', 'refused', 'scheduled')",
+    at,
+    id,
+    contact,
+  );
+}
+
+// Relu dans la base, pas dans un message lu plus tôt : deux envois en parallèle (direct et push) ne
+// chiffrent jamais deux fois le même message.
+export function getSealedPacket(id: string, contact: string): string | null {
+  return db().getFirstSync<{ sealed_packet: string | null }>('SELECT sealed_packet FROM messages WHERE id = ? AND contact = ? AND mine = 1', id, contact)?.sealed_packet ?? null;
+}
+
+export function setSealedPacket(id: string, contact: string, packet: string) {
+  db().runSync("UPDATE messages SET sealed_packet = ? WHERE id = ? AND contact = ? AND mine = 1 AND status NOT IN ('delivered', 'read')", packet, id, contact);
+}
+
+// Session changée (passage en v2, réparation) : ce qui attend sera rechiffré avec la nouvelle.
+export function clearSealedPackets(contact: string) {
+  db().runSync('UPDATE messages SET sealed_packet = NULL WHERE contact = ? AND mine = 1 AND sealed_packet IS NOT NULL', contact);
+}
+
+// Les paquets déjà traités sont gardés 60 jours : un renvoi arrive bien avant.
+const RECEIVED_PACKET_MS = 60 * 24 * 3600 * 1000;
+
+export function findReceivedPacket(contact: string, fingerprint: string): string | null {
+  return db().getFirstSync<{ message_id: string }>('SELECT message_id FROM received_packets WHERE contact = ? AND fingerprint = ?', contact, fingerprint)?.message_id ?? null;
+}
+
+export function rememberReceivedPacket(contact: string, fingerprint: string, messageId: string) {
+  const now = Date.now();
+  db().runSync('INSERT OR IGNORE INTO received_packets (contact, fingerprint, message_id, at) VALUES (?, ?, ?, ?)', contact, fingerprint, messageId, now);
+  db().runSync('DELETE FROM received_packets WHERE at < ?', now - RECEIVED_PACKET_MS);
 }
 
 export function setReaction(id: string, contact: string, column: 'my_reaction' | 'their_reaction', emoji: string | null) {
@@ -593,6 +647,23 @@ export function addRelayIncoming(incoming: RelayIncoming) {
   );
 }
 
+// Un texte trop long pour un push, qui attend dans le relais : sa clé est gardée jusqu'au téléchargement.
+export type RelayText = { file_id: string; contact: string; message_id: string; key: string };
+
+export function addRelayText(incoming: RelayText) {
+  db().runSync(
+    "INSERT OR REPLACE INTO relay_incoming (file_id, contact, message_id, state, size, key) VALUES (?, ?, ?, 'text', 0, ?)",
+    incoming.file_id,
+    incoming.contact,
+    incoming.message_id,
+    incoming.key,
+  );
+}
+
+export function getRelayTexts(): RelayText[] {
+  return db().getAllSync<RelayText>("SELECT file_id, contact, message_id, key FROM relay_incoming WHERE state = 'text' AND key IS NOT NULL");
+}
+
 export function getRelayIncoming(messageId: string, contact: string): RelayIncoming | null {
   return db().getFirstSync<RelayIncoming>('SELECT file_id, contact, message_id, size FROM relay_incoming WHERE message_id = ? AND contact = ?', messageId, contact);
 }
@@ -841,7 +912,7 @@ export function getLastMessage(contact: string): Message | null {
 // Une fois livré, un fichier n'a plus besoin de sa clé : elle est effacée.
 export function setStatus(id: string, contact: string, status: 'delivered' | 'read') {
   db().runSync(
-    "UPDATE messages SET status = ?, file_key = NULL WHERE id = ? AND contact = ? AND mine = 1 AND status != 'read'",
+    "UPDATE messages SET status = ?, file_key = NULL, sealed_packet = NULL, last_attempt_at = NULL, attempts = 0 WHERE id = ? AND contact = ? AND mine = 1 AND status != 'read'",
     status,
     id,
     contact,

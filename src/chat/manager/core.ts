@@ -23,6 +23,12 @@ export class ChatCore {
   sentOnce = new SentOnce();
   // Fichiers en cours d'envoi ou de réception par le relais.
   relaying = new Set<string>();
+  // « Réessayer » : conversations dont un nouvel essai a été demandé à la main, et heures des essais
+  // demandés ainsi qui sont vraiment partis (plafond par heure, src/chat/pending.ts).
+  retryRequested = new Set<string>();
+  manualRetries = new Map<string, number[]>();
+  // Travail lancé par un push (texte à récupérer dans le relais) : le réveil l'attend avant de rendre la main.
+  background = new Set<Promise<unknown>>();
   // Dernière proposition de session v2 à chaque contact.
   rekeyAttempts = new Map<string, number>();
   // Jusqu'à quand garder la connexion avec chaque contact (envoi, réception récente).
@@ -69,6 +75,11 @@ export class ChatCore {
   };
 
   getVersion = () => this.version;
+
+  track(work: Promise<unknown>) {
+    this.background.add(work);
+    work.finally(() => this.background.delete(work)).catch(() => undefined);
+  }
 
   contactsChanged() {
     this.contactsListeners.forEach((listener) => listener());

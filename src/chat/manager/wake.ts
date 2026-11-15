@@ -1,11 +1,13 @@
 import { fetchContactToken } from '../../network/tokens';
 import { PushResult, sendPush } from '../../network/wake';
-import { deleteContactToken, getContactToken, getOutboxEvents, getUndelivered, setContactToken } from '../database';
+import { deleteContactToken, getContactToken, getOutboxEvents, getSetting, getUndelivered, Message, setContactToken } from '../database';
 import { encodePushPayload } from '../pushPayload';
 import { parseMeta } from '../meta';
 
 import { ChatCore } from './core';
-import { pushKeysFor, sealSecure } from './secure';
+import { offlineRoute } from '../packets';
+import { countsAsAttempt } from '../pending';
+import { noteAttempt, pushKeysFor, sealedText, sealSecure } from './secure';
 import { textPayload } from './payloads';
 import { WAKE_INTERVAL_MS } from './types';
 import { log } from '../../log';
@@ -15,9 +17,19 @@ const MAX_PUSHES_PER_ROUND = 5;
 // Les accusés reçus en rafale partent dans un seul push.
 const ACK_DELAY_MS = 300;
 
+// Réglage « Relais des fichiers » : activé tant qu'il n'a pas été coupé. Il sert aussi aux textes trop
+// longs pour un push.
+export const isRelayEnabled = () => getSetting('relay_enabled') !== '0';
+
+// Le push d'un texte : son enveloppe gardée (jamais rechiffrée), null s'il ne tient pas dans un push.
+export function textPushPayload(core: ChatCore, contact: string, message: Message): string | null {
+  const keys = pushKeysFor(core, contact);
+  return encodePushPayload(keys.tag, keys.key, sealedText(core, contact, message));
+}
+
 // Le contact n'est pas connecté : ce qui attend part chiffré dans un push. Le destinataire l'affiche
-// tout de suite, même app fermée. Ce qui ne tient pas dans un push (fichier, texte très long) déclenche
-// un simple réveil : l'autre téléphone se connecte et le reçoit en direct.
+// tout de suite, même app fermée. Un texte trop long pour un push passe par le relais (relay.ts) ; un
+// fichier déclenche en plus un simple réveil : l'autre téléphone se connecte et le reçoit en direct.
 export function wakeIfNeeded(core: ChatCore, contact: string) {
   if (!core.online || core.links.get(contact)?.status === 'connected') return;
   if (getUndelivered(contact).length === 0 && getOutboxEvents(contact).length === 0) return;
@@ -64,38 +76,64 @@ export async function deliverNow(core: ChatCore, contact: string) {
 
 async function pushPending(core: ChatCore, contact: string, token: string) {
   const keys = pushKeysFor(core, contact);
-  let needsWake = false;
   let sent = 0;
-  // lighter : le même message allégé (aperçu de lien sans son image), essayé si le premier ne tient pas dans un push.
-  const send = async (id: string, message: Record<string, unknown>, lighter?: Record<string, unknown>) => {
+  // Ce qui ne tient pas dans un push demande un réveil. Pour les messages listés ici (fichiers…), un
+  // réveil accepté compte comme un essai.
+  let needsWake = false;
+  const waking: string[] = [];
+  // payload : le push déjà préparé ; messageId : le message dont c'est un essai (pas pour un événement).
+  const send = async (id: string, payload: string, messageId?: string) => {
     if (core.pushed.has(id)) return true;
     if (sent >= MAX_PUSHES_PER_ROUND) return false;
-    let payload = encodePushPayload(keys.tag, keys.key, sealSecure(core, contact, message));
-    if (!payload && lighter) payload = encodePushPayload(keys.tag, keys.key, sealSecure(core, contact, lighter));
-    if (!payload) {
-      needsWake = true;
-      return true;
-    }
     core.pushed.add(id);
     sent += 1;
-    return handleResult(core, contact, await sendPush(token, 'msg', payload), id);
+    const result = await sendPush(token, 'msg', payload);
+    if (messageId && countsAsAttempt(result)) noteAttempt(core, contact, messageId);
+    return handleResult(core, contact, result, id);
   };
 
   for (const message of getUndelivered(contact)) {
     if (message.kind !== 'text') {
+      waking.push(message.id);
+      continue;
+    }
+    const payload = textPushPayload(core, contact, message);
+    const route = offlineRoute(payload, isRelayEnabled());
+    if (payload) {
+      if (!(await send(message.id, payload, message.id))) return;
+    } else if (route === 'wake') {
+      // Relais coupé : le même texte allégé (aperçu de lien sans son image) s'il tient dans un push,
+      // sinon il attend la connexion directe. Le texte complet reste celui envoyé en direct.
+      waking.push(message.id);
+      const meta = message.meta ? parseMeta(message.meta) : null;
+      if (meta?.preview?.image && !core.pushed.has(message.id) && sent < MAX_PUSHES_PER_ROUND) {
+        const lighter = { ...textPayload(message, false), meta: { ...meta, preview: { ...meta.preview, image: undefined } } };
+        const light = encodePushPayload(keys.tag, keys.key, sealSecure(core, contact, lighter));
+        if (light && !(await send(message.id, light, message.id))) return;
+      }
+    }
+    // route === 'relay' : relayPending (relay.ts) le dépose chiffré dans le relais ; le réveil permet
+    // en plus une connexion directe si l'autre téléphone la prend avant.
+    else needsWake = true;
+  }
+  for (const event of getOutboxEvents(contact)) {
+    // Vérifié avant de chiffrer : chaque chiffrement d'un événement consomme une clé du ratchet.
+    if (core.pushed.has(event.id)) continue;
+    if (sent >= MAX_PUSHES_PER_ROUND) return;
+    const payload = encodePushPayload(keys.tag, keys.key, sealSecure(core, contact, { type: 'event', eventId: event.id, ...JSON.parse(event.payload) }));
+    if (!payload) {
+      // Trop gros pour un push : il partira en direct, sans être rechiffré à chaque tour.
+      core.pushed.add(event.id);
       needsWake = true;
       continue;
     }
-    const meta = message.meta ? parseMeta(message.meta) : null;
-    const lighter = meta?.preview?.image ? { ...textPayload(message, false), meta: { ...meta, preview: { ...meta.preview, image: undefined } } } : undefined;
-    if (!(await send(message.id, textPayload(message), lighter))) return;
+    if (!(await send(event.id, payload))) return;
   }
-  for (const event of getOutboxEvents(contact)) {
-    if (!(await send(event.id, { type: 'event', eventId: event.id, ...JSON.parse(event.payload) }))) return;
-  }
-  if (needsWake && Date.now() - (core.lastWake.get(contact) ?? 0) >= WAKE_INTERVAL_MS) {
+  if ((needsWake || waking.length > 0) && Date.now() - (core.lastWake.get(contact) ?? 0) >= WAKE_INTERVAL_MS) {
     core.lastWake.set(contact, Date.now());
-    handleResult(core, contact, await sendPush(token, 'wake', keys.tag));
+    const result = await sendPush(token, 'wake', keys.tag);
+    if (countsAsAttempt(result)) waking.forEach((id) => noteAttempt(core, contact, id));
+    handleResult(core, contact, result);
   }
 }
 

@@ -5,10 +5,11 @@ import { Identity } from '../../crypto/pairing';
 import { PeerStatus, RouteType } from '../../network/peer';
 import { Contact, loadContacts, loadOrCreateIdentity, saveContacts } from '../../storage';
 import { t } from '../../i18n';
-import { addMessage, blockKey, dropMessageFile, getExpiredMessages, getSpentOnce, markOnceOpened, deleteMessage, deleteRelayIncoming, editMessage, getMessage, getPendingRequests, getRelayIncoming, unblockKey, markConversationRead, Message, addScheduledMessage, getDueScheduled, releaseScheduled, setConversationSetting, setMessagePinned, setIncomingStatus, setReaction, setStatus } from '../database';
+import { addMessage, blockKey, dropMessageFile, getExpiredMessages, getSpentOnce, markOnceOpened, deleteMessage, deleteRelayIncoming, editMessage, getMessage, getPendingRequests, getRelayIncoming, unblockKey, markConversationRead, Message, addScheduledMessage, getDueScheduled, releaseScheduled, setConversationSetting, setMessagePinned, setIncomingStatus, setReaction, setStatus, getUndelivered } from '../database';
 import { clearMessageNotification } from '../notifications';
 import { encodeMeta, MessageMeta, parseMeta } from '../meta';
 import { isSelf } from '../self';
+import { canRetry, pendingState, recentRetries, retryAvailableAt } from '../pending';
 
 import { deleteRelay } from '../../network/relay';
 import { unpublishToken } from '../../network/tokens';
@@ -25,6 +26,7 @@ import { getMyProfile, saveProfile, shareProfile } from './profile';
 import { acceptFile, closeIncomingFiles, dropIncomingFile, refuseFile, sendFile } from './transfers';
 import { AFTER_SEND_MS, PickedFile, WAKE_CHECK_MS } from './types';
 import { contactForTag, receivePush } from './incoming';
+import { resumeRelayTexts } from './messageIO';
 import { reconcile } from './strategy';
 import { downloadRelayFile, relayPending } from './relay';
 import { acceptPairing, blockPairing, declinePairing, requestPairing, startPairing, syncPairRequests } from './pairing';
@@ -36,6 +38,8 @@ export type { PickedFile } from './types';
 
 // Garde les connexions utiles tant que l'app est ouverte (voir strategy.ts), et prévient les écrans à chaque changement.
 const TYPING_EVERY_MS = 3000;
+// Après un envoi, vérifie s'il faut passer par le relais (texte trop long pour un push).
+const TEXT_RELAY_CHECK_MS = 3500;
 
 class ChatManager extends ChatCore {
   // Ouvre les connexions des nouveaux contacts et ferme celles des contacts supprimés.
@@ -61,6 +65,7 @@ class ChatManager extends ChatCore {
         this.purge();
         tickLocations(this);
         reconcile(this);
+        resumeRelayTexts(this);
         this.names.forEach((_, contact) => {
           wakeIfNeeded(this, contact);
           relayPending(this, contact);
@@ -90,6 +95,8 @@ class ChatManager extends ChatCore {
     }
     receivePush(this, data);
     this.purge();
+    // Un texte annoncé dans le relais est récupéré avant de rendre la main à Android.
+    await Promise.allSettled([...this.background]);
     await settlePushAcks(this);
   }
 
@@ -314,6 +321,43 @@ class ChatManager extends ChatCore {
     this.afterSend(contact);
     flush(this, contact);
     wakeIfNeeded(this, contact);
+    // Trop long pour un push et toujours pas parti en direct : il passe par le relais.
+    setTimeout(() => relayPending(this, contact), TEXT_RELAY_CHECK_MS);
+    this.notify();
+  }
+
+  // --- Messages en attente (src/chat/pending.ts) ---
+
+  pendingState(message: Message) {
+    return pendingState(message, this.links.get(message.contact)?.status === 'connected', this.online);
+  }
+
+  // L'heure à laquelle « Réessayer » apparaîtra sous ce message (null : pas pour lui).
+  retryAvailableAt(message: Message) {
+    return retryAvailableAt(message, this.links.get(message.contact)?.status === 'connected', this.manualRetries.get(message.contact) ?? [], Date.now());
+  }
+
+  // Un nouvel essai de tout ce qui attend dans la conversation, avec les mêmes paquets chiffrés : rien
+  // n'est rechiffré, le destinataire ignore ce qu'il a déjà reçu. Seulement s'il compte (essai qui part
+  // vraiment du téléphone) il entre dans le plafond par heure.
+  retry(contact: string) {
+    const now = Date.now();
+    const retries = recentRetries(this.manualRetries.get(contact) ?? [], now);
+    this.manualRetries.set(contact, retries);
+    const pending = getUndelivered(contact);
+    const connected = this.links.get(contact)?.status === 'connected';
+    if (!pending.some((message) => canRetry(message, connected, retries, now))) return;
+    // Hors ligne, rien ne partira : l'appui ne compte pas (le prochain essai automatique non plus).
+    if (this.online) this.retryRequested.add(contact);
+    for (const message of pending) {
+      this.sentOnce.drop(contact, message.id);
+      this.pushed.delete(message.id);
+    }
+    this.lastWake.delete(contact);
+    this.afterSend(contact);
+    flush(this, contact);
+    wakeIfNeeded(this, contact);
+    relayPending(this, contact);
     this.notify();
   }
 

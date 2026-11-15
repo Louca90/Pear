@@ -227,6 +227,28 @@ const MIGRATIONS: Migration[] = [
       db.execSync('CREATE INDEX IF NOT EXISTS messages_expires ON messages (expires_at) WHERE expires_at IS NOT NULL');
     },
   },
+  {
+    // Messages en attente (retours Reddit) : heure du dernier essai réellement parti et nombre d'essais,
+    // paquet chiffré une seule fois puis renvoyé à l'identique (un renvoi n'avance pas le ratchet).
+    // Côté réception : les paquets déjà traités, pour acquitter un doublon sans le déchiffrer, et la clé
+    // d'un texte trop long pour un push, récupéré dans le relais.
+    version: 18,
+    up: (db) => {
+      addColumn(db, 'messages', 'last_attempt_at', 'INTEGER');
+      addColumn(db, 'messages', 'attempts', 'INTEGER NOT NULL DEFAULT 0');
+      addColumn(db, 'messages', 'sealed_packet', 'TEXT');
+      addColumn(db, 'relay_incoming', 'key', 'TEXT');
+      db.execSync(`
+        CREATE TABLE IF NOT EXISTS received_packets (
+          contact TEXT NOT NULL,
+          fingerprint TEXT NOT NULL,
+          message_id TEXT NOT NULL,
+          at INTEGER NOT NULL,
+          PRIMARY KEY (contact, fingerprint)
+        );
+      `);
+    },
+  },
 ];
 
 // La ligne de l'index porte le rowid du message : une modification ou une suppression la retrouve

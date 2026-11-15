@@ -580,7 +580,7 @@ export const en: Dictionary = {
     media: 'Photos and files',
     mediaAide: 'To send from your gallery.',
     location: 'Location',
-    locationAide: 'Place filter and location sharing.',
+    locationAide: 'Approximate location, read on your phone. For the Place filter and location sharing.',
     autorise: '{nom}: allowed',
     continuer: 'Continue',
     plusTard: 'Later',
@@ -813,6 +813,14 @@ export const en: Dictionary = {
     tirer: 'Pull for disappearing messages',
     minuteur: 'Disappearing messages timer: {duree}',
     message: 'Disappearing message',
+  },
+  attente: {
+    envoi: 'Sending…',
+    enAttente: 'Waiting for contact · last try {heure}',
+    pasEnvoye: 'Not sent yet',
+    pasEnvoyeHorsLigne: 'Not sent yet · no connection',
+    toujours: "Still waiting. Delivery needs your contact's phone to be reachable.",
+    reessayer: 'Retry',
   },
   unique: {
     photo: 'View-once photo',

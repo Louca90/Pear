@@ -14,6 +14,7 @@ import { LocationContent } from './LocationContent';
 import { parseMeta } from '../../../chat/meta';
 import { FittedText, TextFit } from './FittedText';
 import { MessageMeta } from './MessageMeta';
+import { PendingStatus } from './PendingStatus';
 import { ReplyQuote } from './ReplyQuote';
 import { t } from '../../../i18n';
 import { SystemRow } from './SystemRow';
@@ -282,6 +283,8 @@ function BubbleView({ message, name, palettes, hidden, mediaHidden, pulse, onOpe
           </Reanimated.View>
         )}
         <LikeBurst token={burst} style={mine ? styles.burstMine : styles.burstTheirs} />
+        {/* Pas encore distribué : ce qui a été tenté, et « Réessayer » après un moment (sous le dernier du groupe). */}
+        {mine && endsGroup && message.status === 'sending' && message.kind !== 'location' && <PendingStatus message={message} />}
       </Reanimated.View>
     </View>
   );

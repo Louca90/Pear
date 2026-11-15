@@ -579,7 +579,7 @@ export const fr = {
     media: 'Photos et fichiers',
     mediaAide: 'Pour envoyer depuis ta galerie.',
     location: 'Position',
-    locationAide: 'Filtre Lieu et partage de position.',
+    locationAide: 'Position approximative, lue sur ton téléphone. Pour le filtre Lieu et le partage de position.',
     autorise: '{nom} : autorisé',
     continuer: 'Continuer',
     plusTard: 'Plus tard',
@@ -812,6 +812,14 @@ export const fr = {
     tirer: 'Tirer pour les messages éphémères',
     minuteur: 'Minuteur des messages éphémères : {duree}',
     message: 'Message éphémère',
+  },
+  attente: {
+    envoi: 'Envoi…',
+    enAttente: 'En attente du contact · dernier essai {heure}',
+    pasEnvoye: 'Pas encore envoyé',
+    pasEnvoyeHorsLigne: 'Pas encore envoyé · pas de connexion',
+    toujours: 'Toujours en attente. La livraison demande que le téléphone de ton contact soit joignable.',
+    reessayer: 'Réessayer',
   },
   unique: {
     photo: 'Photo à vue unique',
