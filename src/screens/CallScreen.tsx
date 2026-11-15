@@ -141,6 +141,18 @@ function CallFull({ call, name, onMinimize }: { call: CallState; name: string; o
         {call.phase === 'active' && !call.remoteCamera && call.video && <Text style={[styles.hint, { color: mutedColor }]}>{t('appel.cameraCoupee')}</Text>}
       </View>
 
+      {call.phase === 'active' && call.remoteCamera && !call.cameraOn && (
+        <Reanimated.View entering={enterUp(10, DURATION.screen)} exiting={FadeOut.duration(DURATION.small).easing(EASE)} style={styles.offerWrap}>
+          <Text style={[styles.offerText, { color: textColor }]} numberOfLines={1}>
+            {t('appel.cameraAllumee', { nom: name })}
+          </Text>
+          <Pressable onPress={() => chat.toggleCamera()} accessibilityRole="button" style={({ pressed }) => [styles.offerButton, pressed && styles.offerPressed]}>
+            <Video size={16} color={fixed.black} strokeWidth={2} />
+            <Text style={styles.offerLabel}>{t('appel.allumerMienne')}</Text>
+          </Pressable>
+        </Reanimated.View>
+      )}
+
       <View style={[styles.controls, { paddingBottom: bottom + 32 }]}>
         {call.phase === 'incoming' ? (
           <View style={styles.answerRow}>
@@ -168,9 +180,9 @@ function CallFull({ call, name, onMinimize }: { call: CallState; name: string; o
                 onVideo={onVideo}
                 delay={80}
               />
-              {call.cameraOn && <RoundButton icon={SwitchCamera} label={t('appel.retourner')} onPress={chat.switchCamera} onVideo={onVideo} delay={0} />}
+              <RoundButton icon={SwitchCamera} label={t('appel.retourner')} disabled={!call.cameraOn} onPress={chat.switchCamera} onVideo={onVideo} delay={120} />
             </View>
-            <RoundButton icon={PhoneOff} label={t('appel.raccrocher')} variant="danger" onPress={() => chat.hangUp()} onVideo={onVideo} big delay={120} />
+            <RoundButton icon={PhoneOff} label={t('appel.raccrocher')} variant="danger" onPress={() => chat.hangUp()} onVideo={onVideo} big delay={160} />
           </View>
         )}
       </View>
@@ -438,6 +450,35 @@ const useStyles = createStyles((colors) => ({
   },
   hint: {
     fontSize: 13,
+  },
+  offerWrap: {
+    alignSelf: 'center',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+    paddingHorizontal: spacing.lg,
+  },
+  offerText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  offerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: radius.full,
+    backgroundColor: fixed.white,
+  },
+  offerPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.97 }],
+  },
+  offerLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: fixed.black,
   },
   controls: {
     paddingHorizontal: spacing.lg,

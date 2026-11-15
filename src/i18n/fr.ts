@@ -1001,6 +1001,8 @@ export const fr = {
     camera: 'Caméra',
     retourner: 'Changer de caméra',
     cameraCoupee: 'Caméra coupée',
+    cameraAllumee: '{nom} a allumé sa caméra',
+    allumerMienne: 'Allumer la mienne',
     autorisationMicro: 'Pear a besoin du micro pour appeler. Autorise-le dans les réglages du téléphone.',
     autorisationCamera: 'Pear a besoin de la caméra pour un appel vidéo.',
     hautParleurCoupe: 'Écouteur',

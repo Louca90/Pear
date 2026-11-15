@@ -1002,6 +1002,8 @@ export const en: Dictionary = {
     camera: 'Camera',
     retourner: 'Switch camera',
     cameraCoupee: 'Camera off',
+    cameraAllumee: '{nom} turned on their camera',
+    allumerMienne: 'Turn on mine',
     autorisationMicro: 'Pear needs the microphone to call. Allow it in your phone settings.',
     autorisationCamera: 'Pear needs the camera for a video call.',
     hautParleurCoupe: 'Earpiece',
