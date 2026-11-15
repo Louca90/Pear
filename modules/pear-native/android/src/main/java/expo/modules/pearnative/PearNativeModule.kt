@@ -163,6 +163,8 @@ class PearNativeModule : Module() {
   }
 
   private var pipListening = false
+  // Clé de tag pour l'arrondi déjà appliqué à une vidéo.
+  private val R_CORNER = 0x7f0e4207
 
   private fun findSurface(view: View): android.view.SurfaceView? {
     if (view is android.view.SurfaceView) return view
@@ -201,7 +203,14 @@ class PearNativeModule : Module() {
       val surface = findSurface(root) ?: return@AsyncFunction false
       try {
         val method = android.view.SurfaceView::class.java.getMethod("setCornerRadius", Float::class.javaPrimitiveType)
-        method.invoke(surface, (radius * context.resources.displayMetrics.density).toFloat())
+        val pixels = (radius * context.resources.displayMetrics.density).toFloat()
+        if ((surface.getTag(R_CORNER) as? Float) == pixels) return@AsyncFunction true
+        surface.setTag(R_CORNER, pixels)
+        method.invoke(surface, pixels)
+        // Android n'envoie l'arrondi à la surface que lorsqu'il la met à jour : un aller-retour de
+        // visibilité la recrée tout de suite, arrondie (la vidéo reprend à l'image suivante).
+        surface.visibility = View.INVISIBLE
+        surface.post { surface.visibility = View.VISIBLE }
         true
       } catch (e: Exception) {
         Log.w("PearCall", "coins de la vidéo", e)

@@ -347,15 +347,26 @@ export class PeerLink {
     }
   }
 
-  // Les pistes reçues de l'autre téléphone, lues tout de suite (null hors connexion).
+  // Les pistes reçues de l'autre téléphone, lues tout de suite (null tant qu'elles ne sont pas prêtes).
+  // Une piste n'est utilisable qu'une fois la réponse de l'autre appliquée : avant, le téléphone qui a
+  // ajouté les transceivers la voit déjà, mais la bibliothèque ne la connaît pas encore et une vidéo
+  // branchée trop tôt reste noire pour toujours.
   remoteMedia(): CallMedia | null {
-    const transceivers = this.pc ? this.mediaTransceivers(this.pc) : null;
-    return transceivers ? { audio: transceivers.audio.receiver.track ?? null, video: transceivers.video.receiver.track ?? null } : null;
+    const pc = this.pc;
+    if (!pc?.remoteDescription || pc.signalingState !== 'stable') return null;
+    const transceivers = this.mediaTransceivers(pc);
+    if (!transceivers) return null;
+    const receiving = (direction: string | null | undefined) => direction === 'sendrecv' || direction === 'recvonly';
+    return {
+      audio: receiving(transceivers.audio.currentDirection) ? transceivers.audio.receiver.track ?? null : null,
+      video: receiving(transceivers.video.currentDirection) ? transceivers.video.receiver.track ?? null : null,
+    };
   }
 
   private reportRemote(pc: RTCPeerConnection) {
-    const transceivers = this.mediaTransceivers(pc);
-    this.callbacks.onRemoteMedia?.({ audio: transceivers?.audio.receiver.track ?? null, video: transceivers?.video.receiver.track ?? null });
+    if (this.pc !== pc) return;
+    const media = this.remoteMedia();
+    if (media) this.callbacks.onRemoteMedia?.(media);
   }
 
   private async flushCandidates(pc: RTCPeerConnection) {

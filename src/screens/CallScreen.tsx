@@ -336,7 +336,7 @@ function RoundButton({
       <Reanimated.View style={[{ width: size, height: size, borderRadius: size / 2 }, styles.button, solid ? { backgroundColor: solid } : fill, feedback.style]}>
         <Icon size={big ? 30 : 24} color={iconColor} strokeWidth={1.75} />
       </Reanimated.View>
-      <Text style={[styles.buttonLabel, { color: onVideo ? colors.onMedia : colors.textMuted }]} numberOfLines={1}>
+      <Text style={[styles.buttonLabel, { color: onVideo ? colors.onMedia : colors.textMuted }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
         {label}
       </Text>
     </Pressable>
@@ -451,9 +451,10 @@ const useStyles = createStyles((colors) => ({
     gap: 32,
   },
   optionRow: {
+    alignSelf: 'stretch',
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: spacing.lg,
+    gap: spacing.sm,
   },
   disabled: {
     opacity: 0.4,
@@ -461,7 +462,7 @@ const useStyles = createStyles((colors) => ({
   buttonWrap: {
     alignItems: 'center',
     gap: 6,
-    minWidth: 72,
+    width: 76,
   },
   button: {
     alignItems: 'center',
