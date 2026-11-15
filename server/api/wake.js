@@ -28,15 +28,18 @@ function targetId(token) {
 
 // Corps : { token, v?, type?, payload? }. Les apps d'avant le lot 3 n'envoient que { token } (réveil).
 function parse(req) {
-  const body = readBody(req, ['token', 'v', 'type', 'payload']);
+  const body = readBody(req, ['token', 'v', 'type', 'payload', 'quiet']);
   if (!body) return null;
-  const { token, v = 1, type = 'wake', payload } = body;
+  const { token, v = 1, type = 'wake', payload, quiet = false } = body;
   if (typeof token !== 'string' || !FCM_TOKEN.test(token)) return null;
   if (!Number.isInteger(v) || v < 1 || v > PROTOCOL_VERSION) return null;
   if (!(type in TTL_MS)) return null;
   const maxLength = type === 'wake' ? MAX_WAKE_TAG_LENGTH : MAX_PAYLOAD_LENGTH;
   if (payload !== undefined && (typeof payload !== 'string' || payload.length > maxLength || !PAYLOAD.test(payload))) return null;
-  return { token, v, type, payload };
+  // quiet : un push qui n'affiche rien (accusé de réception) : priorité normale, pour que Doze ne rétrograde pas
+  // la priorité haute réservée à ce qui s'affiche tout de suite (messages, réveils).
+  if (typeof quiet !== 'boolean') return null;
+  return { token, v, type, payload, quiet };
 }
 
 module.exports = async (req, res) => {
@@ -60,7 +63,7 @@ module.exports = async (req, res) => {
     // Push "data-only" : il réveille l'app. Le contenu éventuel est chiffré de bout en bout.
     const data = { type: request.type, v: String(request.v) };
     if (request.payload) data.payload = request.payload;
-    await getMessaging().send({ token: request.token, data, android: { priority: 'high', ttl: TTL_MS[request.type] } });
+    await getMessaging().send({ token: request.token, data, android: { priority: request.quiet ? 'normal' : 'high', ttl: TTL_MS[request.type] } });
     return res.status(204).end();
   } catch (error) {
     // On ne journalise jamais le token du destinataire.

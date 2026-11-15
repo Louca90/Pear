@@ -35,8 +35,14 @@ const { state, loadHandler, call, reset } = require('./harness');
   assert.equal(await code({ body: { token, type: 'msg', payload: 'tag~a.b~c.d' } }), 204);
   assert.equal(await code({ body: { token, type: 'pair' } }), 400);
 
-  // Limite par destinataire : 20 par minute (3 appels déjà faits).
-  for (let i = 0; i < 17; i++) assert.equal(await code({ body: { token } }), 204);
+  // Push silencieux (accusé) : priorité normale ; sans le champ, priorité haute comme avant.
+  assert.equal(state.pushes[0].android.priority, 'high');
+  assert.equal(await code({ body: { token, type: 'msg', payload: 'QUJD', quiet: true } }), 204);
+  assert.equal(state.pushes[state.pushes.length - 1].android.priority, 'normal');
+  assert.equal(await code({ body: { token, type: 'msg', payload: 'QUJD', quiet: 'oui' } }), 400);
+
+  // Limite par destinataire : 20 par minute (4 appels déjà faits).
+  for (let i = 0; i < 16; i++) assert.equal(await code({ body: { token } }), 204);
   assert.equal(await code({ body: { token } }), 429);
 
   // Limite par appelant : 30 par minute, même vers des destinataires différents.
