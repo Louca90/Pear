@@ -19,6 +19,21 @@ Je ne m'attribue aucun mérite pour avoir écrit l'application. J'ai simplement 
 
 Télécharger `pear-X.Y.Z.apk` depuis la [dernière release](https://github.com/Louca90/Pear/releases/latest) et l'ouvrir sur le téléphone (Android demande d'autoriser l'installation d'apps inconnues). Les versions suivantes s'installent ensuite depuis l'app.
 
+### Si Android affiche un avertissement
+
+Pear n'est pas publiée sur le Play Store, donc Android ou Google Play Protect peut afficher un avertissement du type « application non reconnue » ou « développeur non vérifié » à l'installation ou à la mise à jour. C'est normal pour une application installée à la main.
+
+Pour continuer :
+1. Appuie sur « Plus de détails » (ou « Détails »).
+2. Appuie sur « Installer quand même ».
+
+Quelques précautions :
+- Télécharge Pear uniquement depuis la page [Releases](https://github.com/Louca90/Pear/releases/latest) de ce dépôt.
+- Ne désactive pas Play Protect pour installer Pear : ce n'est pas nécessaire, et il vaut mieux le laisser activé.
+- Les libellés varient un peu selon la marque du téléphone et la version d'Android.
+
+Pear est un projet personnel, non audité : voir la note en haut du README.
+
 ## Développer
 
 Prérequis : Node 24, Android Studio (SDK Android et JDK : `C:\Program Files\Android\Android Studio\jbr`), un téléphone Android en débogage USB.
