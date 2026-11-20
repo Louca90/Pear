@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Dimensions, Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import Reanimated, { FadeOut, useAnimatedStyle, useSharedValue, withTiming, type EntryExitAnimationFunction, interpolate } from 'react-native-reanimated';
+import Reanimated, { FadeIn, FadeOut, useAnimatedStyle, useSharedValue, withTiming, type EntryExitAnimationFunction, interpolate } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 import { GestureDetector, GestureHandlerRootView, usePanGesture, usePinchGesture, useSimultaneousGestures, useTapGesture } from 'react-native-gesture-handler';
 import { useEvent, useEventListener } from 'expo';
@@ -197,13 +197,15 @@ type Point = { x: number; y: number };
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 // round : la photo part d'un rond (avatar) : ses coins passent de ronds à droits en s'ouvrant.
-export type Viewing = { message: Message; rect: Rect; poster: string; size: { width: number; height: number }; round?: boolean };
+// title / subtitle / hint : la photo de profil en grand (planche « Profil · photo en grand ») : bouton fermer,
+// nom et « Photo de profil » en haut, le geste rappelé en bas.
+export type Viewing = { message: Message; rect: Rect; poster: string; size: { width: number; height: number }; round?: boolean; title?: string; subtitle?: string; hint?: string };
 
 // Le cadre passe en douceur du carré de la conversation au format réel du média : l'image, recadrée
 // en continu, ne saute jamais. Une vidéo n'est lue qu'une fois le cadre en place, et se met en pause
 // dès la fermeture. Glissé vers le bas, le média suit le doigt ; lâché trop tôt, il revient en plein écran.
 // Tout passe par Reanimated : le cadre change de taille sur le fil de l'interface, sans repasser par JS.
-export function MediaViewer({ viewing: { message, rect, poster, size, round }, onClose }: { viewing: Viewing; onClose: () => void }) {
+export function MediaViewer({ viewing: { message, rect, poster, size, round, title, subtitle, hint }, onClose }: { viewing: Viewing; onClose: () => void }) {
   const styles = useStyles();
   const colors = useMediaColors();
   const isVideo = message.kind === 'video';
@@ -443,11 +445,28 @@ export function MediaViewer({ viewing: { message, rect, poster, size, round }, o
         )}
       </View>
       </GestureDetector>
-      <Reanimated.View style={[styles.viewerClose, dimming]}>
-        <IconButton onPress={close} label={t('commun.fermer')}>
-          <X size={28} color={colors.background} strokeWidth={1.75} />
-        </IconButton>
-      </Reanimated.View>
+      {title ? (
+        <Reanimated.View style={[styles.viewerTop, chrome, dimming]}>
+          <IconButton onPress={close} label={t('commun.fermer')} style={styles.viewerTopClose}>
+            <X size={20} color={colors.background} strokeWidth={2} />
+          </IconButton>
+          <View style={styles.viewerTopText}>
+            <Text style={styles.viewerTitle} numberOfLines={1}>{title}</Text>
+            {!!subtitle && <Text style={styles.viewerSubtitle}>{subtitle}</Text>}
+          </View>
+        </Reanimated.View>
+      ) : (
+        <Reanimated.View style={[styles.viewerClose, dimming]}>
+          <IconButton onPress={close} label={t('commun.fermer')}>
+            <X size={28} color={colors.background} strokeWidth={1.75} />
+          </IconButton>
+        </Reanimated.View>
+      )}
+      {!!hint && opened && !closing && (
+        <Reanimated.View pointerEvents="none" entering={FadeIn.delay(120).duration(240)} style={[styles.viewerHint, chrome]}>
+          <Text style={styles.viewerHintText}>{hint}</Text>
+        </Reanimated.View>
+      )}
       </GestureHandlerRootView>
     </Modal>
   );
@@ -556,6 +575,47 @@ const useLocalStyles = createMediaStyles((colors) => ({
     position: 'absolute',
     top: 56,
     right: spacing.lg,
+  },
+  viewerTop: {
+    position: 'absolute',
+    top: 48,
+    left: spacing.md,
+    right: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  viewerTopClose: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewerTopText: {
+    flex: 1,
+    gap: 2,
+  },
+  viewerTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.background,
+  },
+  viewerSubtitle: {
+    fontSize: 12,
+    color: colors.textMuted,
+  },
+  viewerHint: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 40,
+    alignItems: 'center',
+  },
+  viewerHintText: {
+    fontSize: 13,
+    color: colors.textMuted,
   },
 }));
 

@@ -214,7 +214,7 @@ export function ContactScreen({ initialName, profile, isNew, initialTab = 'profi
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.identity}>
             <Reanimated.View style={avatarStyle}>
-              <AvatarViewer photoUri={profile.photo_uri} label={t('contact.photoGrand')}>
+              <AvatarViewer photoUri={profile.photo_uri} label={t('contact.photoGrand')} name={initialName}>
                 <Avatar uri={profile.photo_uri} size={AVATAR} />
               </AvatarViewer>
               {online && <Reanimated.View entering={popIn()} exiting={popOut()} style={styles.onlineDot} />}

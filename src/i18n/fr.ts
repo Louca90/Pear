@@ -219,6 +219,8 @@ export const fr = {
   },
   contact: {
     photoGrand: 'Voir la photo de profil',
+    photoProfil: 'Photo de profil',
+    photoGeste: 'Glisse vers le bas pour fermer · double-touche pour zoomer',
     actionEphemeres: 'Éphémères',
     actionPersonnaliser: 'Personnaliser',
     rechercher: 'Rechercher',

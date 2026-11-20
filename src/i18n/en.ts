@@ -220,6 +220,8 @@ export const en: Dictionary = {
   },
   contact: {
     photoGrand: 'View profile picture',
+    photoProfil: 'Profile picture',
+    photoGeste: 'Swipe down to close · double-tap to zoom',
     actionEphemeres: 'Disappearing',
     actionPersonnaliser: 'Customize',
     rechercher: 'Search',
