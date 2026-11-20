@@ -61,7 +61,7 @@ export function usePullGesture({ dir, canPull, onTrigger, hold, arm }: Options) 
     disableReanimated: true,
     maxPointers: 1,
     activeOffsetY: dir === 1 ? [-10000, 8] : [-8, 10000],
-    ...(arm ? { activateAfterLongPress: arm.holdMs } : {}),
+    activateAfterLongPress: arm ? arm.holdMs : undefined,
     failOffsetX: [-24, 24],
     // Pas permis au moment où le doigt se pose (pas en bas de la conversation, clavier ouvert…) : le
     // geste échoue tout de suite. Sinon il s'activait quand même au bout de 8 points et coupait le
