@@ -456,6 +456,11 @@ class PearNativeModule : Module() {
       mapOf("latitude" to best.latitude, "longitude" to best.longitude)
     }
 
+    // Une position fraîche, quand Android n'en a aucune en mémoire (téléphone où rien n'a encore demandé
+    // la position : lastKnownLocation rend null). Réseau et GPS en même temps, la première réponse gagne ;
+    // null au bout de timeoutMs, sans autorisation ou localisation coupée. Lue sur l'appareil, jamais envoyée.
+    AsyncFunction("currentLocation") { timeoutMs: Int, promise: Promise -> currentLocation(timeoutMs, promise) }.runOnQueue(Queues.MAIN)
+
     // Batterie « sans restriction » : sinon Android retarde les pushs quand le téléphone dort.
     Function("isIgnoringBatteryOptimizations") {
       val context = appContext.reactContext ?: return@Function false
@@ -541,6 +546,59 @@ class PearNativeModule : Module() {
   private fun applySecure() {
     val window = appContext.currentActivity?.window ?: return
     if (secureWindow) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE) else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+  }
+
+  @Suppress("DEPRECATION")
+  private fun currentLocation(timeoutMs: Int, promise: Promise) {
+    val context = appContext.reactContext
+    if (context == null || context.checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+      promise.resolve(null)
+      return
+    }
+    val manager = context.getSystemService(android.content.Context.LOCATION_SERVICE) as android.location.LocationManager
+    val providers = listOf(android.location.LocationManager.NETWORK_PROVIDER, android.location.LocationManager.GPS_PROVIDER)
+      .filter { provider -> try { manager.isProviderEnabled(provider) } catch (_: Exception) { false } }
+    if (providers.isEmpty()) {
+      promise.resolve(null)
+      return
+    }
+    val done = java.util.concurrent.atomic.AtomicBoolean(false)
+    val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    val cancel = CancellationSignal()
+    var listener: android.location.LocationListener? = null
+    fun finish(location: android.location.Location?) {
+      if (!done.compareAndSet(false, true)) return
+      handler.removeCallbacksAndMessages(null)
+      try { cancel.cancel() } catch (_: Exception) {}
+      listener?.let { try { manager.removeUpdates(it) } catch (_: Exception) {} }
+      promise.resolve(location?.let { mapOf("latitude" to it.latitude, "longitude" to it.longitude) })
+    }
+    handler.postDelayed({ finish(null) }, timeoutMs.toLong())
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+      for (provider in providers) {
+        // Sans la position précise, le GPS refuse : le réseau suffit.
+        try {
+          manager.getCurrentLocation(provider, cancel, context.mainExecutor) { location -> if (location != null) finish(location) }
+        } catch (e: SecurityException) {
+          Log.w("PearNative", "position $provider", e)
+        }
+      }
+    } else {
+      val single = object : android.location.LocationListener {
+        override fun onLocationChanged(location: android.location.Location) = finish(location)
+        override fun onStatusChanged(provider: String?, status: Int, extras: android.os.Bundle?) = Unit
+        override fun onProviderEnabled(provider: String) = Unit
+        override fun onProviderDisabled(provider: String) = Unit
+      }
+      listener = single
+      for (provider in providers) {
+        try {
+          manager.requestSingleUpdate(provider, single, android.os.Looper.getMainLooper())
+        } catch (e: SecurityException) {
+          Log.w("PearNative", "position $provider", e)
+        }
+      }
+    }
   }
 
   private fun authenticate(title: String, promise: Promise) {

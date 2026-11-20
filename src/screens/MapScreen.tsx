@@ -4,7 +4,7 @@ import { Camera, Map, Marker, type CameraRef } from '@maplibre/maplibre-react-na
 import Reanimated, { cancelAnimation, Easing, ReduceMotion, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withRepeat, withTiming, type EntryExitAnimationFunction } from 'react-native-reanimated';
 import { Download, Eye, EyeOff, Lock, MessageCircle } from 'lucide-react-native';
 
-import { lastKnownLocation } from '../../modules/pear-native';
+import { freshLocation, lastKnownLocation } from '../../modules/pear-native';
 import { getContactProfile, getLocationMessages } from '../chat/database';
 import { distanceKm, formatDistance, isSharing, parseLocationText, SharedLocation } from '../chat/location';
 import { chat } from '../chat/manager';
@@ -251,17 +251,24 @@ export function MapScreen({ contacts, focus, onBack, onOpenChat }: Props) {
     ]);
   };
 
+  // La zone se centre sur ma position, sans rien partager : la dernière connue, sinon une position
+  // fraîche demandée au téléphone (sur un téléphone où rien ne l'a encore demandée, Android n'en a aucune).
   const download = async () => {
-    let center = lastKnownLocation();
-    if (!center) {
-      const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION).catch(() => null);
-      if (granted === PermissionsAndroid.RESULTS.GRANTED) center = lastKnownLocation();
-    }
-    if (!center) {
+    if (progress !== null) return;
+    const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION).catch(() => null);
+    if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
       showDialog(t('carte.sansPosition'), t('carte.sansPositionAide'));
       return;
     }
+    // Le bouton montre déjà le téléchargement pendant qu'on cherche la position.
     setProgress(0);
+    const center = await freshLocation();
+    if (!center) {
+      setProgress(null);
+      showDialog(t('carte.sansPosition'), t('carte.sansPositionAide'));
+      return;
+    }
+    setMe(center);
     try {
       setRegion(await downloadRegion(center, setProgress));
       haptics.success();

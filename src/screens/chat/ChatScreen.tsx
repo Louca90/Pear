@@ -50,6 +50,7 @@ import { TypingBubble } from './components/TypingBubble';
 import { dayLabel, ephemeralLabel, nextVoice } from './format';
 import { JUMP_PULSE_DELAY_MS, LIKE } from './constants';
 import { useChatScroll } from './hooks/useChatScroll';
+import { freshLocation } from '../../../modules/pear-native';
 import { useKeyboardOpen } from './hooks/useKeyboardOpen';
 import { useChatStyles } from './styles';
 import { Action, Palettes, Rect, ViewRef } from './types';
@@ -486,6 +487,9 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
         ]);
         return;
       }
+      // Sur un téléphone où rien n'a encore demandé la position, Android n'en a aucune en mémoire : on en
+      // demande une fraîche avant de partager (elle devient la dernière position connue).
+      await freshLocation();
       if (once ? chat.sendCurrentLocation(contactKey) : chat.startLocation(contactKey, seconds, open)) scroll.followSent();
       else showDialog(t('position.indisponible'), t('position.indisponibleAide'));
     } catch (e) {

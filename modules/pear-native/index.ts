@@ -28,6 +28,7 @@ declare class PearNativeModule extends NativeModule<{ onBack: (event: BackEvent)
   isIgnoringBatteryOptimizations(): boolean;
   batteryStatus?(): { level: number; charging: boolean } | null;
   lastKnownLocation?(): { latitude: number; longitude: number } | null;
+  currentLocation?(timeoutMs: number): Promise<{ latitude: number; longitude: number } | null>;
   requestIgnoreBatteryOptimizations(): boolean;
   canRequestPackageInstalls(): boolean;
   openUnknownAppSourcesSettings(): boolean;
@@ -96,6 +97,18 @@ export function batteryStatus(): { level: number; charging: boolean } | null {
 // Dernière position connue, approximative. null sans autorisation ou avec un ancien APK.
 export function lastKnownLocation(): { latitude: number; longitude: number } | null {
   return PearNative.lastKnownLocation?.() ?? null;
+}
+
+// La dernière position connue, sinon une position fraîche demandée au téléphone (au plus timeoutMs).
+// Sur un téléphone où rien n'a encore demandé la position, Android n'en a aucune en mémoire.
+export async function freshLocation(timeoutMs = 15000): Promise<{ latitude: number; longitude: number } | null> {
+  const known = lastKnownLocation();
+  if (known) return known;
+  try {
+    return (await PearNative.currentLocation?.(timeoutMs)) ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export function isIgnoringBatteryOptimizations(): boolean {
