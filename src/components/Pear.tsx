@@ -17,7 +17,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import Svg, { Circle, ClipPath, Defs, G, Mask, Path, Rect } from 'react-native-svg';
 
-import { fixed, inkOn, useColors } from '../theme';
+import { fixed, useColors } from '../theme';
 
 // L'icône « Pépins » : une poire coupée en deux, peau verte, chair pâle, deux pépins reliés par un lien
 // en pointillés (la connexion pair à pair). C'est un logo qui s'anime, pas un personnage : aucun visage,
@@ -74,9 +74,6 @@ type Props = {
   progress?: number;
   // Couleur de la feuille qui repousse (`leaf`), `signatureStrong` en pratique.
   leafColor?: string;
-  // Le fond sous la poire, s'il n'est pas celui de l'écran (carte blanche du QR, photo…) : la tige, les
-  // feuilles et les pépins hors de la chair s'y adaptent pour rester lisibles.
-  background?: string;
 };
 
 // Les ressorts de la planche « Icône Pépins » (raideur, amortissement) : défaut 170/26, doux 90/19, lent 55/15,
@@ -175,10 +172,11 @@ const AnimatedCircle = Reanimated.createAnimatedComponent(Circle);
 const AnimatedRect = Reanimated.createAnimatedComponent(Rect);
 const AnimatedG = Reanimated.createAnimatedComponent(G);
 
-export function Pear({ height, color: wanted, state = 'idle', progress = 0, leafColor, background }: Props) {
+export function Pear({ height, color, state = 'idle', progress = 0, leafColor }: Props) {
   const colors = useColors();
-  // Tige et feuilles : la couleur demandée, corrigée si elle ne se lit pas sur le fond donné (ou celui de l'écran).
-  const color = inkOn(background ?? colors.background, wanted);
+  // Deux versions, choisies par le mode (planche « Nouvelle icône de l'app ») : la peau prend le vert
+  // signature du mode (#9DB84A en clair, #B4CC68 en sombre), la chair reste pâle et les pépins noirs dessus ;
+  // la tige, les feuilles et ce qui n'est pas sur la chair prennent la couleur de texte du mode (`color`).
   const ink = color;
   const reduced = useReducedMotion();
   const width = height * PEAR_RATIO;

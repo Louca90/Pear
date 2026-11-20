@@ -9,7 +9,7 @@ import { Button } from '../components/ui';
 import { PairingLink, parsePairingLink } from '../crypto/pairing';
 import { Pear } from '../components/Pear';
 import { haptics } from '../haptics';
-import { createStyles, fixed, motion, radius, spacing, useColors } from '../theme';
+import { createStyles, motion, radius, spacing, useColors } from '../theme';
 import { t } from '../i18n';
 
 type Props = {
@@ -119,7 +119,7 @@ export function ScannerPanel({ onKeyReceived }: Props) {
         </Reanimated.View>
         {found && (
           <Reanimated.View pointerEvents="none" style={[styles.pear, pearStyle]}>
-            <Pear height={64} color={colors.onMedia} background={fixed.black} state="leaf" leafColor={colors.signatureStrong} />
+            <Pear height={64} color={colors.onMedia} state="leaf" leafColor={colors.signatureStrong} />
           </Reanimated.View>
         )}
       </View>

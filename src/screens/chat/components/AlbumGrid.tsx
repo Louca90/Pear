@@ -5,6 +5,7 @@ import { Message } from '../../../chat/database';
 import { chat } from '../../../chat/manager';
 import { parseMeta } from '../../../chat/meta';
 import { createStyles, radius, useColors } from '../../../theme';
+import { TransferPear } from '../../../components/TransferPear';
 
 import { LONG_PRESS_MS, MEDIA_WIDTH } from '../constants';
 import { useChatStyles } from '../styles';
@@ -37,7 +38,6 @@ type CellProps = {
 
 function Cell({ message, width, height, hidden, onOpen, onLongPress, onPrepare }: CellProps) {
   const styles = useStyles();
-  const colors = useColors();
   const view = useRef<ViewRef>(null);
   // L'avancement du transfert est lu ici : la bulle, elle, ne se redessine que si son message change.
   const progress = useTransferProgress(message.id);
@@ -64,11 +64,7 @@ function Cell({ message, width, height, hidden, onOpen, onLongPress, onPrepare }
           <VideoPreview message={message} style={size} />
         </View>
       )}
-      {progress !== undefined && (
-        <View style={styles.progressTrack}>
-          <View style={[styles.progressBar, { width: `${Math.round(progress * 100)}%`, backgroundColor: colors.onMedia }]} />
-        </View>
-      )}
+      <TransferPear progress={progress} small />
     </Pressable>
   );
 }

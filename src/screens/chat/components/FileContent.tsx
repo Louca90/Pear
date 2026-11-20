@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Image, ImageStyle, Pressable, StyleProp, Text, View } from 'react-native';
 import { FileText, Images, Mic, Play } from 'lucide-react-native';
 
@@ -78,6 +78,25 @@ export function BlurThumb({ thumb, label, style }: { thumb: string; label?: stri
   );
 }
 
+// Vrai pendant un court instant après la fin d'un transfert : la poire montre « Vérifié » avant l'icône du fichier.
+const DONE_MS = 1200;
+function useJustDone(progress: number | undefined) {
+  const [done, setDone] = useState(false);
+  const was = useRef(progress !== undefined);
+  useEffect(() => {
+    if (progress !== undefined) {
+      was.current = true;
+      return;
+    }
+    if (!was.current) return;
+    was.current = false;
+    setDone(true);
+    const timer = setTimeout(() => setDone(false), DONE_MS);
+    return () => clearTimeout(timer);
+  }, [progress]);
+  return done;
+}
+
 export function FileContent({ message, palette, mediaHidden, onOpen, onLongPress, onPrepare, onAccept, onRefuse }: FileContentProps) {
   const styles = useStyles();
   const colors = useColors();
@@ -87,6 +106,7 @@ export function FileContent({ message, palette, mediaHidden, onOpen, onLongPress
   const secondary = bare ? colors.textMuted : palette.muted;
   // L'avancement du transfert est lu ici : la bulle, elle, ne se redessine que si son message change.
   const progress = useTransferProgress(message.id);
+  const justDone = useJustDone(progress);
   const open = () => media.current?.measureInWindow((x, y, width, height) => onOpen({ x, y, width, height }));
   // Photo ou vidéo pas encore arrivée (ou proposée) : sa miniature floue à la place de la ligne de fichier.
   const waiting = message.status === 'receiving' || message.status === 'offered';
@@ -144,9 +164,10 @@ export function FileContent({ message, palette, mediaHidden, onOpen, onLongPress
         <View style={styles.fileRow}>
           {thumb ? (
             <Image source={{ uri: jpegDataUri(thumb) }} style={styles.offerThumb} resizeMode="cover" blurRadius={3} />
-          ) : progress !== undefined ? (
+          ) : progress !== undefined || justDone ? (
+            // La poire suit le transfert, puis passe en « Vérifié » un instant quand il est fini.
             <View style={styles.fileIcon}>
-              <Pear height={24} color={foreground} background={bare ? colors.background : palette.background} state="ripening" progress={progress} />
+              <Pear height={24} color={foreground} state={progress !== undefined ? 'ripening' : 'leaf'} progress={progress ?? 1} leafColor={colors.signatureStrong} />
             </View>
           ) : message.kind === 'video' ? (
             <Play size={24} color={foreground} strokeWidth={1.75} />
@@ -179,11 +200,6 @@ export function FileContent({ message, palette, mediaHidden, onOpen, onLongPress
         </View>
       )}
       {onMedia && <TransferPear progress={progress} />}
-      {progress !== undefined && !onMedia && (
-        <View style={[styles.progressTrack, { backgroundColor: bare ? colors.border : palette.track }]}>
-          <View style={[styles.progressBar, { width: `${Math.round(progress * 100)}%`, backgroundColor: foreground }]} />
-        </View>
-      )}
     </Pressable>
   );
 }

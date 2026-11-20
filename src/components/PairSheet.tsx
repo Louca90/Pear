@@ -98,7 +98,7 @@ function CodePane({ publicKey }: { publicKey: string }) {
     <Reanimated.View entering={FadeIn.duration(200)} style={styles.pane}>
       <Reanimated.View entering={codeIn} style={styles.card}>
         <View style={styles.cardHead}>
-          <Pear height={22} color={fixed.black} background={fixed.white} />
+          <Pear height={22} color={fixed.black} />
           {!!profile.name && (
             <Text style={styles.name} numberOfLines={1}>
               {profile.name}
