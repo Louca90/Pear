@@ -9,10 +9,18 @@ import { log } from '../../log';
 const SOURCES = {
   sent: require('../../../assets/sounds/sent.wav'),
   received: require('../../../assets/sounds/received.wav'),
+  // Appels : tonalité d'attente de l'appelant, appel reconnecté, appel raccroché (Kenney, CC0).
+  callWaiting: require('../../../assets/sounds/kenney_bong_001.wav'),
+  callReconnected: require('../../../assets/sounds/kenney_confirmation_001.wav'),
+  callHangup: require('../../../assets/sounds/kenney_close_001.wav'),
 };
 type Sound = keyof typeof SOURCES;
 
 const players: Partial<Record<Sound, AudioPlayer>> = {};
+
+// Les sons d'appel suivent le volume de sonnerie et le mode silencieux du téléphone, sans passer par
+// l'interrupteur « Sons de la conversation ».
+const CALL_SOUNDS: Sound[] = ['callWaiting', 'callReconnected', 'callHangup'];
 
 export function soundsEnabled() {
   return getSetting('chat_sounds') !== '0';
@@ -49,7 +57,7 @@ export function releaseSounds() {
 // Le mode audio est remis avant chaque son, car les vocaux et les appels le changent : le son se mêle
 // à la musique en cours sans l'interrompre et se tait en mode silencieux ou vibreur.
 export function playSound(sound: Sound) {
-  if (!soundsEnabled()) return;
+  if (!CALL_SOUNDS.includes(sound) && !soundsEnabled()) return;
   prepareSounds();
   setAudioModeAsync({ interruptionMode: 'mixWithOthers', playsInSilentMode: false, allowsRecording: false })
     .catch((e) => log.warn('sons', e))

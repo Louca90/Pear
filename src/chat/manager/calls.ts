@@ -11,6 +11,7 @@ import { addCallHangUpListener, addHeadsetListener, callHeadset, callOutputs, Ca
 import { t } from '../../i18n';
 import { log } from '../../log';
 
+import { playSound } from '../../screens/chat/sounds';
 import { ChatCore } from './core';
 import { addSystemMessage } from './outbox';
 import { pushKeysFor } from './secure';
@@ -75,6 +76,19 @@ const listeners = new Set<() => void>();
 let timer: ReturnType<typeof setTimeout> | undefined;
 let inviteTimer: ReturnType<typeof setTimeout> | undefined;
 let dropTimer: ReturnType<typeof setTimeout> | undefined;
+// Tonalité d'attente de l'appelant, tant que ça sonne chez l'autre.
+let waitingTone: ReturnType<typeof setInterval> | undefined;
+
+function startWaitingTone() {
+  stopWaitingTone();
+  playSound('callWaiting');
+  waitingTone = setInterval(() => playSound('callWaiting'), 3000);
+}
+
+function stopWaitingTone() {
+  clearInterval(waitingTone);
+  waitingTone = undefined;
+}
 let expectTimer: ReturnType<typeof setTimeout> | undefined;
 let clearTimer: ReturnType<typeof setTimeout> | undefined;
 let audioTrack: MediaStreamTrack | null = null;
@@ -531,6 +545,7 @@ export function receiveCall(core: ChatCore, contact: string, raw: unknown) {
   if (message.action === 'ringing' && state.phase === 'calling') {
     clearTimeout(inviteTimer);
     set({ phase: 'ringing' });
+    startWaitingTone();
     core.keepConnected(contact, RING_MS + 10 * 1000);
     startTimer(RING_MS, () => {
       if (state?.phase !== 'ringing') return;
@@ -538,6 +553,7 @@ export function receiveCall(core: ChatCore, contact: string, raw: unknown) {
       finish(core, 'noAnswer', true);
     });
   } else if (message.action === 'accept' && (state.phase === 'calling' || state.phase === 'ringing')) {
+    stopWaitingTone();
     set({ remoteCamera: message.camera === true });
     begin(core, state.video);
   } else if (message.action === 'decline' && state.outgoing) {
@@ -643,6 +659,7 @@ export function callLinkStatus(core: ChatCore, contact: string, status: PeerStat
       clearTimeout(dropTimer);
       set({ reconnecting: false });
       log.info('appel reconnecté');
+      playSound('callReconnected');
       // Après une reconnexion, le partage ne reprend jamais tout seul : il faut un nouveau consentement.
       stopShare(core);
     }
@@ -694,6 +711,8 @@ function finish(core: ChatCore, end: CallEnd, record = false) {
   clearTimeout(timer);
   clearTimeout(inviteTimer);
   clearTimeout(dropTimer);
+  stopWaitingTone();
+  playSound('callHangup');
   appState?.remove();
   appState = null;
   headsetWatch?.remove();
