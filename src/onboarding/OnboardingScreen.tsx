@@ -262,6 +262,7 @@ export function OnboardingScreen({ mode, initialStep, onDone }: Props) {
                         why={t(`priseEnMain.${id}Aide`)}
                         state={states[id] ?? 'missing'}
                         onPress={() => ask(id)}
+                        later
                       />
                     ))}
                 </View>

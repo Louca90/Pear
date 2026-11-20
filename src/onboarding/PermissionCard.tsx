@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { LucideIcon } from 'lucide-react-native';
 import Svg, { Path } from 'react-native-svg';
@@ -32,17 +32,25 @@ type Props = {
   why: string;
   state: PermissionState;
   onPress: () => void;
+  // Prise en main : un « Plus tard » discret sous le bouton ; la carte s'estompe, rien n'est imposé.
+  later?: boolean;
 };
 
 // Une carte de l'étape « Quelques autorisations » : icône, titre, à quoi elle sert, et le bouton qui
 // lance la vraie demande. Accordée, le bouton devient une pastille signature où une coche se dessine.
-export function PermissionCard({ index, icon: Icon, title, why, state, onPress }: Props) {
+export function PermissionCard({ index, icon: Icon, title, why, state, onPress, later }: Props) {
   const colors = useColors();
   const styles = useStyles();
   const granted = state === 'granted';
   const done = useSharedValue(granted ? 1 : 0);
   const draw = useSharedValue(granted ? 1 : 0);
   const feedback = usePressFeedback();
+  const [postponed, setPostponed] = useState(false);
+  const dim = useSharedValue(1);
+  useEffect(() => {
+    dim.set(timing(postponed && !granted ? 0.5 : 1, 240));
+  }, [postponed, granted, dim]);
+  const dimStyle = useAnimatedStyle(() => ({ opacity: dim.get() }));
 
   useEffect(() => {
     done.set(timing(granted ? 1 : 0, SWAP_MS));
@@ -61,7 +69,7 @@ export function PermissionCard({ index, icon: Icon, title, why, state, onPress }
   const checkProps = useAnimatedProps(() => ({ strokeDashoffset: CHECK_LENGTH * (1 - draw.get()) }));
 
   return (
-    <Reanimated.View entering={enterUp(10, ENTER_MS, index * STAGGER_MS)} style={styles.card}>
+    <Reanimated.View entering={enterUp(10, ENTER_MS, index * STAGGER_MS)} style={[styles.card, dimStyle]}>
       <View style={styles.icon}>
         <Icon size={20} color={colors.text} strokeWidth={1.8} />
       </View>
@@ -96,6 +104,11 @@ export function PermissionCard({ index, icon: Icon, title, why, state, onPress }
             </Reanimated.View>
           </Pressable>
         </Reanimated.View>
+        {later && !granted && !postponed && (
+          <Pressable onPress={() => setPostponed(true)} hitSlop={8} accessibilityRole="button" accessibilityLabel={`${t('priseEnMain.plusTard')} : ${title}`}>
+            <Text style={styles.later}>{t('priseEnMain.plusTard')}</Text>
+          </Pressable>
+        )}
       </View>
     </Reanimated.View>
   );
@@ -151,6 +164,11 @@ const useStyles = createStyles((colors) => ({
     fontSize: 13,
     fontWeight: '600',
     color: colors.onAccent,
+  },
+  later: {
+    marginTop: 6,
+    fontSize: 12,
+    color: colors.textMuted,
   },
   badge: {
     position: 'absolute',
