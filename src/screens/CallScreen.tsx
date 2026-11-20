@@ -171,6 +171,19 @@ function CallFull({ call, name, onMinimize }: { call: CallState; name: string; o
       { label: t('appel.partager'), onPress: () => chat.toggleShare() },
       { label: t('commun.annuler'), style: 'cancel' },
     ]);
+  // Un appui au milieu masque les commandes (pour mieux voir la vidéo ou l'écran partagé), un autre les remet.
+  const [chromeHidden, setChromeHidden] = useState(false);
+  const canHide = call.phase === 'active';
+  useEffect(() => {
+    if (!canHide) setChromeHidden(false);
+  }, [canHide]);
+  const toggleChrome = () => canHide && setChromeHidden((hidden) => !hidden);
+  const chrome = useSharedValue(1);
+  useEffect(() => {
+    chrome.set(timing(chromeHidden ? 0 : 1, DURATION.small));
+  }, [chromeHidden, chrome]);
+  const chromeStyle = useAnimatedStyle(() => ({ opacity: chrome.get() }));
+  const chromeEvents = chromeHidden ? 'none' : 'box-none';
   const activeOutput = call.outputs.find((output) => output.active);
   const OutputIcon = activeOutput ? OUTPUT_ICONS[activeOutput.type] : call.speaker ? Volume2 : Smartphone;
 
@@ -178,9 +191,13 @@ function CallFull({ call, name, onMinimize }: { call: CallState; name: string; o
     <View style={[styles.root, onVideo && styles.dark]}>
       {outputsOpen && <OutputSheet outputs={call.outputs} onClose={() => setOutputsOpen(false)} />}
       <StatusBar style={onVideo ? 'light' : 'auto'} />
-      {onVideo && <VideoStage call={call} showRemote={showRemote} showLocal={showLocal} top={top} bottom={bottom} />}
+      {onVideo ? (
+        <VideoStage call={call} showRemote={showRemote} showLocal={showLocal} top={top} bottom={bottom} onTap={toggleChrome} />
+      ) : (
+        <Pressable style={StyleSheet.absoluteFill} onPress={toggleChrome} accessibilityLabel={t('appel.commandes')} />
+      )}
 
-      <View style={[styles.topBar, { paddingTop: top + spacing.sm }]}>
+      <Reanimated.View pointerEvents={chromeEvents} style={[styles.topBar, { paddingTop: top + spacing.sm }, chromeStyle]}>
         {call.phase !== 'incoming' && !ended ? (
           <Pressable onPress={onMinimize} hitSlop={12} accessibilityRole="button" accessibilityLabel={t('appel.reduire')} style={[styles.minimize, onVideo && styles.minimizeOnVideo]}>
             <ChevronDown size={24} color={textColor} strokeWidth={1.75} />
@@ -202,9 +219,9 @@ function CallFull({ call, name, onMinimize }: { call: CallState; name: string; o
             </Pressable>
           </Reanimated.View>
         )}
-      </View>
+      </Reanimated.View>
 
-      <View style={[styles.head, onVideo && styles.headOnVideo]}>
+      <Reanimated.View pointerEvents="none" style={[styles.head, onVideo && styles.headOnVideo, chromeStyle]}>
         {!onVideo && (
           <View style={styles.avatarWrap}>
             {waiting && <Breath />}
@@ -224,9 +241,10 @@ function CallFull({ call, name, onMinimize }: { call: CallState; name: string; o
         {call.phase === 'active' && !call.remoteCamera && call.video && <Text style={[styles.hint, { color: mutedColor }]}>{t('appel.cameraCoupee')}</Text>}
         {call.remoteSharing && <Text style={[styles.hint, { color: mutedColor }]}>{t('appel.ecranDe', { nom: name })}</Text>}
         {call.sharing && <Text style={[styles.hint, { color: colors.danger }]}>{t('appel.partageEnCours')}</Text>}
-      </View>
+      </Reanimated.View>
 
-      {call.phase === 'active' && call.remoteCamera && !call.cameraOn && (
+      {/* Pas de proposition d'allumer sa caméra quand l'autre partage son écran (ce n'est pas sa caméra). */}
+      {call.phase === 'active' && call.remoteCamera && !call.remoteSharing && !call.cameraOn && !chromeHidden && (
         <Reanimated.View entering={enterUp(10, DURATION.screen)} exiting={FadeOut.duration(DURATION.small).easing(EASE)} style={styles.offerWrap}>
           <Text style={[styles.offerText, { color: textColor }]} numberOfLines={1}>
             {t('appel.cameraAllumee', { nom: name })}
@@ -238,7 +256,7 @@ function CallFull({ call, name, onMinimize }: { call: CallState; name: string; o
         </Reanimated.View>
       )}
 
-      <View style={[styles.controls, { paddingBottom: bottom + 32 }]}>
+      <Reanimated.View pointerEvents={chromeEvents} style={[styles.controls, { paddingBottom: bottom + 32 }, chromeStyle]}>
         {call.phase === 'incoming' ? (
           <View style={styles.answerRow}>
             <RoundButton icon={PhoneOff} label={t('appel.refuser')} variant="danger" onPress={() => chat.declineCall()} onVideo={onVideo} big delay={0} />
@@ -270,7 +288,7 @@ function CallFull({ call, name, onMinimize }: { call: CallState; name: string; o
             <RoundButton icon={PhoneOff} label={t('appel.raccrocher')} variant="danger" onPress={() => chat.hangUp()} onVideo={onVideo} big delay={160} />
           </View>
         )}
-      </View>
+      </Reanimated.View>
     </View>
   );
 }
@@ -330,7 +348,7 @@ const THUMB_W = 108;
 const THUMB_H = 160;
 const CONTROLS_H = 250;
 
-function VideoStage({ call, showRemote, showLocal, top, bottom }: { call: CallState; showRemote: boolean; showLocal: boolean; top: number; bottom: number }) {
+function VideoStage({ call, showRemote, showLocal, top, bottom, onTap }: { call: CallState; showRemote: boolean; showLocal: boolean; top: number; bottom: number; onTap: () => void }) {
   const styles = useStyles();
   const { width, height } = useWindowDimensions();
   const [localMain, setLocalMain] = useState(false);
@@ -362,12 +380,14 @@ function VideoStage({ call, showRemote, showLocal, top, bottom }: { call: CallSt
     <>
       <RTCView
         streamURL={mainLocal ? call.localUrl! : call.remoteUrl!}
-        objectFit="cover"
+        // Un écran partagé s'affiche en entier (pas rogné) ; une caméra remplit l'écran.
+        objectFit={!mainLocal && call.remoteSharing ? 'contain' : 'cover'}
         mirror={mainLocal && call.front}
         zOrder={0}
         style={StyleSheet.absoluteFill}
       />
       <Reanimated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.dark, veilStyle]} />
+      <Pressable style={StyleSheet.absoluteFill} onPress={onTap} accessibilityLabel={t('appel.commandes')} />
       {both && (
         <SnapDraggable slots={slots} onTap={swap} style={styles.thumbWrap}>
           <Reanimated.View entering={FadeIn.duration(DURATION.small).easing(EASE)} style={styles.thumb}>

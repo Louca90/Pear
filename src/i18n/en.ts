@@ -1045,6 +1045,7 @@ export const en: Dictionary = {
     casqueFilaire: 'Wired headset',
     casqueUsb: 'USB headset',
     sortie: 'Audio output',
+    commandes: 'Show or hide the controls',
     partager: 'Share screen',
     arreterPartage: 'Stop sharing',
     partagerTitre: 'Share your screen?',

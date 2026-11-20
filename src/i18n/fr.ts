@@ -1044,6 +1044,7 @@ export const fr = {
     casqueFilaire: 'Casque filaire',
     casqueUsb: 'Casque USB',
     sortie: 'Sortie audio',
+    commandes: 'Afficher ou masquer les commandes',
     partager: "Partager l'écran",
     arreterPartage: 'Arrêter le partage',
     partagerTitre: 'Partager ton écran ?',
