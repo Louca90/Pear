@@ -860,6 +860,7 @@ export const en: Dictionary = {
     envoyee: 'Sent',
     envoi: 'Sending…',
     bouton: 'View once',
+    camera: "View once: opened a single time. Your contact can't save it or take a screenshot in Pear.",
     aide: 'The media is erased after being opened once.',
   },
   position: {

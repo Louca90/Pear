@@ -859,6 +859,7 @@ export const fr = {
     envoyee: 'Envoyée',
     envoi: 'Envoi…',
     bouton: 'Vue unique',
+    camera: "Vue unique : ouverte une seule fois. Ton contact ne pourra pas l'enregistrer ni faire de capture dans Pear.",
     aide: 'Le média s\'efface après avoir été ouvert une fois.',
   },
   position: {

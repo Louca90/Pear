@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, useWindowDimensions, Modal, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
-import Reanimated, { Easing, useAnimatedStyle, useSharedValue, withTiming, withSpring, withSequence, interpolateColor } from 'react-native-reanimated';
+import Reanimated, { Easing, FadeIn, useAnimatedStyle, useSharedValue, withTiming, withSpring, withSequence, interpolateColor } from 'react-native-reanimated';
 import { useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import { haptics } from '../haptics';
 import { NavigationBar } from 'expo-navigation-bar';
@@ -131,6 +131,15 @@ function CaptureReview({ capture, contacts, onDiscard, onSent, to }: ReviewProps
   const styles = useStyles();
   const [picking, setPicking] = useState(false);
   const [saved, setSaved] = useState(false);
+  // Vue unique : le contact ne peut ouvrir la photo (ou la vidéo) qu'une fois. Désactivé à chaque nouvelle prise.
+  const [once, setOnce] = useState(false);
+  const onceFill = useSharedValue(0);
+  const onceStyle = useAnimatedStyle(() => ({ backgroundColor: interpolateColor(onceFill.get(), [0, 1], [colors.overlay, colors.signatureStrong]), transform: [{ scale: 1 + 0.08 * onceFill.get() }] }));
+  const toggleOnce = () => {
+    haptics.select();
+    onceFill.set(timing(once ? 0 : 1, DURATION.small));
+    setOnce(!once);
+  };
   const editor = useRef<MediaEditorHandle>(null);
   const [preparing, setPreparing] = useState(false);
 
@@ -180,6 +189,7 @@ function CaptureReview({ capture, contacts, onDiscard, onSent, to }: ReviewProps
           kind: capture.kind,
           fromCamera: true,
           keepSource: index < keys.length - 1,
+          ...(once ? { once: true } : {}),
         });
       } catch (e) {
         log.warn('envoi depuis la caméra', e);
@@ -209,12 +219,24 @@ function CaptureReview({ capture, contacts, onDiscard, onSent, to }: ReviewProps
             onClose: onDiscard,
             onSend: () => (to ? send([to]) : setPicking(true)),
             extra: (
+              <>
+              <IconButton onPress={toggleOnce} label={t('unique.bouton')} style={styles.roundControl}>
+                <Reanimated.View style={[styles.onceFill, onceStyle]}>
+                  <Text style={styles.onceLabel}>1</Text>
+                </Reanimated.View>
+              </IconButton>
               <IconButton onPress={save} disabled={saved} label={saved ? t('camera.enregistre') : t('camera.enregistrerGalerie')} style={styles.roundControl}>
                 {saved ? <Check size={22} color={colors.background} strokeWidth={2} /> : <Download size={22} color={colors.background} strokeWidth={1.9} />}
               </IconButton>
+              </>
             ),
           }}
         />
+        {once && (
+          <Reanimated.Text entering={FadeIn.duration(180)} style={styles.onceHint}>
+            {t('unique.camera')}
+          </Reanimated.Text>
+        )}
 
         {picking && (
           <ContactPickerSheet title={t('camera.envoyerA')} contacts={contacts} onSend={send} onClose={() => setPicking(false)} />
@@ -874,6 +896,27 @@ const useStyles = createMediaStyles((colors) => ({
     backgroundColor: fixed.cameraSurface,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  onceFill: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  onceLabel: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: colors.background,
+  },
+  onceHint: {
+    position: 'absolute',
+    alignSelf: 'center',
+    bottom: 120,
+    fontSize: 13,
+    color: colors.background,
+    textAlign: 'center',
+    paddingHorizontal: spacing.lg,
   },
   roundControl: {
     width: 44,
