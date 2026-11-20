@@ -48,6 +48,9 @@ export type CallState = {
   // Les sorties audio (écouteur, haut-parleur, casques avec leur nom) et laquelle est active.
   outputs: CallOutput[];
   cameraOn: boolean;
+  // Je partage mon écran / l'autre partage le sien.
+  sharing: boolean;
+  remoteSharing: boolean;
   front: boolean;
   remoteCamera: boolean;
   localUrl: string | null;
@@ -76,6 +79,8 @@ let expectTimer: ReturnType<typeof setTimeout> | undefined;
 let clearTimer: ReturnType<typeof setTimeout> | undefined;
 let audioTrack: MediaStreamTrack | null = null;
 let videoTrack: MediaStreamTrack | null = null;
+// L'écran partagé : il REMPLACE la piste de la caméra tant que le partage dure (replaceTrack, sans renégociation).
+let screenTrack: MediaStreamTrack | null = null;
 let remoteVideoId: string | null = null;
 // L'appelant a vu la signalisation passer (« connecting ») : l'autre téléphone répond, mais le chemin
 // direct n'aboutit pas. Sans ça, il est simplement injoignable.
@@ -165,7 +170,7 @@ function sendCall(core: ChatCore, contact: string, message: Payload) {
 
 function attachMedia(core: ChatCore) {
   if (!state) return;
-  core.links.get(state.contact)?.peer.setMedia({ audio: audioTrack, video: videoTrack });
+  core.links.get(state.contact)?.peer.setMedia({ audio: audioTrack, video: screenTrack ?? videoTrack });
   pullRemote(core);
 }
 
@@ -217,6 +222,7 @@ function closeCamera() {
 }
 
 function releaseMedia() {
+  closeScreen();
   audioTrack?.stop();
   audioTrack?.release();
   audioTrack = null;
@@ -272,6 +278,8 @@ export async function startCall(core: ChatCore, contact: string, video: boolean)
     headset: '',
     outputs: [],
     cameraOn: false,
+    sharing: false,
+    remoteSharing: false,
     front: true,
     remoteCamera: video,
     localUrl: null,
@@ -441,6 +449,55 @@ export async function toggleCamera(core: ChatCore) {
   showActive(core);
 }
 
+// --- Partage d'écran ---
+
+function closeScreen() {
+  if (!screenTrack) return;
+  screenTrack.stop();
+  screenTrack.release();
+  screenTrack = null;
+  set({ sharing: false });
+}
+
+// La fenêtre d'Android demande le consentement à CHAQUE partage ; refusé, rien ne change. La piste de
+// l'écran remplace celle de la caméra ; l'autre téléphone est prévenu par un message de contrôle.
+export async function startShare(core: ChatCore) {
+  if (!state || state.phase !== 'active' || screenTrack) return;
+  try {
+    const stream = await mediaDevices.getDisplayMedia({});
+    const track = stream.getVideoTracks()[0] ?? null;
+    if (!track || !state) return;
+    screenTrack = track;
+    track.addEventListener('ended', () => {
+      if (screenTrack === track) stopShare(core);
+    });
+    set({ sharing: true });
+    attachMedia(core);
+    sendCall(core, state.contact, { action: 'media', id: state.id, camera: true });
+    sendCall(core, state.contact, { action: 'screen', id: state.id, on: true });
+    log.info('partage d’écran commencé');
+  } catch (e) {
+    // Consentement refusé : retour à l'appel, rien ne change.
+    log.info('partage d’écran refusé', String(e));
+  }
+}
+
+export function stopShare(core: ChatCore) {
+  if (!screenTrack) return;
+  closeScreen();
+  if (!state) return;
+  attachMedia(core);
+  sendCall(core, state.contact, { action: 'screen', id: state.id, on: false });
+  // La caméra revient si elle était allumée.
+  sendCall(core, state.contact, { action: 'media', id: state.id, camera: !!videoTrack });
+  log.info('partage d’écran arrêté');
+}
+
+export function toggleShare(core: ChatCore) {
+  if (screenTrack) stopShare(core);
+  else startShare(core).catch((e) => log.warn('partage d’écran', e));
+}
+
 export function switchCamera() {
   if (!state || !videoTrack) return;
   videoTrack._switchCamera();
@@ -489,6 +546,9 @@ export function receiveCall(core: ChatCore, contact: string, raw: unknown) {
     finish(core, 'busy', true);
   } else if (message.action === 'end') {
     finish(core, state.phase === 'incoming' ? 'missed' : 'remoteHungUp', true);
+  } else if (message.action === 'screen' && typeof message.on === 'boolean') {
+    set({ remoteSharing: message.on });
+    pullRemote(core);
   } else if (message.action === 'media' && typeof message.camera === 'boolean') {
     log.info('caméra du contact', message.camera ? 'allumée' : 'coupée');
     set({ remoteCamera: message.camera });
@@ -514,6 +574,8 @@ function ring(core: ChatCore, contact: string, id: string, video: boolean) {
     headset: '',
     outputs: [],
     cameraOn: false,
+    sharing: false,
+    remoteSharing: false,
     front: true,
     remoteCamera: video,
     localUrl: null,
@@ -581,6 +643,8 @@ export function callLinkStatus(core: ChatCore, contact: string, status: PeerStat
       clearTimeout(dropTimer);
       set({ reconnecting: false });
       log.info('appel reconnecté');
+      // Après une reconnexion, le partage ne reprend jamais tout seul : il faut un nouveau consentement.
+      stopShare(core);
     }
     return;
   }

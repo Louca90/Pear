@@ -1,7 +1,7 @@
 import { ComponentType, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { AppState, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Reanimated, { FadeIn, FadeOut, interpolateColor, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
-import { BluetoothConnected, ChevronDown, Headphones, Mic, MicOff, Phone, PhoneOff, Smartphone, SwitchCamera, Video, VideoOff, Volume2, LucideIcon } from 'lucide-react-native';
+import { BluetoothConnected, ChevronDown, Headphones, Mic, MicOff, Phone, PhoneOff, Smartphone, SwitchCamera, Video, VideoOff, Volume2, LucideIcon, ScreenShare, ScreenShareOff } from 'lucide-react-native';
 import { RTCView } from 'react-native-webrtc';
 import { StatusBar } from 'expo-status-bar';
 
@@ -10,6 +10,7 @@ import { getContactProfile } from '../chat/database';
 import { formatCallDuration } from '../chat/callText';
 import { Avatar, useInsets, usePressFeedback } from '../components/ui';
 import { Sheet, SheetChoice } from '../components/Sheet';
+import { showDialog } from '../components/dialog';
 import type { CallOutput, CallOutputType } from '../../modules/pear-native';
 import { useBackInterceptor } from '../navigation/backInterceptors';
 import { DURATION, EASE, enterUp, timing } from '../motion';
@@ -159,6 +160,12 @@ function CallFull({ call, name, onMinimize }: { call: CallState; name: string; o
   const mutedColor = onVideo ? colors.onDarkMuted : colors.textMuted;
   // La sortie audio : l'icône suit la sortie ACTIVE ; avec plus de deux sorties, un appui ouvre la liste.
   const [outputsOpen, setOutputsOpen] = useState(false);
+  // Une courte explication avant la fenêtre d'Android, qui redemande le consentement à chaque partage.
+  const askShare = () =>
+    showDialog(t('appel.partagerTitre'), t('appel.partagerAide'), [
+      { label: t('appel.partager'), onPress: () => chat.toggleShare() },
+      { label: t('commun.annuler'), style: 'cancel' },
+    ]);
   const activeOutput = call.outputs.find((output) => output.active);
   const OutputIcon = activeOutput ? OUTPUT_ICONS[activeOutput.type] : call.speaker ? Volume2 : Smartphone;
 
@@ -196,6 +203,8 @@ function CallFull({ call, name, onMinimize }: { call: CallState; name: string; o
           call.startedAt && <Chrono call={call} style={[styles.status, { color: mutedColor }]} />
         )}
         {call.phase === 'active' && !call.remoteCamera && call.video && <Text style={[styles.hint, { color: mutedColor }]}>{t('appel.cameraCoupee')}</Text>}
+        {call.remoteSharing && <Text style={[styles.hint, { color: mutedColor }]}>{t('appel.ecranDe', { nom: name })}</Text>}
+        {call.sharing && <Text style={[styles.hint, { color: colors.danger }]}>{t('appel.partageEnCours')}</Text>}
       </View>
 
       {call.phase === 'active' && call.remoteCamera && !call.cameraOn && (
@@ -237,7 +246,16 @@ function CallFull({ call, name, onMinimize }: { call: CallState; name: string; o
                 onVideo={onVideo}
                 delay={80}
               />
-              <RoundButton icon={SwitchCamera} label={t('appel.retourner')} disabled={!call.cameraOn} onPress={chat.switchCamera} onVideo={onVideo} delay={120} />
+              <RoundButton icon={SwitchCamera} label={t('appel.retourner')} disabled={!call.cameraOn || call.sharing} onPress={chat.switchCamera} onVideo={onVideo} delay={120} />
+              <RoundButton
+                icon={call.sharing ? ScreenShareOff : ScreenShare}
+                label={t(call.sharing ? 'appel.arreterPartage' : 'appel.partager')}
+                active={call.sharing}
+                disabled={call.phase !== 'active'}
+                onPress={() => (call.sharing ? chat.toggleShare() : askShare())}
+                onVideo={onVideo}
+                delay={140}
+              />
             </View>
             <RoundButton icon={PhoneOff} label={t('appel.raccrocher')} variant="danger" onPress={() => chat.hangUp()} onVideo={onVideo} big delay={160} />
           </View>
@@ -266,7 +284,7 @@ function CallPip({ call, name }: { call: CallState; name: string }) {
           </View>
         </View>
       ) : remote ? (
-        <RTCView streamURL={call.remoteUrl!} objectFit="cover" zOrder={0} style={StyleSheet.absoluteFill} />
+        <RTCView streamURL={call.remoteUrl!} objectFit={call.remoteSharing ? 'contain' : 'cover'} zOrder={0} style={StyleSheet.absoluteFill} />
       ) : local ? (
         <RTCView streamURL={call.localUrl!} objectFit="cover" mirror={call.front} zOrder={0} style={StyleSheet.absoluteFill} />
       ) : null}
@@ -396,7 +414,7 @@ function RoundButton({
   const idle = onVideo ? 'rgba(255,255,255,0.18)' : colors.surface;
   const lit = onVideo ? fixed.white : colors.text;
   const fill = useAnimatedStyle(() => ({ backgroundColor: interpolateColor(on.get(), [0, 1], [idle, lit]) }));
-  const size = big ? 72 : 60;
+  const size = big ? 72 : 54;
   const solid = variant === 'danger' ? colors.danger : variant === 'accept' ? colors.signatureStrong : null;
   const iconColor = solid ? fixed.white : active ? (onVideo ? fixed.black : colors.background) : onVideo ? colors.onMedia : colors.text;
   return (
@@ -560,7 +578,7 @@ const useStyles = createStyles((colors) => ({
   buttonWrap: {
     alignItems: 'center',
     gap: 6,
-    width: 76,
+    width: 66,
   },
   button: {
     alignItems: 'center',

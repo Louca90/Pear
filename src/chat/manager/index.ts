@@ -33,7 +33,7 @@ import { downloadRelayFile, relayPending } from './relay';
 import { acceptPairing, blockPairing, declinePairing, requestPairing, startPairing, syncPairRequests } from './pairing';
 import { deliverNow, sendStatusNow, settlePushAcks, wakeIfNeeded } from './wake';
 import { notifyMessage } from './notify';
-import { acceptCall, callKeepsAwake, declineCall, getCall, hangUp, receiveCallPush, startCall, subscribeCall, switchCamera, toggleCamera, toggleMute, toggleSpeaker, chooseOutput } from './calls';
+import { acceptCall, callKeepsAwake, declineCall, getCall, hangUp, receiveCallPush, startCall, subscribeCall, switchCamera, toggleCamera, toggleMute, toggleSpeaker, chooseOutput, toggleShare } from './calls';
 
 export type { CallEnd, CallPhase, CallState } from './calls';
 
@@ -70,6 +70,9 @@ class ChatManager extends ChatCore {
     return toggleCamera(this);
   }
   switchCamera = switchCamera;
+  toggleShare() {
+    return toggleShare(this);
+  }
   // Push « call » reçu app fermée : le contact à joindre, ou null.
   receiveCallPush(data: { [key: string]: unknown } | undefined) {
     return receiveCallPush(this, data);
