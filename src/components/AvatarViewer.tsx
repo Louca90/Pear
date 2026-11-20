@@ -1,4 +1,4 @@
-import { ReactNode, useRef, useState } from 'react';
+import { ComponentRef, ReactNode, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { Message } from '../chat/database';
@@ -11,7 +11,7 @@ import { MediaViewer, Viewing } from '../screens/chat/components/MediaViewer';
 // c'est la photo de quelqu'un d'autre. Sans photo (initiales), seule une vibration légère.
 export function AvatarViewer({ photoUri, label, children }: { photoUri: string | null | undefined; label: string; children: ReactNode }) {
   const photo = useMediaUri(photoUri, { scope: 'app' });
-  const box = useRef<View>(null);
+  const box = useRef<ComponentRef<typeof View>>(null);
   const [viewing, setViewing] = useState<Viewing | null>(null);
 
   const open = () => {
