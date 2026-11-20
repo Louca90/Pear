@@ -20,6 +20,9 @@ import { t } from '../../../i18n';
 import { SystemRow } from './SystemRow';
 import { VoiceContent } from './VoiceContent';
 import { LIKE, LONG_PRESS_MS, MEDIA_WIDTH, SWIPE_REPLY, SWIPE_START, TEXT_LINE_HEIGHT } from '../constants';
+
+// Largeur de l'icône de réponse (18) et de son souffle, pour la poser juste avant la ligne qui glisse.
+const SWIPE_ICON = 26;
 import { emojiOnly, isBareMedia, isMediaDeleted } from '../format';
 import { LikeBurst, useReactionAppear } from '../../../components/LikeAnimation';
 import { useDoubleTap } from '../hooks/useDoubleTap';
@@ -172,8 +175,12 @@ function BubbleView({ message, name, palettes, hidden, mediaHidden, pulse, onOpe
   // L'icône de réponse apparaît, grandit et tourne pendant le glissement.
   const iconStyle = useAnimatedStyle(() => {
     const amount = interpolate(swipe.get() * (mine ? -1 : 1), [SWIPE_START, SWIPE_REPLY], [0, 1], 'clamp');
-    return { opacity: amount, transform: [{ scale: 0.4 + 0.6 * amount }, { rotate: `${(mine ? -60 : 60) * (1 - amount)}deg` }] };
+    // Messages reçus : l'icône suit la ligne (juste à gauche de l'avatar ou de la bulle) et ne peut donc
+    // jamais passer sur la photo de profil. Mes messages : l'icône reste au bord, que la bulle découvre.
+    return { opacity: amount, transform: [{ translateX: mine ? 0 : swipe.get() }, { scale: 0.4 + 0.6 * amount }, { rotate: `${(mine ? -60 : 60) * (1 - amount)}deg` }] };
   });
+  // L'avatar des messages reçus glisse avec la bulle : toute la ligne bouge ensemble.
+  const avatarStyle = useAnimatedStyle(() => ({ transform: [{ translateX: swipe.get() }] }));
   const bubbleStyle = useAnimatedStyle(() => ({
     opacity: pop.get(),
     transform: [{ translateX: swipe.get() }, { translateY: 10 * (1 - pop.get()) }, { scale: scale.get() * (0.96 + 0.04 * pop.get()) }],
@@ -238,7 +245,7 @@ function BubbleView({ message, name, palettes, hidden, mediaHidden, pulse, onOpe
           <Reply size={18} color={colors.text} strokeWidth={1.75} />
         </Reanimated.View>
       )}
-      {!mine && position && <View style={styles.avatarSlot}>{endsGroup && <Avatar uri={avatar} size={AVATAR_SIZE} />}</View>}
+      {!mine && position && <Reanimated.View style={[styles.avatarSlot, avatarStyle]}>{endsGroup && <Avatar uri={avatar} size={AVATAR_SIZE} />}</Reanimated.View>}
       <Reanimated.View style={[mine ? styles.rowMine : styles.rowTheirs, bubbleStyle]}>
         <Pressable
           onPress={press}
@@ -327,7 +334,7 @@ const useLocalStyles = createStyles((colors) => ({
     right: spacing.sm,
   },
   swipeIconTheirs: {
-    left: spacing.sm,
+    left: -(SWIPE_ICON + spacing.sm),
   },
   bare: {
     alignItems: 'flex-end',
