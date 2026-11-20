@@ -10,7 +10,16 @@ export function SearchField({ value, onChange, placeholder, autoFocus }: { value
   const colors = useColors();
   const styles = useStyles();
   const input = useRef<ComponentRef<typeof TextInput>>(null);
-  // Le champ ne prend le focus qu'au toucher : en quittant l'écran, il le rend et le clavier se ferme.
+  // Le champ ne prend le focus qu'au toucher (ou s'il est ouvert exprès, autoFocus). Android le lui
+  // donne parfois tout seul, par exemple quand on quitte une conversation dont le champ Message avait
+  // le clavier : on le rend aussitôt et le clavier se ferme.
+  const touched = useRef(!!autoFocus);
+  const onFocus = () => {
+    if (touched.current) return;
+    input.current?.blur();
+    Keyboard.dismiss();
+  };
+  // En quittant l'écran, il rend le focus et le clavier se ferme.
   useEffect(
     () => () => {
       if (input.current?.isFocused()) Keyboard.dismiss();
@@ -29,6 +38,13 @@ export function SearchField({ value, onChange, placeholder, autoFocus }: { value
         placeholderTextColor={colors.textMuted}
         returnKeyType="search"
         autoFocus={autoFocus}
+        onPressIn={() => {
+          touched.current = true;
+        }}
+        onFocus={onFocus}
+        onBlur={() => {
+          touched.current = false;
+        }}
       />
       {value.length > 0 && (
         <Pressable onPress={() => onChange('')} hitSlop={8} accessibilityLabel={t('liste.effacer')}>

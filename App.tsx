@@ -1,5 +1,5 @@
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, BackHandler, PanResponder, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { AppState, BackHandler, Keyboard, PanResponder, StyleSheet, useWindowDimensions, View } from 'react-native';
 import Reanimated, { Easing, makeMutable, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 import { NavigationBar } from 'expo-navigation-bar';
@@ -474,6 +474,8 @@ function App() {
       setRouteState(next);
       return;
     }
+    // Changer d'écran ferme le clavier (celui d'une conversation ne reste pas ouvert sur l'accueil).
+    Keyboard.dismiss();
     const betweenTabs = TAB_ROUTES.includes(current.name) && TAB_ROUTES.includes(next.name);
     const parent = nav.current.parent;
     if (!betweenTabs && parent && routeKey(parent) === nextKey && mountedKeys.current.has(nextKey)) {
