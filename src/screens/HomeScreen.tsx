@@ -391,15 +391,17 @@ export function HomeScreen({ contacts, onAdd, onOpen, onRequests, onQr }: Props)
           ) : undefined
         }
         renderItem={({ item, index }) => (
-          <View
-            ref={(view) => {
-              if (view) rows.current.set(item.contact.publicKey, view);
-              else rows.current.delete(item.contact.publicKey);
-            }}
-            collapsable={false}
-          >
+          <View>
             {sectioned && index === 0 && <Text style={styles.section}>{t('liste.sectionEpinglees')}</Text>}
             {sectioned && item.contact.publicKey === firstRecent && <Text style={styles.section}>{t('liste.sectionRecentes')}</Text>}
+            {/* Seule la ligne est mesurée (pas le titre de section au-dessus) : la carte de sélection s'y pose exactement. */}
+            <View
+              ref={(view) => {
+                if (view) rows.current.set(item.contact.publicKey, view);
+                else rows.current.delete(item.contact.publicKey);
+              }}
+              collapsable={false}
+            >
             {isSelf(item.contact.publicKey) ? (
               // Mes notes : ni épingle ni « lu » à glisser, seulement ouvrir (et vider, par appui long).
               <RowPressable onPress={() => onOpen(item.contact)} onLongPress={item.last ? () => select(item) : undefined} holdMs={420} style={styles.row}>
@@ -412,6 +414,7 @@ export function HomeScreen({ contacts, onAdd, onOpen, onRequests, onQr }: Props)
                 </RowPressable>
               </SwipeRow>
             )}
+            </View>
           </View>
         )}
       />
