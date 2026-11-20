@@ -301,7 +301,8 @@ export function Pear({ height, color, state = 'idle', progress = 0, leafColor }:
   // La vague arrière, un peu plus haute et décalée, à 45 % (planche « Envoi » : deux vagues).
   const backClip = useAnimatedProps(() => ({ d: wavePath(Math.min(1, level.get() + 0.03), wave.get(), 0.45) }));
   const backProps = useAnimatedProps(() => ({ opacity: 0.45 * ripen.get() }));
-  const outlineProps = useAnimatedProps(() => ({ strokeDashoffset: dash.get(), opacity: outline.get(), strokeDasharray: [6, Math.max(0.01, gapLine.get())] }));
+  // Le contour en pointillés de « Connexion » est du vert de la peau (planche).
+  const outlineProps = useAnimatedProps(() => ({ strokeDashoffset: dash.get(), opacity: outline.get(), strokeDasharray: [6, Math.max(0.01, gapLine.get())], stroke: skinColor(rest.get()) }));
   const biteProps0 = useAnimatedProps(() => ({ r: BITE_R * bite0.get() }));
   const biteProps1 = useAnimatedProps(() => ({ r: BITE_R * bite1.get() }));
   const biteProps2 = useAnimatedProps(() => ({ r: BITE_R * bite2.get() }));
@@ -423,7 +424,7 @@ export function Pear({ height, color, state = 'idle', progress = 0, leafColor }:
               </G>
             </G>
           </G>
-          <AnimatedPath d={BODY} fill="none" stroke={innerInk} strokeWidth={2.5} strokeLinecap="round" animatedProps={outlineProps} />
+          <AnimatedPath d={BODY} fill="none" strokeWidth={2.6} strokeLinecap="round" animatedProps={outlineProps} />
           <AnimatedPath fill={innerInk} animatedProps={seedLeft} />
           <AnimatedPath fill={innerInk} animatedProps={seedRight} />
           <G clipPath={`url(#${clipLink})`}>
