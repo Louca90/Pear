@@ -17,7 +17,7 @@ import Reanimated, {
 } from 'react-native-reanimated';
 import Svg, { Circle, ClipPath, Defs, G, Mask, Path, Rect } from 'react-native-svg';
 
-import { fixed, useColors } from '../theme';
+import { fixed, inkOn, useColors } from '../theme';
 
 // L'icône « Pépins » : une poire coupée en deux, peau verte, chair pâle, deux pépins reliés par un lien
 // en pointillés (la connexion pair à pair). C'est un logo qui s'anime, pas un personnage : aucun visage,
@@ -74,6 +74,9 @@ type Props = {
   progress?: number;
   // Couleur de la feuille qui repousse (`leaf`), `signatureStrong` en pratique.
   leafColor?: string;
+  // Le fond sous la poire, s'il n'est pas celui de l'écran (carte blanche du QR, photo…) : la tige, les
+  // feuilles et les pépins hors de la chair s'y adaptent pour rester lisibles.
+  background?: string;
 };
 
 // Les ressorts de la planche « Icône Pépins » (raideur, amortissement) : défaut 170/26, doux 90/19, lent 55/15,
@@ -171,8 +174,11 @@ const AnimatedPath = Reanimated.createAnimatedComponent(Path);
 const AnimatedCircle = Reanimated.createAnimatedComponent(Circle);
 const AnimatedRect = Reanimated.createAnimatedComponent(Rect);
 
-export function Pear({ height, color, state = 'idle', progress = 0, leafColor }: Props) {
+export function Pear({ height, color: wanted, state = 'idle', progress = 0, leafColor, background }: Props) {
   const colors = useColors();
+  // Tige et feuilles : la couleur demandée, corrigée si elle ne se lit pas sur le fond donné (ou celui de l'écran).
+  const color = inkOn(background ?? colors.background, wanted);
+  const ink = color;
   const reduced = useReducedMotion();
   const width = height * PEAR_RATIO;
   const clamped = Math.min(1, Math.max(0, progress));
@@ -303,8 +309,18 @@ export function Pear({ height, color, state = 'idle', progress = 0, leafColor }:
     'worklet';
     return gap.get() * (1 + 0.24 * searchW.get() * (wobble.get() * 2 - 1));
   };
-  const seedLeft = useAnimatedProps(() => ({ d: seedPath(50 - SEED_HALF * gapNow(), -18, seed.get()), fill: interpolateColor(rest.get(), [0, 1], [fixed.black, REST.ink]) }));
-  const seedRight = useAnimatedProps(() => ({ d: seedPath(50 + SEED_HALF * gapNow(), 18, seed.get()), fill: interpolateColor(rest.get(), [0, 1], [fixed.black, REST.ink]) }));
+  // Contraste : sur la chair pâle, les pépins et le lien sont noirs ; quand la chair n'est plus derrière eux
+  // (« Connexion », où la poire s'efface, ou « Envoi » tant que le liquide n'a pas atteint les pépins), ils
+  // prennent l'encre de l'écran, choisie pour se lire sur son fond : jamais noir sur noir.
+  const seedInk = () => {
+    'worklet';
+    const liquid = Math.max(0, Math.min(1, (level.get() - 0.38) / 0.12));
+    const cover = body.get() * (1 - ripen.get()) + liquid * ripen.get();
+    const onFlesh = interpolateColor(Math.max(0, Math.min(1, (cover - 0.2) / 0.6)), [0, 1], [ink, fixed.black]);
+    return interpolateColor(rest.get(), [0, 1], [onFlesh, REST.ink]);
+  };
+  const seedLeft = useAnimatedProps(() => ({ d: seedPath(50 - SEED_HALF * gapNow(), -18, seed.get()), fill: seedInk() }));
+  const seedRight = useAnimatedProps(() => ({ d: seedPath(50 + SEED_HALF * gapNow(), 18, seed.get()), fill: seedInk() }));
   // Le lien : une ligne de points qui défilent, révélée du centre vers les pépins.
   const linkProps = useAnimatedProps(() => {
     const half = SEED_HALF * gapNow();
@@ -313,7 +329,7 @@ export function Pear({ height, color, state = 'idle', progress = 0, leafColor }:
       strokeWidth: thick.get(),
       strokeDashoffset: -dots.get() * DOT_PERIOD,
       opacity: linkOpacity.get() * (state === 'searching' ? 0.6 + 0.4 * pulse.get() : 1),
-      stroke: interpolateColor(rest.get(), [0, 1], [fixed.black, REST.ink]),
+      stroke: seedInk(),
     };
   });
   const linkReveal = useAnimatedProps(() => {

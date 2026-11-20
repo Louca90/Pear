@@ -3,7 +3,7 @@ import Reanimated, { ReduceMotion, useAnimatedStyle, useSharedValue, withDelay, 
 
 import { t } from '../i18n';
 import { EASE } from '../motion';
-import { createStyles, radius, spacing, useColors } from '../theme';
+import { createStyles, fixed, radius, spacing, useColors } from '../theme';
 import { Pear } from './Pear';
 
 const SIZE = 56;
@@ -52,7 +52,7 @@ export function TransferPear({ progress }: { progress: number | undefined }) {
       accessibilityLabel={t('chat.transfert', { pourcent: Math.round((active ? progress : 1) * 100) })}
       style={[styles.pill, pill]}
     >
-      <Pear height={PEAR_HEIGHT} color={colors.onMedia} state="ripening" progress={active ? progress : 1} />
+      <Pear height={PEAR_HEIGHT} color={colors.onMedia} background={fixed.black} state="ripening" progress={active ? progress : 1} />
     </Reanimated.View>
   );
 }

@@ -16,3 +16,20 @@ describe('couleurs de la roue', () => {
     expect(hexToHsv('#FFFFFF')).toEqual({ h: 0, s: 0, v: 1 });
   });
 });
+
+describe('inkOn : jamais noir sur noir ni blanc sur blanc', () => {
+  const { inkOn, contrastRatio } = require('./theme');
+  it('garde la couleur voulue quand elle se distingue du fond', () => {
+    expect(inkOn('#FFFFFF', '#000000')).toBe('#000000');
+    expect(inkOn('#FFFFFF', '#9DB84A')).toBe('#9DB84A');
+  });
+  it('remplace une couleur invisible par noir ou blanc', () => {
+    expect(inkOn('#0B0B0C', '#000000')).toBe('#FFFFFF');
+    expect(inkOn('#FFFFFF', '#F5F5F5')).toBe('#000000');
+  });
+  it('rapport de contraste symétrique, de 1 à 21', () => {
+    expect(contrastRatio('#000000', '#FFFFFF')).toBeCloseTo(21, 0);
+    expect(contrastRatio('#FFFFFF', '#000000')).toBeCloseTo(21, 0);
+    expect(contrastRatio('#123456', '#123456')).toBeCloseTo(1, 5);
+  });
+});

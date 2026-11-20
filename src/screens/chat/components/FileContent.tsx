@@ -146,7 +146,7 @@ export function FileContent({ message, palette, mediaHidden, onOpen, onLongPress
             <Image source={{ uri: jpegDataUri(thumb) }} style={styles.offerThumb} resizeMode="cover" blurRadius={3} />
           ) : progress !== undefined ? (
             <View style={styles.fileIcon}>
-              <Pear height={24} color={foreground} state="ripening" progress={progress} />
+              <Pear height={24} color={foreground} background={bare ? colors.background : palette.background} state="ripening" progress={progress} />
             </View>
           ) : message.kind === 'video' ? (
             <Play size={24} color={foreground} strokeWidth={1.75} />

@@ -335,6 +335,21 @@ function luminance(hex: string) {
   return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
 }
 
+// Rapport de contraste WCAG entre deux couleurs « #RRGGBB » (1 à 21).
+export function contrastRatio(a: string, b: string) {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+// Une icône posée sur `background` : la couleur voulue si elle se distingue du fond (contraste d'au moins
+// `min`, 2 par défaut : une teinte signature sur fond clair reste telle quelle), sinon noir ou blanc, le plus
+// lisible des deux. Jamais noir sur noir, blanc sur blanc ni gris sur gris.
+export function inkOn(background: string, preferred: string, min = 2) {
+  if (!/^#[0-9a-f]{6}$/i.test(background) || !/^#[0-9a-f]{6}$/i.test(preferred)) return preferred;
+  if (contrastRatio(background, preferred) >= min) return preferred;
+  return contrastRatio(background, fixed.black) >= contrastRatio(background, fixed.white) ? fixed.black : fixed.white;
+}
+
 // Lisibilité du texte, en un seul endroit :
 // - sur le fond de l'app : colors.text / colors.textMuted (suivent le thème) ;
 // - sur un bouton principal (fond colors.accent) : colors.onAccent ;
