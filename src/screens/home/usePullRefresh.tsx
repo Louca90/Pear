@@ -7,7 +7,7 @@ import { usePullGesture } from '../../components/pull';
 // croquer, puis cherche pendant 900 ms. Voir components/pull.tsx.
 export function usePullRefresh(onRefresh: () => void) {
   const top = useRef(true);
-  const pull = usePullGesture({ dir: 1, canPull: () => top.current, onTrigger: onRefresh, hold: { distance: 60, ms: 900 } });
+  const pull = usePullGesture({ dir: 1, canPull: () => top.current, onTrigger: onRefresh, hold: { distance: 72, ms: 900 } });
   return {
     ...pull,
     listProps: {

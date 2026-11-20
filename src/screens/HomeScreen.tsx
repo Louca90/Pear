@@ -367,7 +367,7 @@ export function HomeScreen({ contacts, onAdd, onOpen, onRequests, onQr }: Props)
           })}
         </ScrollView>
       </View>
-      <PullView gesture={pull.gesture} offset={pull.offset} indicator={<PullPear offset={pull.offset} dir={1} kind="bitten" busy={pull.busy} />}>
+      <PullView gesture={pull.gesture} offset={pull.offset} indicator={<PullPear offset={pull.offset} dir={1} kind="bitten" busy={pull.busy} size={54} />}>
       <Reanimated.FlatList
         style={listStyle}
         data={visible}

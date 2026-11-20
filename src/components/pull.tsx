@@ -169,6 +169,8 @@ type PullPearProps = {
   label?: (full: boolean, held: boolean) => string;
   // Geste en deux temps : avancement du maintien (anneau) et distance de la cible.
   hold?: SharedValue<number>;
+  // Hauteur de la poire (36 par défaut).
+  size?: number;
   threshold?: number;
 };
 
@@ -179,7 +181,7 @@ const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
 const AnimatedCircle = Reanimated.createAnimatedComponent(Circle);
 
 // La poire qui grandit avec la distance, dans l'espace ouvert par le décalage.
-export function PullPear({ offset, dir, kind, busy, label, hold, threshold = PULL_THRESHOLD }: PullPearProps) {
+export function PullPear({ offset, dir, kind, busy, label, hold, threshold = PULL_THRESHOLD, size = 36 }: PullPearProps) {
   const styles2 = useStyles();
   const colors = useColors();
   const [progress, setProgress] = useState(0);
@@ -226,7 +228,7 @@ export function PullPear({ offset, dir, kind, busy, label, hold, threshold = PUL
             />
           </Svg>
         ) : null}
-        <Pear height={36} color={full && kind === 'ripening' ? colors.signatureStrong : colors.text} state={state} progress={progress} />
+        <Pear height={size} color={full && kind === 'ripening' ? colors.signatureStrong : colors.text} state={state} progress={progress} />
       </Reanimated.View>
       {label && !busy ? <Text style={styles2.label}>{label(full, held)}</Text> : null}
     </Reanimated.View>

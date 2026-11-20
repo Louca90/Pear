@@ -1,5 +1,5 @@
 import { ComponentType, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { AppState, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { AppState, Keyboard, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Reanimated, { FadeIn, FadeOut, interpolateColor, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { BluetoothConnected, ChevronDown, Headphones, Mic, MicOff, Phone, PhoneOff, Smartphone, SwitchCamera, Video, VideoOff, Volume2, LucideIcon, ScreenShare, ScreenShareOff } from 'lucide-react-native';
 import { RTCView } from 'react-native-webrtc';
@@ -76,7 +76,15 @@ export function CallLayer({ nameOf }: { nameOf: (contact: string) => string }) {
       <CallFull call={call} name={name} onMinimize={() => setMinimized(true)} />
     </Reanimated.View>
   ) : (
-    <CallPill call={call} name={name} onPress={() => setMinimized(false)} />
+    <CallPill
+      call={call}
+      name={name}
+      onPress={() => {
+        // L'appel revient en plein écran : le clavier d'une conversation se ferme.
+        Keyboard.dismiss();
+        setMinimized(false);
+      }}
+    />
   );
 }
 
