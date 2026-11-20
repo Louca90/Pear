@@ -24,8 +24,8 @@ type Options = {
   onTrigger: () => void;
   // Si fourni : l'actualisation garde la liste décalée de `distance` points pendant `ms`.
   hold?: { distance: number; ms: number };
-  // Si fourni : geste volontaire en deux temps. Maintenir le doigt immobile holdMs (un anneau se remplit,
-  // bouger avant la fin annule), puis, sans lever le doigt, glisser de `distance` points jusqu'à la cible.
+  // Si fourni : le même geste, plus long à déclencher. Il faut tirer de `distance` points, puis rester au bout
+  // `holdMs` pendant qu'un anneau se remplit ; lâcher avant ne fait rien.
   arm?: { holdMs: number; distance: number };
 };
 
@@ -37,6 +37,9 @@ export function usePullGesture({ dir, canPull, onTrigger, hold, arm }: Options) 
   const threshold = arm ? arm.distance : PULL_THRESHOLD;
   const allowed = useRef(false);
   const armed = useRef(false);
+  // Au bout du geste depuis assez longtemps (l'anneau est plein) : relâcher déclenche.
+  const full = useRef(false);
+  const fullTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const busyRef = useRef(false);
   const [busy, setBusy] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -52,6 +55,8 @@ export function usePullGesture({ dir, canPull, onTrigger, hold, arm }: Options) 
 
   const settle = () => {
     armed.current = false;
+    full.current = false;
+    if (fullTimer.current) clearTimeout(fullTimer.current);
     offset.set(withTiming(0, { duration: motion.small, easing: EASE }));
     holdProgress.set(withTiming(0, { duration: motion.small, easing: EASE }));
   };
@@ -61,7 +66,6 @@ export function usePullGesture({ dir, canPull, onTrigger, hold, arm }: Options) 
     disableReanimated: true,
     maxPointers: 1,
     activeOffsetY: dir === 1 ? [-10000, 8] : [-8, 10000],
-    activateAfterLongPress: arm ? arm.holdMs : undefined,
     failOffsetX: [-24, 24],
     // Pas permis au moment où le doigt se pose (pas en bas de la conversation, clavier ouvert…) : le
     // geste échoue tout de suite. Sinon il s'activait quand même au bout de 8 points et coupait le
@@ -69,11 +73,13 @@ export function usePullGesture({ dir, canPull, onTrigger, hold, arm }: Options) 
     onTouchesDown: (event) => {
       allowed.current = !busyRef.current && latest.current.canPull();
       if (!allowed.current) GestureStateManager.fail(event.handlerTag);
-      else if (arm) holdProgress.set(withTiming(1, { duration: arm.holdMs, easing: Easing.linear }));
     },
     onActivate: () => {
-      if (!arm || !allowed.current) return;
-      haptics.select();
+      // Entre-temps, l'appui long a pu ouvrir la sélection d'un message : le geste s'arrête là.
+      if (allowed.current && !latest.current.canPull()) {
+        allowed.current = false;
+        settle();
+      }
     },
     onBegin: () => {
       allowed.current = !busyRef.current && latest.current.canPull();
@@ -86,14 +92,26 @@ export function usePullGesture({ dir, canPull, onTrigger, hold, arm }: Options) 
       if (over !== armed.current) {
         armed.current = over;
         haptics.select();
+        if (arm) {
+          // Au bout : l'anneau se remplit ; revenir en arrière le vide.
+          if (fullTimer.current) clearTimeout(fullTimer.current);
+          full.current = false;
+          holdProgress.set(over ? withTiming(1, { duration: arm.holdMs, easing: Easing.linear }) : withTiming(0, { duration: 160, easing: EASE }));
+          if (over) {
+            fullTimer.current = setTimeout(() => {
+              full.current = true;
+              haptics.action();
+            }, arm.holdMs);
+          }
+        }
       }
     },
     onDeactivate: (event) => {
       if (!allowed.current) return;
       allowed.current = false;
-      if (dir * event.translationY < threshold) return settle();
+      if (dir * event.translationY < threshold || (arm && !full.current)) return settle();
       armed.current = false;
-      haptics.action();
+      if (!arm) haptics.action();
       latest.current.onTrigger();
       const holding = latest.current.hold;
       if (!holding) return settle();
@@ -111,7 +129,14 @@ export function usePullGesture({ dir, canPull, onTrigger, hold, arm }: Options) 
     },
   });
 
-  return { offset, gesture, busy, holdProgress, threshold };
+  // Annule le geste en cours (la sélection d'un message vient de s'ouvrir sous le doigt).
+  const cancel = () => {
+    if (!allowed.current) return;
+    allowed.current = false;
+    settle();
+  };
+
+  return { offset, gesture, busy, holdProgress, threshold, cancel };
 }
 
 type PullViewProps = {
@@ -168,13 +193,13 @@ export function PullPear({ offset, dir, kind, busy, label, hold, threshold = PUL
   const ring = useAnimatedProps(() => ({ strokeDashoffset: RING_LENGTH * (1 - (hold ? hold.get() : 0)) }));
   // Par pas de 5 % : la poire ne se redessine pas à chaque point parcouru.
   useAnimatedReaction(
-    () => (hold && hold.get() < 1 ? 0 : Math.round(Math.max(0, Math.min(1, (dir * offset.get()) / threshold)) * 20) / 20),
+    () => Math.round(Math.max(0, Math.min(1, (dir * offset.get()) / threshold)) * 20) / 20,
     (next, previous) => {
       if (next !== previous) scheduleOnRN(setProgress, next);
     },
   );
   const fade = useAnimatedStyle(() => ({
-    opacity: Math.max(interpolate(dir * offset.get(), [6, 36], [0, 1], 'clamp'), hold ? interpolate(hold.get(), [0, 0.15], [0, 1], 'clamp') : 0),
+    opacity: Math.max(interpolate(dir * offset.get(), [6, 36], [0, 1], 'clamp'), hold ? interpolate(hold.get(), [0, 0.1], [0, 1], 'clamp') : 0),
   }));
   const grow = useAnimatedStyle(() => ({ transform: [{ scale: interpolate(dir * offset.get(), [0, threshold], [0.7, 1], 'clamp') }] }));
 

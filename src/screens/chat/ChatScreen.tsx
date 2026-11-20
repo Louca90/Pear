@@ -243,6 +243,10 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
     () => chat.toggleEphemeral(contactKey),
     !!ephemeral,
   );
+  // La sélection d'un message s'ouvre (appui long) : le geste éphémère commencé sous le doigt s'arrête.
+  useEffect(() => {
+    if (selection) pull.cancel();
+  }, [selection]);
   const chooseEphemeral = () =>
     showDialog(t('ephemere.titre'), t('ephemere.aide'), [
       ...EPHEMERAL_CHOICES.map((seconds) => ({ label: ephemeralLabel(seconds), onPress: () => chat.setEphemeral(contactKey, seconds) })),
@@ -632,14 +636,16 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
               kind="ripening"
               hold={pull.holdProgress}
               threshold={pull.threshold}
+              // Pas encore au bout : « Tire encore » ; au bout : « Reste au bout… » pendant que l'anneau se remplit ;
+              // anneau plein : « Relâche pour activer ».
               label={(full, held) =>
-                full
-                  ? ephemeral
-                    ? t('ephemere.relacherCouper')
-                    : t('ephemere.relacherActiver', { duree: ephemeralLabel(chat.getNextEphemeral(contactKey)) })
-                  : held
-                    ? t('ephemere.glisser')
-                    : t('ephemere.maintenir')
+                !full
+                  ? t('ephemere.glisser')
+                  : !held
+                    ? t('ephemere.maintenir')
+                    : ephemeral
+                      ? t('ephemere.relacherCouper')
+                      : t('ephemere.relacherActiver', { duree: ephemeralLabel(chat.getNextEphemeral(contactKey)) })
               }
             /> : null}>
           {messages.length === 0 ? (
