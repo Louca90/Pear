@@ -259,7 +259,7 @@ function startReceiving(core: ChatCore, contact: string, id: string, size: numbe
     const writer = createStored(id, size, true);
     const next = Math.floor(writer.written / CHUNK_BYTES);
     // En cas de reprise, la clé du transfert reste celle du début du fichier.
-    incoming = { contact, key: from_base64(message.file_key), writer, size, next, received: writer.written >= size ? size : next * CHUNK_BYTES, pending: [], pendingBytes: 0 };
+    incoming = { contact, key: from_base64(message.file_key), writer, size, next, received: writer.written >= size ? size : next * CHUNK_BYTES, pending: [], pendingBytes: 0, startedAt: Date.now() };
     core.incomingFiles.set(id, incoming);
   }
 
@@ -332,6 +332,11 @@ async function writePending(incoming: IncomingFile) {
 
 function finishFile(core: ChatCore, contact: string, id: string, incoming: IncomingFile) {
   incoming.writer.close();
+  // Journal de diagnostic (sans contenu) : taille, durée et débit moyen, pour mesurer avant d'optimiser.
+  if (incoming.startedAt) {
+    const ms = Math.max(1, Date.now() - incoming.startedAt);
+    log.info('transfert reçu', `${incoming.size} octets en ${ms} ms (${(incoming.size / 1048.576 / ms).toFixed(2)} Mo/s)`);
+  }
   core.incomingFiles.delete(id);
   core.progress.delete(id);
   clearFileProgress(id);

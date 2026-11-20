@@ -42,6 +42,8 @@ export type IncomingFile = {
   // Morceaux reçus, pas encore écrits sur le disque.
   pending: Uint8Array[];
   pendingBytes: number;
+  // Début de la réception (journal : débit moyen du transfert, sans contenu).
+  startedAt?: number;
 };
 
 export type PickedFile = {
