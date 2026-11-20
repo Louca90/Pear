@@ -155,19 +155,34 @@ function seedPath(cx: number, tilt: number, scale: number) {
 }
 
 // La surface du liquide : une vague qui avance, à la hauteur `level`. Plate en bas et en haut.
-function wavePath(level: number, phase: number, shift: number) {
-  'worklet';
-  const top = BODY_TOP - 3;
-  const bottom = BODY_BOTTOM + 3;
-  const y0 = bottom - level * (bottom - top);
-  const amplitude = 2.4 * Math.min(1, level * 6) * Math.min(1, (1 - level) * 6);
-  let d = `M ${VB_X} ${bottom}`;
-  for (let x = VB_X; x <= VB_X + VB_W; x += 4) {
-    const y = y0 + amplitude * Math.sin(((x - VB_X) / VB_W) * Math.PI * 3 + (phase + shift) * Math.PI * 2);
+// Le liquide : une vague fixe et répétée, dessinée une seule fois (ligne de base à y = 0, pleine vers le bas).
+// On ne fait que la déplacer : horizontalement d'une longueur d'onde en boucle (la vague avance), verticalement
+// selon le niveau (c'est le dessous qui monte). Le détourage ne change jamais de forme : Android n'a rien à
+// reconstruire, et tout bouge sur le fil natif, sans à-coup.
+const WAVE_LENGTH = (VB_W * 2) / 3;
+// `matrix` est la prop native des groupes de react-native-svg (non typée côté TypeScript).
+type NativeG = { opacity?: number };
+const WAVE_AMPLITUDE = 2.4;
+function staticWave(shift: number) {
+  const from = VB_X - WAVE_LENGTH * 2;
+  const to = VB_X + VB_W + WAVE_LENGTH * 2;
+  let d = `M ${from} 200`;
+  for (let x = from; x <= to; x += 2) {
+    const y = WAVE_AMPLITUDE * Math.sin(((x - VB_X) / WAVE_LENGTH) * Math.PI * 2 + shift * Math.PI * 2);
     d += ` L ${x} ${y.toFixed(2)}`;
   }
-  return `${d} L ${VB_X + VB_W} ${bottom} Z`;
+  return `${d} L ${to} 200 Z`;
 }
+const WAVE_FRONT = staticWave(0);
+const WAVE_BACK = staticWave(0.45);
+// La hauteur de la ligne de base pour un niveau de 0 (vide) à 1 (plein), crêtes comprises.
+function liquidY(level: number) {
+  'worklet';
+  const top = BODY_TOP - WAVE_AMPLITUDE - 1;
+  const bottom = BODY_BOTTOM + WAVE_AMPLITUDE + 1;
+  return bottom - Math.max(0, Math.min(1, level)) * (bottom - top);
+}
+
 
 const AnimatedPath = Reanimated.createAnimatedComponent(Path);
 const AnimatedCircle = Reanimated.createAnimatedComponent(Circle);
@@ -302,32 +317,27 @@ export function Pear({ height, color, state = 'idle', progress = 0, leafColor }:
   // image : sur Android, react-native-svg ne redessine pas un détourage ou un masque dont la forme change par
   // animatedProps (la poire restait vide, et « Vérifié » sans contour). Elles sont donc recalculées par
   // React, à partir d'une copie des valeurs animées, seulement quand elles bougent.
-  const [cut, setCut] = useState({ level: state === 'ripening' ? clamped : 1, link: 1, b0: 0, b1: 0, b2: 0 });
+  const [cut, setCut] = useState({ link: 1, b0: 0, b1: 0, b2: 0 });
   useAnimatedReaction(
     () => ({
-      level: Math.round(level.get() * 250) / 250,
       link: Math.round(link.get() * 50) / 50,
       b0: Math.round(bite0.get() * 25) / 25,
       b1: Math.round(bite1.get() * 25) / 25,
       b2: Math.round(bite2.get() * 25) / 25,
     }),
     (next, previous) => {
-      if (!previous || next.level !== previous.level || next.link !== previous.link || next.b0 !== previous.b0 || next.b1 !== previous.b1 || next.b2 !== previous.b2) {
+      if (!previous || next.link !== previous.link || next.b0 !== previous.b0 || next.b1 !== previous.b1 || next.b2 !== previous.b2) {
         scheduleOnRN(setCut, next);
       }
     },
   );
-  // La vague du liquide avance (une période en 1,4 s) seulement pendant un envoi.
-  const [phase, setPhase] = useState(0);
-  useEffect(() => {
-    if (state !== 'ripening' || reduced) return;
-    const timer = setInterval(() => setPhase((value) => (value + 0.064) % 1), 90);
-    return () => clearInterval(timer);
-  }, [state, reduced]);
-  const frontD = wavePath(cut.level, phase, 0);
-  const backD = wavePath(Math.min(1, cut.level + 0.03), phase, 0.45);
+  // Le liquide se déplace (matrice du groupe) ; la poire, dedans, est remise à sa place par le déplacement
+  // inverse : seule la découpe bouge. La vague avance en boucle pendant l'envoi (wave, 1,4 s par période).
+  const frontMove = useAnimatedProps(() => ({ matrix: [1, 0, 0, 1, -wave.get() * WAVE_LENGTH, liquidY(level.get())] } as NativeG));
+  const frontBack = useAnimatedProps(() => ({ matrix: [1, 0, 0, 1, wave.get() * WAVE_LENGTH, -liquidY(level.get())] } as NativeG));
+  const backMove = useAnimatedProps(() => ({ opacity: 0.45 * ripen.get(), matrix: [1, 0, 0, 1, -wave.get() * WAVE_LENGTH, liquidY(Math.min(1, level.get() + 0.03))] } as NativeG));
+  const backBack = useAnimatedProps(() => ({ matrix: [1, 0, 0, 1, wave.get() * WAVE_LENGTH, -liquidY(Math.min(1, level.get() + 0.03))] } as NativeG));
   const revealHalf = SEED_HALF * 1.4 * cut.link + 0.01;
-  const backProps = useAnimatedProps(() => ({ opacity: 0.45 * ripen.get() }));
   // Le contour en pointillés de « Connexion » est du vert de la peau (planche).
   const outlineProps = useAnimatedProps(() => ({ strokeDashoffset: dash.get(), opacity: outline.get(), strokeDasharray: [6, Math.max(0.01, gapLine.get())], stroke: skinColor(rest.get()) }));
 
@@ -394,9 +404,8 @@ export function Pear({ height, color, state = 'idle', progress = 0, leafColor }:
   const clipBody = `body${id}`;
   // Un identifiant neuf à chaque changement de forme : Android garde un détourage en mémoire tant que son
   // identifiant ne change pas, même si son contenu change.
-  const waveKey = `${Math.round(cut.level * 250)}-${Math.round(phase * 100)}`;
-  const clipLiquid = `liquid${id}-${waveKey}`;
-  const clipBack = `back${id}-${waveKey}`;
+  const clipLiquid = `liquid${id}`;
+  const clipBack = `back${id}`;
   const clipLink = `link${id}-${Math.round(cut.link * 50)}`;
   const maskBites = `bites${id}-${Math.round(cut.b0 * 25)}-${Math.round(cut.b1 * 25)}-${Math.round(cut.b2 * 25)}`;
   const skinWidth = small ? SKIN_WIDTH + 3 : SKIN_WIDTH;
@@ -411,10 +420,10 @@ export function Pear({ height, color, state = 'idle', progress = 0, leafColor }:
             </ClipPath>
             {/* La clé suit la forme : le détourage est reconstruit à chaque changement, sinon Android le garde. */}
             <ClipPath id={clipBack}>
-              <Path key={backD} d={backD} />
+              <Path d={WAVE_BACK} />
             </ClipPath>
             <ClipPath id={clipLiquid}>
-              <Path key={frontD} d={frontD} />
+              <Path d={WAVE_FRONT} />
             </ClipPath>
             <ClipPath id={clipLink}>
               <Rect key={revealHalf} x={50 - revealHalf} y={VB_Y} width={revealHalf * 2} height={VB_H} />
@@ -434,18 +443,22 @@ export function Pear({ height, color, state = 'idle', progress = 0, leafColor }:
                 <AnimatedPath d={BODY} fill="none" strokeWidth={skinWidth} animatedProps={skinProps} />
               </G>
             </AnimatedG>
-            <AnimatedG animatedProps={backProps} clipPath={`url(#${clipBack})`}>
-              <AnimatedPath d={BODY} animatedProps={fleshProps} />
-              <G clipPath={`url(#${clipBody})`}>
-                <AnimatedPath d={BODY} fill="none" strokeWidth={skinWidth} animatedProps={skinProps} />
-              </G>
+            <AnimatedG animatedProps={backMove} clipPath={`url(#${clipBack})`}>
+              <AnimatedG animatedProps={backBack}>
+                <AnimatedPath d={BODY} animatedProps={fleshProps} />
+                <G clipPath={`url(#${clipBody})`}>
+                  <AnimatedPath d={BODY} fill="none" strokeWidth={skinWidth} animatedProps={skinProps} />
+                </G>
+              </AnimatedG>
             </AnimatedG>
-            <G clipPath={`url(#${clipLiquid})`}>
-              <AnimatedPath d={BODY} animatedProps={fleshProps} />
-              <G clipPath={`url(#${clipBody})`}>
-                <AnimatedPath d={BODY} fill="none" strokeWidth={skinWidth} animatedProps={skinProps} />
-              </G>
-            </G>
+            <AnimatedG animatedProps={frontMove} clipPath={`url(#${clipLiquid})`}>
+              <AnimatedG animatedProps={frontBack}>
+                <AnimatedPath d={BODY} animatedProps={fleshProps} />
+                <G clipPath={`url(#${clipBody})`}>
+                  <AnimatedPath d={BODY} fill="none" strokeWidth={skinWidth} animatedProps={skinProps} />
+                </G>
+              </AnimatedG>
+            </AnimatedG>
           </G>
           <AnimatedPath d={BODY} fill="none" strokeWidth={2.6} strokeLinecap="round" animatedProps={outlineProps} />
           <AnimatedPath fill={innerInk} animatedProps={seedLeft} />
