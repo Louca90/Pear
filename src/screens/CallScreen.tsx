@@ -192,7 +192,7 @@ function CallFull({ call, name, onMinimize }: { call: CallState; name: string; o
       {outputsOpen && <OutputSheet outputs={call.outputs} onClose={() => setOutputsOpen(false)} />}
       <StatusBar style={onVideo ? 'light' : 'auto'} />
       {onVideo ? (
-        <VideoStage call={call} showRemote={showRemote} showLocal={showLocal} top={top} bottom={bottom} onTap={toggleChrome} />
+        <VideoStage call={call} showRemote={showRemote} showLocal={showLocal} top={top} bottom={bottom} onTap={toggleChrome} chromeHidden={chromeHidden} />
       ) : (
         <Pressable style={StyleSheet.absoluteFill} onPress={toggleChrome} accessibilityLabel={t('appel.commandes')} />
       )}
@@ -348,7 +348,7 @@ const THUMB_W = 108;
 const THUMB_H = 160;
 const CONTROLS_H = 250;
 
-function VideoStage({ call, showRemote, showLocal, top, bottom, onTap }: { call: CallState; showRemote: boolean; showLocal: boolean; top: number; bottom: number; onTap: () => void }) {
+function VideoStage({ call, showRemote, showLocal, top, bottom, onTap, chromeHidden }: { call: CallState; showRemote: boolean; showLocal: boolean; top: number; bottom: number; onTap: () => void; chromeHidden: boolean }) {
   const styles = useStyles();
   const { width, height } = useWindowDimensions();
   const [localMain, setLocalMain] = useState(false);
@@ -366,15 +366,17 @@ function VideoStage({ call, showRemote, showLocal, top, bottom, onTap }: { call:
   const slots = useMemo(() => {
     const left = 16;
     const right = width - THUMB_W - 16;
-    const high = top + 64;
-    const low = Math.max(high, height - bottom - CONTROLS_H - THUMB_H);
+    // Commandes masquées : les coins sont les vrais bords du téléphone. Affichées : la vignette reste sous
+    // la barre du haut et au-dessus des boutons ; une vignette restée dans un coin du bas remonte en douceur.
+    const high = chromeHidden ? top + 12 : top + 64;
+    const low = Math.max(high, chromeHidden ? height - bottom - 12 - THUMB_H : height - bottom - CONTROLS_H - THUMB_H);
     return [
       { x: right, y: high },
       { x: left, y: high },
       { x: right, y: low },
       { x: left, y: low },
     ];
-  }, [width, height, top, bottom]);
+  }, [width, height, top, bottom, chromeHidden]);
   const mainLocal = showLocal && (!showRemote || localMain);
   return (
     <>

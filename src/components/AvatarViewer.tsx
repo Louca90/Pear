@@ -29,7 +29,9 @@ export function AvatarViewer({ photoUri, label, name, children }: { photoUri: st
   return (
     <>
       <Pressable onPress={open} accessibilityRole="imagebutton" accessibilityLabel={label}>
-        <View ref={box} collapsable={false}>
+        {/* Pendant le plein écran, l'avatar d'origine est caché : en glissant pour fermer, on ne voit qu'une photo.
+            Il réapparaît quand la photo est revenue exactement à sa place. */}
+        <View ref={box} collapsable={false} style={viewing ? { opacity: 0 } : null}>
           {children}
         </View>
       </Pressable>
