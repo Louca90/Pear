@@ -3,14 +3,18 @@ import { useEffect, useRef, useState } from 'react';
 import { Message } from '../../../chat/database';
 
 // L'animation « Envoi » de la poire, pilotée par le vrai transfert (planche « Icône Pépins ») :
-// - le niveau suit le pourcentage du fichier ; il avance aussi un peu de lui-même pour qu'un transfert
-//   instantané (petit fichier, connexion directe) ait quand même son remplissage (au moins MIN_MS) ;
+// - le niveau suit le pourcentage réel du fichier (avec seulement un petit départ, START) ; un transfert
+//   déjà fini (petit fichier, connexion directe) se remplit en douceur jusqu'en haut avant de confirmer ;
 // - à la fin, la poire finit de se remplir puis passe d'« Envoi » à « Vérifié » (CONFIRM_MS), et s'efface ;
 // - un envoi parti en attente (contact hors ligne) sans aucune progression se retire au bout de STALL_MS
 //   au lieu de rester bloqué.
 // Seuls les transferts qui commencent pendant que la conversation est ouverte sont animés (pas les vieux
 // messages au chargement).
 const MIN_MS = 900;
+// Le petit départ visible tant que le vrai pourcentage n'a pas encore bougé.
+const START = 0.08;
+// Le temps laissé à la poire pour finir de se remplir à l'écran avant « Vérifié ».
+const FILL_MS = 800;
 const CONFIRM_MS = 1600;
 const STALL_MS = 4000;
 const TICK_MS = 80;
@@ -26,6 +30,7 @@ export function useTransferAnimation(message: Message, real: number | undefined)
   const [shown, setShown] = useState(real ?? 0);
   const startedAt = useRef(Date.now());
   const sawProgress = useRef(real !== undefined);
+  const finishedAt = useRef(0);
   const latest = useRef({ real, message });
   latest.current = { real, message };
 
@@ -35,6 +40,7 @@ export function useTransferAnimation(message: Message, real: number | undefined)
     sawProgress.current = true;
     if (phase === 'idle') {
       startedAt.current = Date.now();
+      finishedAt.current = 0;
       setShown(0);
       setPhase('running');
     }
@@ -46,12 +52,12 @@ export function useTransferAnimation(message: Message, real: number | undefined)
       const { real: now, message: current } = latest.current;
       const elapsed = Date.now() - startedAt.current;
       const finished = now === undefined && (sawProgress.current || !inFlight(current));
-      // Le plancher simulé monte jusqu'à 90 % en MIN_MS ; la vraie progression passe devant dès qu'elle avance.
-      const floor = Math.min(0.9, (elapsed / MIN_MS) * 0.9);
-      const target = finished ? 1 : Math.max(floor, now ?? 0);
+      // Pendant le transfert : le vrai pourcentage, avec seulement un petit départ. Fini : tout en haut.
+      const target = finished ? 1 : Math.max(Math.min(START, (elapsed / MIN_MS) * START), now ?? 0);
       setShown((value) => Math.max(value, target));
-      if (finished && elapsed >= MIN_MS) {
-        setShown(1);
+      if (finished && !finishedAt.current) finishedAt.current = Date.now();
+      // « Vérifié » quand la poire a eu le temps d'être pleine à l'écran.
+      if (finished && elapsed >= MIN_MS && Date.now() - finishedAt.current >= FILL_MS) {
         setPhase('confirm');
       } else if (!finished && !sawProgress.current && elapsed > STALL_MS) {
         // Parti en attente, rien ne bouge : on n'affiche pas une poire figée.
