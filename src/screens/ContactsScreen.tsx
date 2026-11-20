@@ -94,6 +94,7 @@ export function ContactsScreen({ publicKey, contacts, onScan, onKeyReceived, onR
         keyExtractor={(contact) => contact.publicKey}
         ListHeaderComponent={header}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         contentContainerStyle={{ paddingBottom: barSpace }}
         ListEmptyComponent={<EmptyState label={query.trim() ? t('liste.aucunTrouve') : t('contacts.aucun')} />}
         renderItem={({ item, index }) => {

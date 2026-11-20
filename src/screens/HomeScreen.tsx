@@ -363,6 +363,7 @@ export function HomeScreen({ contacts, onAdd, onOpen, onRequests, permissionMiss
         contentContainerStyle={{ paddingBottom: barSpace }}
         keyExtractor={(item) => item.contact.publicKey}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         ListEmptyComponent={emptyLabel ? <EmptyState key={emptyLabel} label={emptyLabel} /> : undefined}
         ListFooterComponent={
           messageHits.length > 0 ? (

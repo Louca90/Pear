@@ -133,6 +133,7 @@ export function ContactPickerSheet({ title, contacts, onSend, onClose }: Props) 
           data={shown}
           keyExtractor={(contact) => contact.publicKey}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           style={styles.list}
           ListEmptyComponent={<Text style={styles.empty}>{t('transfert.aucun')}</Text>}
           renderItem={({ item }) => (
