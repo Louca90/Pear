@@ -302,7 +302,6 @@ export function MapScreen({ contacts, focus, onBack, onOpenChat }: Props) {
       )}
 
       <Reanimated.View entering={enterUp(-10, 300)} style={[styles.header, { top: top + spacing.sm }]}>
-        <View style={styles.round} />
         <View style={styles.titlePill}>
           <Text style={styles.title}>{t('carte.titre')}</Text>
         </View>

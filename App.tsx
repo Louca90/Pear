@@ -347,6 +347,16 @@ function App() {
 
   nav.current = { route, parent: identity ? parentOf(route) : null };
 
+  // Un code scanné ouvre « Nouveau contact » ; revenir sans l'ajouter ramène à la feuille QR code.
+  const pairReturn = useRef<string | null>(null);
+  useEffect(() => {
+    const key = pairReturn.current;
+    if (!key) return;
+    if (route.name === 'contact' && route.publicKey === key) return;
+    pairReturn.current = null;
+    if (route.name === 'home' && !isSaved(key)) setPairOpen(true);
+  }, [route]);
+
   // Une bulle de position (ou autre) demande la carte.
   useEffect(() => onOpenMap((focus) => setRoute({ name: 'map', focus })), []);
 
@@ -843,7 +853,15 @@ function App() {
         </NeighborLayer>
       )}
       {identity && !error && (
-        <PairSheet visible={pairOpen} publicKey={identity.publicKey} onClose={() => setPairOpen(false)} onKeyReceived={openKey} />
+        <PairSheet
+          visible={pairOpen}
+          publicKey={identity.publicKey}
+          onClose={() => setPairOpen(false)}
+          onKeyReceived={(link) => {
+            pairReturn.current = link.publicKey;
+            openKey(link);
+          }}
+        />
       )}
       {identity && !error && !filming && TAB_ROUTES.includes(route.name) && (
         <BottomBar active={route.name as Tab} onChange={(tab) => setRoute(tab === 'map' ? { name: 'map', focus: null } : ({ name: tab } as Route))} />

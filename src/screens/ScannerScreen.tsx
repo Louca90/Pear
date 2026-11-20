@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import Reanimated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Reanimated, { useAnimatedStyle, useSharedValue, withTiming, cancelAnimation, Easing, interpolateColor, useReducedMotion, withRepeat } from 'react-native-reanimated';
 import { EASE } from '../motion';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Camera } from 'lucide-react-native';
@@ -32,7 +32,25 @@ export function ScannerPanel({ onKeyReceived }: Props) {
   const shiftX = useSharedValue(0);
   const shiftY = useSharedValue(0);
   const pearOpacity = useSharedValue(0);
-  const frameStyle = useAnimatedStyle(() => ({ transform: [{ translateX: shiftX.get() }, { translateY: shiftY.get() }, { scale: scale.get() }] }));
+  // Le cadre respire tant qu'il cherche, une ligne balaie la zone ; au code lu, il se verrouille en vert.
+  const reduced = useReducedMotion();
+  const breathe = useSharedValue(0);
+  const sweep = useSharedValue(0);
+  const lock = useSharedValue(0);
+  useEffect(() => {
+    if (reduced) return;
+    breathe.set(withRepeat(withTiming(1, { duration: 1200, easing: Easing.inOut(Easing.sin) }), -1, true));
+    sweep.set(withRepeat(withTiming(1, { duration: 1200, easing: Easing.inOut(Easing.sin) }), -1, true));
+    return () => {
+      cancelAnimation(breathe);
+      cancelAnimation(sweep);
+    };
+  }, [reduced, breathe, sweep]);
+  const frameStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: shiftX.get() }, { translateY: shiftY.get() }, { scale: scale.get() * (1 + 0.025 * breathe.get() * (1 - lock.get())) }],
+  }));
+  const cornerColor = useAnimatedStyle(() => ({ borderColor: interpolateColor(lock.get(), [0, 1], [colors.onMedia, colors.signatureStrong]) }));
+  const sweepStyle = useAnimatedStyle(() => ({ opacity: 1 - lock.get(), transform: [{ translateY: sweep.get() * Math.max(0, box * FRAME - 24) }] }));
   const pearStyle = useAnimatedStyle(() => ({ opacity: pearOpacity.get() }));
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
@@ -51,6 +69,7 @@ export function ScannerPanel({ onKeyReceived }: Props) {
     done.current = true;
     haptics.success();
     setFound(true);
+    lock.set(withTiming(1, { duration: 260, easing: EASE }));
     // Sur le code lu si la caméra donne sa position (et qu'elle tombe dans la zone), sinon resserré au centre.
     let target = FRAME * 0.62;
     let dx = 0;
@@ -91,10 +110,13 @@ export function ScannerPanel({ onKeyReceived }: Props) {
           barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
           onBarcodeScanned={handleScan}
         />
-        <Reanimated.View
-          pointerEvents="none"
-          style={[styles.frame, { width: `${FRAME * 100}%`, height: `${FRAME * 100}%`, borderColor: found ? colors.signatureStrong : colors.onMedia }, frameStyle]}
-        />
+        <Reanimated.View pointerEvents="none" style={[styles.frame, { width: `${FRAME * 100}%`, height: `${FRAME * 100}%` }, frameStyle]}>
+          <Reanimated.View style={[styles.corner, styles.cornerTL, cornerColor]} />
+          <Reanimated.View style={[styles.corner, styles.cornerTR, cornerColor]} />
+          <Reanimated.View style={[styles.corner, styles.cornerBL, cornerColor]} />
+          <Reanimated.View style={[styles.corner, styles.cornerBR, cornerColor]} />
+          <Reanimated.View style={[styles.sweep, { backgroundColor: colors.signatureStrong, boxShadow: `0px 0px 12px ${colors.signatureStrong}` }, sweepStyle]} />
+        </Reanimated.View>
         {found && (
           <Reanimated.View pointerEvents="none" style={[styles.pear, pearStyle]}>
             <Pear height={64} color={colors.onMedia} state="leaf" leafColor={colors.signatureStrong} />
@@ -123,8 +145,24 @@ const useStyles = createStyles((colors) => ({
     position: 'absolute',
     alignSelf: 'center',
     top: '15%',
-    borderWidth: 2,
-    borderRadius: radius.md,
+  },
+  corner: {
+    position: 'absolute',
+    width: 34,
+    height: 34,
+    borderStyle: 'solid',
+  },
+  cornerTL: { left: 0, top: 0, borderTopWidth: 4, borderLeftWidth: 4, borderTopLeftRadius: 14 },
+  cornerTR: { right: 0, top: 0, borderTopWidth: 4, borderRightWidth: 4, borderTopRightRadius: 14 },
+  cornerBL: { left: 0, bottom: 0, borderBottomWidth: 4, borderLeftWidth: 4, borderBottomLeftRadius: 14 },
+  cornerBR: { right: 0, bottom: 0, borderBottomWidth: 4, borderRightWidth: 4, borderBottomRightRadius: 14 },
+  sweep: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    top: 12,
+    height: 2,
+    borderRadius: 1,
   },
   pear: {
     position: 'absolute',
