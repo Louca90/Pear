@@ -328,7 +328,8 @@ class PearNativeModule : Module() {
     }.runOnQueue(Queues.MAIN)
     // Fin de l'appel : la fenêtre flottante se ferme tout de suite (l'app reste ouverte en arrière-plan).
     AsyncFunction("closeCallPip") {
-      val activity = appContext.currentActivity ?: return@AsyncFunction
+      val activity = appContext.currentActivity
+      if (activity == null) return@AsyncFunction Unit
       if (Build.VERSION.SDK_INT >= 26 && activity.isInPictureInPictureMode) activity.moveTaskToBack(true)
       Unit
     }.runOnQueue(Queues.MAIN)
