@@ -42,3 +42,11 @@ describe('messages éphémères', () => {
     expect(pullTriggers(-72)).toBe(true);
   });
 });
+
+describe('fusion des lignes éphémères', () => {
+  it('fusionne sous 10 minutes, pas au-delà', () => {
+    const { shouldMergeEphemeral, EPHEMERAL_MERGE_MS } = require('./ephemeral');
+    expect(shouldMergeEphemeral(1000, 1000 + EPHEMERAL_MERGE_MS - 1)).toBe(true);
+    expect(shouldMergeEphemeral(1000, 1000 + EPHEMERAL_MERGE_MS)).toBe(false);
+  });
+});

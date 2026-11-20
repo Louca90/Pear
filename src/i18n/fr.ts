@@ -803,6 +803,8 @@ export const fr = {
     apercuCoupe: 'Messages éphémères désactivés',
     active: 'activé les messages éphémères ({duree})',
     coupe: 'désactivé les messages éphémères',
+    ligne: 'Messages éphémères : {duree}',
+    ligneCoupe: 'Messages éphémères : désactivés',
     titre: 'Messages éphémères',
     aide: 'Les nouveaux messages s\'effacent des deux téléphones après la durée choisie. Tirer vers le haut en bas de la conversation les active ou les coupe.',
     h1: '1 heure',

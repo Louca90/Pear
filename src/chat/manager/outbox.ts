@@ -3,7 +3,9 @@ import { randombytes_buf, to_base64 } from 'react-native-libsodium';
 import {
   addMessage,
   addOutboxEvent,
+  deleteMessage,
   getConversationSettings,
+  getLastLine,
   getSetting,
   setConversationSetting,
   setSetting,
@@ -22,7 +24,7 @@ import { ChatCore } from './core';
 import { noteAttempt, sendSealedText, sendSecure } from './secure';
 import { FILE_KEY_BYTES } from './types';
 import { isSelf } from '../self';
-import { DEFAULT_EPHEMERAL, ephemeralSystemText, nextSettingTime, validTtl } from '../ephemeral';
+import { DEFAULT_EPHEMERAL, ephemeralSystemText, nextSettingTime, parseEphemeralSystem, shouldMergeEphemeral, validTtl } from '../ephemeral';
 import { fileExtras } from './payloads';
 
 // --- Messages éphémères (lot 4.7) ---
@@ -40,6 +42,14 @@ export function lastEphemeralChoice(contact: string): number {
   return validTtl(Number(getSetting(lastChoiceKey(contact)))) ?? DEFAULT_EPHEMERAL;
 }
 
+// Une ligne « messages éphémères » : si la dernière ligne de la conversation en est une, récente (moins
+// de 10 min) et sans autre message entre les deux, la nouvelle la remplace : un seul état final.
+function addEphemeralLine(contact: string, mine: number, seconds: number) {
+  const last = getLastLine(contact);
+  if (last && last.kind === 'system' && parseEphemeralSystem(last.text) !== null && shouldMergeEphemeral(last.created_at, Date.now())) deleteMessage(last.id, contact);
+  addSystemMessage(contact, mine, ephemeralSystemText(seconds));
+}
+
 // Applique un réglage du minuteur (le nôtre ou celui reçu), daté : un réglage plus ancien que celui
 // déjà appliqué est ignoré (événements croisés). Le message système n'apparaît que si la valeur change.
 export function applyEphemeral(contact: string, seconds: number, at: number, mine: number): boolean {
@@ -48,7 +58,7 @@ export function applyEphemeral(contact: string, seconds: number, at: number, min
   const current = getConversationSettings(contact).ephemeral ?? 0;
   setConversationSetting(contact, 'ephemeral', seconds || null);
   if (seconds) setSetting(lastChoiceKey(contact), String(seconds));
-  if (current !== seconds) addSystemMessage(contact, mine, ephemeralSystemText(seconds));
+  if (current !== seconds) addEphemeralLine(contact, mine, seconds);
   return true;
 }
 

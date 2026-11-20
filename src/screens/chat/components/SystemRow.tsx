@@ -11,7 +11,7 @@ import { Pear } from '../../../components/Pear';
 import { createStyles, useColors } from '../../../theme';
 
 import { SESSION_BROKEN, SESSION_REPAIRED, UPDATE_REQUIRED } from '../../../chat/protocol';
-import { systemAction } from '../format';
+import { ephemeralLabel, systemAction } from '../format';
 import { useChatStyles } from '../styles';
 import { t } from '../../../i18n';
 
@@ -47,7 +47,7 @@ export function SystemRow({ message, name, hasWallpaper }: { message: Message; n
           <Pear height={13} color={hasWallpaper ? colors.onMedia : ephemeral ? colors.signatureStrong : colors.textMuted} />
         </View>
       )}
-      <Text style={textStyle}>{standalone ? text : `${author} ${text}`}</Text>
+      <Text style={textStyle}>{ephemeral !== null ? (ephemeral ? t('ephemere.ligne', { duree: ephemeralLabel(ephemeral) }) : t('ephemere.ligneCoupe')) : standalone ? text : `${author} ${text}`}</Text>
     </View>
   );
 }

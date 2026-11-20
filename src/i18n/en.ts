@@ -804,6 +804,8 @@ export const en: Dictionary = {
     apercuCoupe: 'Disappearing messages off',
     active: 'turned on disappearing messages ({duree})',
     coupe: 'turned off disappearing messages',
+    ligne: 'Disappearing messages: {duree}',
+    ligneCoupe: 'Disappearing messages: off',
     titre: 'Disappearing messages',
     aide: 'New messages are erased from both phones after the chosen time. Pull up at the bottom of the conversation to turn them on or off.',
     h1: '1 hour',

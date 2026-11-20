@@ -35,6 +35,10 @@ export function parseEphemeralSystem(text: string): number | null {
   return validEphemeralSetting(Number(text.slice(SYSTEM_PREFIX.length)));
 }
 
+// Deux lignes de réglage rapprochées (moins de 10 min) n'en font qu'une.
+export const EPHEMERAL_MERGE_MS = 10 * 60 * 1000;
+export const shouldMergeEphemeral = (previousAt: number, now: number) => now - previousAt < EPHEMERAL_MERGE_MS;
+
 // Nouvelle heure de réglage : toujours après la précédente, même si une horloge retarde.
 export function nextSettingTime(now: number, last: number) {
   return Math.max(now, last + 1);

@@ -908,8 +908,18 @@ export function setReadReceiptSent(id: string, contact: string) {
   db().runSync("UPDATE messages SET status = 'read' WHERE id = ? AND contact = ? AND mine = 0", id, contact);
 }
 
+// Le dernier vrai message (aperçu de l'accueil) : les lignes « messages éphémères » n'en sont pas.
 export function getLastMessage(contact: string): Message | null {
-  const message = db().getFirstSync<Message>("SELECT * FROM messages WHERE contact = ? AND kind != 'avatar' AND status != 'scheduled' ORDER BY created_at DESC LIMIT 1", contact);
+  const message = db().getFirstSync<Message>(
+    "SELECT * FROM messages WHERE contact = ? AND kind != 'avatar' AND status != 'scheduled' AND NOT (kind = 'system' AND text LIKE 'ephemeral:%') ORDER BY created_at DESC LIMIT 1",
+    contact,
+  );
+  return message && withoutFileKey(message);
+}
+
+// La dernière ligne de la conversation, quelle qu'elle soit (sert à fusionner les lignes éphémères).
+export function getLastLine(contact: string): Message | null {
+  const message = db().getFirstSync<Message>("SELECT * FROM messages WHERE contact = ? AND kind != 'avatar' ORDER BY created_at DESC LIMIT 1", contact);
   return message && withoutFileKey(message);
 }
 
