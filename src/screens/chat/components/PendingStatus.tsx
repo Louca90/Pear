@@ -4,6 +4,7 @@ import Reanimated from 'react-native-reanimated';
 
 import { Message } from '../../../chat/database';
 import { chat } from '../../../chat/manager';
+import { PendingLabel, PendingState, pendingLabel, unreachableAt } from '../../../chat/pending';
 import { useColors } from '../../../theme';
 import { enterUp, exitFade } from '../../../motion';
 import { t } from '../../../i18n';
@@ -11,7 +12,7 @@ import { t } from '../../../i18n';
 import { formatTime } from '../format';
 
 // Un envoi qui aboutit tout de suite (contact connecté) n'affiche rien : la ligne n'apparaît qu'après ce délai.
-const SHOW_AFTER_MS = 2000;
+const SHOW_AFTER_MS = 1000;
 
 // Sous un message pas encore distribué : ce qui a été tenté et quand (heure absolue, qui ne se périme
 // pas), puis « Réessayer » si rien n'est parti depuis quelques minutes. Rien ne promet la livraison :
@@ -23,36 +24,45 @@ export function PendingStatus({ message }: { message: Message }) {
   const colors = useColors();
   const snapshot = useSyncExternalStore(chat.subscribe, () => {
     const state = chat.pendingState(message);
-    return `${state?.kind ?? ''}|${state?.kind === 'not-sent' && state.offline ? 1 : 0}|${chat.retryAvailableAt(message) ?? ''}`;
+    const kind = state ? (state.kind === 'not-sent' ? (state.offline ? 'offline' : 'not-sent') : state.kind) : '';
+    return `${kind}|${chat.retryAvailableAt(message) ?? ''}`;
   });
-  const [kind, offline, retryText] = snapshot.split('|');
+  const [kind, retryText] = snapshot.split('|');
   const retryAt = retryText ? Number(retryText) : null;
+  const state: PendingState | null =
+    kind === 'sending'
+      ? { kind: 'sending' }
+      : kind === 'waiting' && message.last_attempt_at
+        ? { kind: 'waiting', lastTry: message.last_attempt_at }
+        : kind === 'offline' || kind === 'not-sent'
+          ? { kind: 'not-sent', offline: kind === 'offline' }
+          : null;
+  const offAt = state ? unreachableAt(state, message) : Infinity;
 
-  // L'apparition de la ligne et l'heure de « Réessayer » passent sans aucun signal du moteur : un
-  // minuteur redessine à ce moment-là.
+  // L'apparition de la ligne, le passage à « pas de connexion » et l'heure de « Réessayer » passent
+  // sans aucun signal du moteur : un minuteur redessine à ce moment-là.
   const showAt = message.created_at + SHOW_AFTER_MS;
   const [now, setNow] = useState(Date.now);
   const [showTime, setShowTime] = useState(false);
   useEffect(() => {
-    const next = [showAt, retryAt].filter((at): at is number => at !== null && at > now);
+    const next = [showAt, retryAt, offAt].filter((at): at is number => at !== null && Number.isFinite(at) && at > now);
     if (next.length === 0) return;
     const timer = setTimeout(() => setNow(Date.now()), Math.min(...next) - now + 50);
     return () => clearTimeout(timer);
-  }, [showAt, retryAt, now]);
+  }, [showAt, retryAt, offAt, now]);
 
   const retryDue = retryAt !== null && now >= retryAt;
-  if (!kind || now < showAt) return null;
-  const label =
-    kind === 'sending'
-      ? t('attente.envoi')
-      : kind === 'waiting' && message.last_attempt_at
-        ? // Transmis, accusé pas encore reçu : « Envoyé ». L'heure du dernier essai seulement à l'appui, ou après 5 minutes.
-          showTime || retryDue
-          ? t('attente.envoyeEssai', { heure: formatTime(message.last_attempt_at) })
-          : t('attente.envoye')
-        : offline === '1'
-          ? t('attente.pasEnvoyeHorsLigne')
-          : t('attente.pasEnvoye');
+  if (!state || now < showAt) return null;
+  // « Envoi… » tant que le téléphone du contact n'a pas reçu le message. L'heure du dernier essai
+  // seulement à l'appui, ou après 5 minutes.
+  const lastTry = showTime || retryDue ? message.last_attempt_at : null;
+  const labels: Record<PendingLabel, string> = {
+    sending: lastTry ? t('attente.envoiEssai', { heure: formatTime(lastTry) }) : t('attente.envoi'),
+    unreachable: lastTry ? t('attente.contactHorsLigneEssai', { heure: formatTime(lastTry) }) : t('attente.contactHorsLigne'),
+    offline: t('attente.pasEnvoyeHorsLigne'),
+    'not-sent': t('attente.pasEnvoye'),
+  };
+  const label = labels[pendingLabel(state, message, now)];
   const retry = retryDue;
 
   return (

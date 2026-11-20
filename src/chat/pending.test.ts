@@ -1,6 +1,6 @@
 import { describe, expect, it } from '@jest/globals';
 
-import { canRetry, countsAsAttempt, MAX_MANUAL_RETRIES, pendingState, RETRY_AFTER_MS, retryAvailableAt } from './pending';
+import { canRetry, countsAsAttempt, MAX_MANUAL_RETRIES, pendingLabel, pendingState, RETRY_AFTER_MS, retryAvailableAt, UNREACHABLE_AFTER_MS } from './pending';
 
 const NOW = 1_000_000_000;
 const message = (extra: object = {}) => ({ status: 'sending', created_at: NOW - 1000, last_attempt_at: null as number | null, ...extra });
@@ -59,5 +59,28 @@ describe('Réessayer', () => {
     expect(canRetry(old, false, full, NOW)).toBe(false);
     // Plus d'une heure après, ils ne comptent plus.
     expect(canRetry(old, false, full, NOW + 61 * 60_000)).toBe(true);
+  });
+});
+
+describe('libellé sous un message en attente', () => {
+  const label = (extra: object, connected: boolean, online: boolean, now = NOW) => {
+    const msg = message(extra);
+    const state = pendingState(msg, connected, online);
+    return state && pendingLabel(state, msg, now);
+  };
+
+  it('« Envoi… » tant que le téléphone du contact n’a pas reçu le message, même si le push est parti', () => {
+    expect(label({}, true, true)).toBe('sending');
+    expect(label({ last_attempt_at: NOW - 5_000, attempts: 1 }, false, true)).toBe('sending');
+  });
+
+  it('pas d’accusé après le délai, ou un deuxième essai : le contact n’a pas de connexion', () => {
+    expect(label({ last_attempt_at: NOW - UNREACHABLE_AFTER_MS, attempts: 1 }, false, true)).toBe('unreachable');
+    expect(label({ last_attempt_at: NOW - 1_000, attempts: 2 }, false, true)).toBe('unreachable');
+  });
+
+  it('notre téléphone sans connexion, ou rien n’a pu partir', () => {
+    expect(label({}, false, false)).toBe('offline');
+    expect(label({}, false, true)).toBe('not-sent');
   });
 });
