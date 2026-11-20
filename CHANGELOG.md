@@ -36,6 +36,7 @@
 - Messages éphémères : le geste est plus difficile à déclencher par erreur, et les messages système sont plus discrets.
 - Recherche : elle ne prend plus le clavier toute seule, même en revenant d'une conversation. Quitter une conversation ferme le clavier.
 - Caméra : plus d'à-coup à l'ouverture.
+- Carte : télécharger la carte de sa zone marche sans avoir partagé sa position avant (au lieu de « Position introuvable » sur certains téléphones).
 - Plus de son à l'envoi ni à la réception d'un message (le réglage est retiré). Les sons d'appel restent.
 
 #### Technique
