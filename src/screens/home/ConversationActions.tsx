@@ -1,12 +1,13 @@
 import { ComponentRef, ReactNode, RefObject, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import Reanimated, { Easing, ReduceMotion, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
+import Reanimated, { Easing, interpolateColor, ReduceMotion, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 import { BlurView } from 'expo-blur';
 import { LucideIcon } from 'lucide-react-native';
 import type { ComponentType } from 'react';
 import type { AnimatedIconProps } from '../../components/AnimatedIcons';
 
+import { useBottomBarSpace } from '../../components/BottomBar';
 import { t } from '../../i18n';
 import { useBackInterceptor } from '../../navigation/backInterceptors';
 import { createStyles, spacing, useColors } from '../../theme';
@@ -19,6 +20,9 @@ const CLOSE_MS = 200;
 const EASE = Easing.bezier(0.2, 0.8, 0.2, 1);
 const MENU_GAP = 10;
 const ITEM_HEIGHT = 52;
+const MENU_PADDING = 8;
+// Un filet avant « Supprimer » : l'action dangereuse est séparée des autres.
+const SEPARATOR = 9;
 const MENU_WIDTH = 236;
 const ITEM_FIRST_MS = 60;
 const ITEM_STEP_MS = 35;
@@ -55,9 +59,15 @@ export function ConversationActions({ rect, row, actions, blurTarget, onClose }:
   const menu = useSharedValue(0);
   const closing = useRef(false);
 
+  const barSpace = useBottomBarSpace();
   const card = { x: spacing.lg, y: rect.y, width: width - spacing.lg * 2, height: rect.height };
-  const menuHeight = actions.length * ITEM_HEIGHT + 12;
-  const below = rect.y + rect.height + MENU_GAP + menuHeight < height - 140;
+  // D'où part la carte : la ligne telle qu'elle est à la fin du maintien (en retrait de 8, rétrécie à 97 %).
+  const rowX = rect.x + spacing.sm;
+  const rowW = rect.width - spacing.sm * 2;
+  const start = { x: rowX + rowW * 0.015, y: rect.y + rect.height * 0.015, width: rowW * 0.97, height: rect.height * 0.97 };
+  const menuHeight = actions.length * ITEM_HEIGHT + MENU_PADDING * 2 + SEPARATOR;
+  // Le menu ne touche jamais le bas de l'écran ni la barre d'onglets.
+  const below = rect.y + rect.height + MENU_GAP + menuHeight < height - barSpace - spacing.md;
   const menuTop = below ? card.y + card.height + MENU_GAP : card.y - MENU_GAP - menuHeight;
 
   useEffect(() => {
@@ -84,9 +94,23 @@ export function ConversationActions({ rect, row, actions, blurTarget, onClose }:
   useBackInterceptor(true, () => close());
 
   const veil = useAnimatedStyle(() => ({ opacity: shown.get() }));
-  const lifted = useAnimatedStyle(() => ({
-    opacity: Math.min(1, shown.get() * 4),
-    boxShadow: `0px 18px 40px ${colors.shadow}`,
+  // La ligne s'agrandit en carte : position, taille, fond et ombre suivent l'ouverture, sans à-coup.
+  const ox = origin?.x ?? 0;
+  const oy = origin?.y ?? 0;
+  const lifted = useAnimatedStyle(() => {
+    const p = shown.get();
+    return {
+      left: start.x + (card.x - start.x) * p - ox,
+      top: start.y + (card.y - start.y) * p - oy,
+      width: start.width + (card.width - start.width) * p,
+      height: start.height + (card.height - start.height) * p,
+      backgroundColor: interpolateColor(p, [0, 1], [colors.surface, colors.elevated]),
+      boxShadow: `0px ${Math.round(18 * p)}px ${Math.round(40 * p)}px ${colors.shadow}`,
+    };
+  });
+  const rowStyle = useAnimatedStyle(() => ({
+    paddingHorizontal: 16 + (12 - 16) * shown.get(),
+    transform: [{ scale: 0.97 + 0.03 * shown.get() }],
   }));
   // Le menu grandit depuis son coin haut gauche (bas gauche s'il est au-dessus).
   const menuStyle = useAnimatedStyle(() => ({
@@ -107,9 +131,9 @@ export function ConversationActions({ rect, row, actions, blurTarget, onClose }:
             <View style={styles.dim} />
           </Reanimated.View>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => close()} accessibilityLabel={t('commun.fermer')} />
-          <Reanimated.View pointerEvents="none" style={[styles.card, { top: card.y - origin.y, left: card.x - origin.x, width: card.width, height: card.height }, lifted]}>
-            {/* La ligne, avec 12 de marge intérieure (planche) : rien n'est rogné sur les bords de la carte. */}
-            <View style={styles.cardRow}>{row}</View>
+          <Reanimated.View pointerEvents="none" style={[styles.card, lifted]}>
+            {/* La ligne, avec 12 de marge intérieure à l'arrivée (planche) : rien n'est rogné sur les bords. */}
+            <Reanimated.View style={[styles.cardRow, rowStyle]}>{row}</Reanimated.View>
           </Reanimated.View>
           <Reanimated.View
             style={[
@@ -120,6 +144,7 @@ export function ConversationActions({ rect, row, actions, blurTarget, onClose }:
           >
             {actions.map(({ label, icon: Icon, animated: Animated_, onPress, danger }, index) => (
               <ActionItem key={label} index={index}>
+                {danger && index > 0 && <View style={styles.separator} />}
                 <Pressable onPress={() => close(onPress)} style={({ pressed }) => [styles.item, pressed && styles.pressed]} accessibilityRole="menuitem">
                   {Animated_ ? (
                     <Animated_ size={20} color={danger ? colors.danger : colors.text} strokeWidth={1.8} autoPlay delay={200 + index * 40} />
@@ -163,12 +188,17 @@ const useStyles = createStyles((colors) => ({
   cardRow: {
     flex: 1,
     justifyContent: 'center',
-    paddingHorizontal: 12,
+  },
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    marginVertical: 4,
+    marginHorizontal: 12,
+    backgroundColor: colors.border,
   },
   menu: {
     position: 'absolute',
     width: MENU_WIDTH,
-    padding: 6,
+    padding: MENU_PADDING,
     borderRadius: CARD_RADIUS,
     backgroundColor: colors.elevated,
     borderWidth: StyleSheet.hairlineWidth,

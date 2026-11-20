@@ -160,8 +160,10 @@ export function RowPressable({ onPress, onLongPress, style, label, holdMs, child
   // Une ligne se touche souvent : l'effet reste presque imperceptible (0,99), le fond fait le reste.
   const feedback = usePressFeedback(0.99, 1);
   const hold = useSharedValue(0);
+  // Le maintien est l'animation de la sélection elle-même : la ligne devient peu à peu la carte (fond qui
+  // apparaît, coins qui s'arrondissent, léger rétrécissement), sur exactement la durée du maintien.
   const holdStyle = useAnimatedStyle(() => ({ transform: [{ scale: 1 - 0.03 * hold.get() }] }));
-  const fillStyle = useAnimatedStyle(() => ({ transform: [{ scaleX: hold.get() }] }));
+  const fillStyle = useAnimatedStyle(() => ({ opacity: hold.get(), borderRadius: 12 + 8 * hold.get() }));
   return (
     <Reanimated.View style={[feedback.style, holdMs ? holdStyle : null]}>
       <Pressable
@@ -170,7 +172,7 @@ export function RowPressable({ onPress, onLongPress, style, label, holdMs, child
         delayLongPress={holdMs}
         onPressIn={() => {
           feedback.onPressIn();
-          if (holdMs) hold.set(withTiming(1, { duration: holdMs, easing: Easing.out(Easing.quad) }));
+          if (holdMs) hold.set(withTiming(1, { duration: holdMs, easing: Easing.linear }));
         }}
         onPressOut={() => {
           feedback.onPressOut();
@@ -178,7 +180,7 @@ export function RowPressable({ onPress, onLongPress, style, label, holdMs, child
         }}
         accessibilityRole="button"
         accessibilityLabel={label}
-        style={({ pressed }) => [styles.rowPressable, style, pressed && styles.rowPressed]}
+        style={({ pressed }) => [styles.rowPressable, style, pressed && !holdMs && styles.rowPressed]}
       >
         {holdMs ? <Reanimated.View pointerEvents="none" style={[styles.holdFill, fillStyle]} /> : null}
         {children}
@@ -281,7 +283,6 @@ const useStyles = createStyles((colors) => ({
     right: 0,
     bottom: 0,
     backgroundColor: colors.surface,
-    transformOrigin: 'left',
   },
   button: {
     flexDirection: 'row',
