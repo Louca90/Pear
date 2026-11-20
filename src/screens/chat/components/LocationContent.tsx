@@ -10,7 +10,7 @@ import { savedRegion } from '../../../map/offlineMap';
 import { openMap } from '../../../map/openMap';
 import { insideRegion } from '../../../map/region';
 import { chat } from '../../../chat/manager';
-import { nearestCity } from '../../../components/editor/cities';
+import { IN_PLACE_KM, nearestPlace } from '../../../components/editor/cities';
 import { t } from '../../../i18n';
 import { log } from '../../../log';
 import { BubblePalette, createStyles, radius, spacing } from '../../../theme';
@@ -64,10 +64,11 @@ export function LocationContent({ message, palette }: { message: Message; palett
   const me = useMyPosition(!mine && !!location, now);
   if (!location) return <Text style={[styles.title, { color: palette.text }]}>{t('position.titre')}</Text>;
 
-  const city = nearestCity(location);
+  // La commune la plus proche (liste embarquée) : « À X » si on y est, « Près de X » sinon.
+  const near = nearestPlace(location);
   const away = !mine && me ? distanceKm(me, location) : null;
   const direction = !mine && me && away !== null && away >= 0.3 ? bearing(me, location) : null;
-  const place = [city ? t('position.presDe', { ville: city }) : null, away !== null ? t('position.aDistance', { distance: formatDistance(away, t('position.virgule')) }) : null].filter(Boolean).join(' · ');
+  const place = [near ? t(near.km <= IN_PLACE_KM ? 'position.aVille' : 'position.presDe', { ville: near.name }) : null, away !== null ? t('position.aDistance', { distance: formatDistance(away, t('position.virgule')) }) : null].filter(Boolean).join(' · ');
 
   const region = savedRegion();
   const mapped = !!region && insideRegion(region.bounds, location);

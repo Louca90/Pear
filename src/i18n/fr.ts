@@ -883,6 +883,7 @@ export const fr = {
     ouvrirCartes: 'Ouvrir dans une app de cartes',
     termine: 'Partage terminé',
     presDe: 'Près de {ville}',
+    aVille: 'À {ville}',
     aDistance: 'à {distance}',
     virgule: ',',
     aLinstant: 'à l\'instant',
@@ -998,7 +999,7 @@ export const fr = {
   },
   licences: {
     titre: 'Licences',
-    texte: 'Les lentilles de l’appareil photo utilisent MediaPipe et son modèle de suivi du visage, © Google LLC, sous licence Apache 2.0. CameraX, © The Android Open Source Project, sous licence Apache 2.0.',
+    texte: 'Les lentilles de l’appareil photo utilisent MediaPipe et son modèle de suivi du visage, © Google LLC, sous licence Apache 2.0. CameraX, © The Android Open Source Project, sous licence Apache 2.0. Noms de lieux : GeoNames (www.geonames.org), sous licence CC BY 4.0.',
     lire: 'Lire la licence',
   },
   appel: {

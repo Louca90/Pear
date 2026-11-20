@@ -884,6 +884,7 @@ export const en: Dictionary = {
     ouvrirCartes: 'Open in a maps app',
     termine: 'Sharing ended',
     presDe: 'Near {ville}',
+    aVille: 'In {ville}',
     aDistance: '{distance} away',
     virgule: '.',
     aLinstant: 'just now',
@@ -999,7 +1000,7 @@ export const en: Dictionary = {
   },
   licences: {
     titre: 'Licenses',
-    texte: 'Camera lenses use MediaPipe and its face tracking model, © Google LLC, licensed under Apache 2.0. CameraX, © The Android Open Source Project, licensed under Apache 2.0.',
+    texte: 'Camera lenses use MediaPipe and its face tracking model, © Google LLC, licensed under Apache 2.0. CameraX, © The Android Open Source Project, licensed under Apache 2.0. Place names: GeoNames (www.geonames.org), licensed under CC BY 4.0.',
     lire: 'Read the license',
   },
   appel: {

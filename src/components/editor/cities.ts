@@ -1,6 +1,8 @@
-// Une liste de villes embarquée : le filtre Lieu trouve la ville la plus proche de la position du
-// téléphone ici, sans jamais interroger un serveur. Au-delà de MAX_KM d'une ville de la liste, rien
-// n'est affiché plutôt qu'un nom faux.
+// Où est-on, sans jamais interroger un serveur : la commune la plus proche dans une liste embarquée
+// (places.ts, communes de France et des pays voisins, GeoNames), sinon la grande ville la plus proche
+// de la courte liste ci-dessous. Au-delà de MAX_KM d'une ville, rien n'est affiché plutôt qu'un nom faux.
+import { PLACES } from './places';
+
 export type City = { name: string; latitude: number; longitude: number };
 
 export const MAX_KM = 60;
@@ -170,8 +172,55 @@ function distanceKm(a: { latitude: number; longitude: number }, b: { latitude: n
   return 2 * 6371 * Math.asin(Math.sqrt(h));
 }
 
-// La ville de la liste la plus proche, ou null si aucune n'est à moins de MAX_KM.
-export function nearestCity(position: { latitude: number; longitude: number }): string | null {
+// La liste dense (places.ts : communes de France et des pays voisins), lue une seule fois, au premier
+// besoin. Coordonnées au millième de degré.
+let dense: { names: string[]; lat: Float64Array; lon: Float64Array } | null = null;
+
+function densePlaces() {
+  if (dense) return dense;
+  const entries = PLACES.split('|');
+  const names: string[] = [];
+  const lat = new Float64Array(entries.length);
+  const lon = new Float64Array(entries.length);
+  entries.forEach((entry, index) => {
+    const [name, la, lo] = entry.split(';');
+    names.push(name);
+    lat[index] = Number(la) / 1000;
+    lon[index] = Number(lo) / 1000;
+  });
+  dense = { names, lat, lon };
+  return dense;
+}
+
+// Dans la liste dense, la commune la plus proche est rarement à plus de quelques kilomètres : au-delà
+// de DENSE_MAX_KM, on est hors de la zone couverte et on passe aux grandes villes.
+const DENSE_MAX_KM = 15;
+// En dessous de cette distance du centre de la commune, on y est (« À Thonon-les-Bains »).
+export const IN_PLACE_KM = 2.5;
+
+export type NearestPlace = { name: string; km: number };
+
+// Le lieu le plus proche : la commune de la liste dense, sinon la grande ville la plus proche à moins de
+// MAX_KM, sinon null (plutôt qu'un nom faux).
+export function nearestPlace(position: { latitude: number; longitude: number }): NearestPlace | null {
+  const places = densePlaces();
+  // Une première passe sans trigonométrie (degrés aplatis à la latitude) : la distance exacte ensuite.
+  const scale = Math.cos((position.latitude * Math.PI) / 180);
+  let bestIndex = -1;
+  let bestScore = Infinity;
+  for (let i = 0; i < places.names.length; i += 1) {
+    const dLat = places.lat[i] - position.latitude;
+    const dLon = (places.lon[i] - position.longitude) * scale;
+    const score = dLat * dLat + dLon * dLon;
+    if (score < bestScore) {
+      bestScore = score;
+      bestIndex = i;
+    }
+  }
+  if (bestIndex >= 0) {
+    const km = distanceKm(position, { latitude: places.lat[bestIndex], longitude: places.lon[bestIndex] });
+    if (km <= DENSE_MAX_KM) return { name: places.names[bestIndex], km };
+  }
   let best: City | null = null;
   let bestKm = Infinity;
   for (const city of CITIES) {
@@ -181,5 +230,10 @@ export function nearestCity(position: { latitude: number; longitude: number }): 
       bestKm = km;
     }
   }
-  return best && bestKm <= MAX_KM ? best.name : null;
+  return best && bestKm <= MAX_KM ? { name: best.name, km: bestKm } : null;
+}
+
+// Le nom du lieu le plus proche, ou null.
+export function nearestCity(position: { latitude: number; longitude: number }): string | null {
+  return nearestPlace(position)?.name ?? null;
 }
