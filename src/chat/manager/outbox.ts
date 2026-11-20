@@ -11,6 +11,7 @@ import {
   setSetting,
   getOutboxEvents,
   getPendingReadReceipts,
+  getReadMessages,
   getUpload,
   getUndelivered,
   setFileKey,
@@ -26,6 +27,7 @@ import { FILE_KEY_BYTES } from './types';
 import { isSelf } from '../self';
 import { DEFAULT_EPHEMERAL, ephemeralSystemText, nextSettingTime, parseEphemeralSystem, shouldMergeEphemeral, validTtl } from '../ephemeral';
 import { fileExtras } from './payloads';
+import { cursorToSend, latestReadId } from '../readCursor';
 
 // --- Messages éphémères (lot 4.7) ---
 
@@ -158,4 +160,7 @@ export function flush(core: ChatCore, contact: string) {
     if (!peer.send({ type: 'read', id: message.id })) return;
     setReadReceiptSent(message.id, contact);
   }
+  // Le curseur de lecture : renvoyé tant que l'autre ne l'a pas confirmé (accusé perdu, connexion coupée).
+  const cursor = cursorToSend(latestReadId(getReadMessages(contact)), getSetting(`read_cursor_ack.${contact}`) ?? null);
+  if (cursor) once(`readupto:${cursor}`, () => peer.send({ type: 'read-upto', id: cursor }));
 }

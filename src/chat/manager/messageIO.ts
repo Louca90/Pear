@@ -26,6 +26,8 @@ import {
   setConversationSetting,
   setReaction,
   setStatus,
+  markSentReadUpTo,
+  setSetting,
 } from '../database';
 import { CHUNK_BYTES, isValidFileId } from '../files';
 import { encodeMeta, sanitizeMeta } from '../meta';
@@ -286,6 +288,13 @@ export function receive(core: ChatCore, contact: string, received: unknown) {
     setStatus(data.id, contact, data.type === 'read' ? 'read' : 'delivered');
     deleteUpload(data.id, contact);
     core.notify();
+  } else if (data.type === 'read-upto' && typeof data.id === 'string') {
+    // Curseur de lecture : tous mes messages jusqu'à celui-là sont lus ; je confirme au lecteur.
+    for (const id of markSentReadUpTo(contact, data.id)) deleteUpload(id, contact);
+    core.links.get(contact)?.peer.send({ type: 'read-upto-ack', id: data.id });
+    core.notify();
+  } else if (data.type === 'read-upto-ack' && typeof data.id === 'string') {
+    setSetting(`read_cursor_ack.${contact}`, data.id);
   } else if (data.type === 'typing') {
     receiveTyping(core, contact, data.state === 'start');
   } else if (data.type === 'token' && typeof data.token === 'string' && data.token.length <= 4096) {

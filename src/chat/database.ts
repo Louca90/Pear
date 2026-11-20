@@ -904,6 +904,23 @@ export function markConversationRead(contact: string) {
   db().runSync("UPDATE messages SET status = 'read-pending' WHERE contact = ? AND mine = 0 AND status = 'delivered'", contact);
 }
 
+// Les messages reçus que j'ai lus (id, date, statut) : de quoi retrouver mon curseur de lecture.
+export function getReadMessages(contact: string): { id: string; created_at: number; mine: number; status: string }[] {
+  return db().getAllSync("SELECT id, created_at, mine, status FROM messages WHERE contact = ? AND mine = 0 AND status IN ('read', 'read-pending') ORDER BY created_at DESC LIMIT 1", contact);
+}
+
+// Curseur reçu : tous mes messages jusqu'à celui-là sont lus, en une seule requête (rien ne reste à
+// moitié si l'app s'arrête). Un curseur plus ancien que ce qui est déjà lu ne change rien.
+export function markSentReadUpTo(contact: string, messageId: string): string[] {
+  const target = db().getFirstSync<{ created_at: number }>('SELECT created_at FROM messages WHERE id = ? AND contact = ? AND mine = 1', messageId, contact);
+  if (!target) return [];
+  const where = "contact = ? AND mine = 1 AND created_at <= ? AND (status = 'delivered' OR (status = 'sending' AND kind = 'text'))";
+  const ids = db().getAllSync<{ id: string }>(`SELECT id FROM messages WHERE ${where}`, contact, target.created_at).map((row) => row.id);
+  if (ids.length === 0) return [];
+  db().runSync(`UPDATE messages SET status = 'read', file_key = NULL, sealed_packet = NULL, last_attempt_at = NULL, attempts = 0 WHERE ${where}`, contact, target.created_at);
+  return ids;
+}
+
 export function setReadReceiptSent(id: string, contact: string) {
   db().runSync("UPDATE messages SET status = 'read' WHERE id = ? AND contact = ? AND mine = 0", id, contact);
 }
