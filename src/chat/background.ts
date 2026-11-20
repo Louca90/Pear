@@ -3,6 +3,7 @@ import { AppState } from 'react-native';
 import { loadContacts, loadOrCreateIdentity } from '../storage';
 import { chat } from './manager';
 import { showUpdateNotification } from './notifications';
+import { announcedVersion } from '../update/announce';
 import { appVersionCode } from '../../modules/pear-native';
 import { BACKGROUND_MAX_AWAKE_MS, BACKGROUND_QUIET_MS } from '../config';
 import { recordPush } from '../diagnostics';
@@ -21,10 +22,11 @@ export async function handleWake(message: { data?: { [key: string]: unknown } })
   if (AppState.currentState === 'active') return;
 
   // Annonce d'une version (topic « updates », envoyée par /api/announce) : aucun contact à réveiller.
+  // (Jusqu'à la 1.9.0, la version était testée avec /^d+.d+.d+$/, sans les « \ » : aucune annonce ne
+  // s'affichait app fermée.)
   if (message.data?.type === 'update') {
-    const versionCode = Number(message.data.versionCode);
-    const version = String(message.data.version ?? '');
-    if (/^d+.d+.d+$/.test(version) && versionCode > (appVersionCode() ?? 0)) await showUpdateNotification(version);
+    const version = announcedVersion(message.data, appVersionCode());
+    if (version) await showUpdateNotification(version);
     return;
   }
 
