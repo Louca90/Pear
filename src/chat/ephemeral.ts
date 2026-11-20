@@ -5,7 +5,8 @@
 
 const HOUR = 3600;
 export const EPHEMERAL_CHOICES = [HOUR, 24 * HOUR, 7 * 24 * HOUR] as const;
-export const DEFAULT_EPHEMERAL = 24 * HOUR;
+// La plus longue des durées par défaut : on perd moins de messages par erreur.
+export const DEFAULT_EPHEMERAL = 7 * 24 * HOUR;
 
 // Une durée reçue de l'autre téléphone : seulement l'une des trois proposées.
 export function validTtl(value: unknown): number | null {

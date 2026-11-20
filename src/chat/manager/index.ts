@@ -590,6 +590,11 @@ class ChatManager extends ChatCore {
     return next;
   }
 
+  // La durée qu'activerait le geste maintenant (affichée sur la cible).
+  getNextEphemeral(contact: string) {
+    return lastEphemeralChoice(contact);
+  }
+
   getEphemeral(contact: string) {
     return ephemeralFor(contact);
   }

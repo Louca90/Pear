@@ -241,6 +241,7 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
   const pull = useEphemeralPull(
     () => canWrite && !preview && !keyboardOpen && scroll.isAtEdge() && !selection && !viewing,
     () => chat.toggleEphemeral(contactKey),
+    !!ephemeral,
   );
   const chooseEphemeral = () =>
     showDialog(t('ephemere.titre'), t('ephemere.aide'), [
@@ -623,7 +624,22 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
           <View ref={listArea} collapsable={false} style={styles.flex}>
           {palettes.hasWallpaper && <ComposerFade />}
           <PinnedBanner messages={pinnedMessages} onJump={jumpTo} />
-          <PullView gesture={pull.gesture} offset={pull.offset} indicator={canWrite ? <PullPear offset={pull.offset} dir={-1} kind="ripening" label={(full) => t(full ? (ephemeral ? 'ephemere.relacherCouper' : 'ephemere.relacherActiver') : 'ephemere.tirer')} /> : null}>
+          <PullView gesture={pull.gesture} offset={pull.offset} indicator={canWrite ? <PullPear
+              offset={pull.offset}
+              dir={-1}
+              kind="ripening"
+              hold={pull.holdProgress}
+              threshold={pull.threshold}
+              label={(full, held) =>
+                full
+                  ? ephemeral
+                    ? t('ephemere.relacherCouper')
+                    : t('ephemere.relacherActiver', { duree: ephemeralLabel(chat.getNextEphemeral(contactKey)) })
+                  : held
+                    ? t('ephemere.glisser')
+                    : t('ephemere.maintenir')
+              }
+            /> : null}>
           {messages.length === 0 ? (
             <View style={styles.empty}>
               <Pear height={56} color={colors.textMuted} state="resting" />

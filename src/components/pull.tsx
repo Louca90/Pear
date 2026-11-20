@@ -1,6 +1,7 @@
 import { ReactNode, useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text } from 'react-native';
-import Reanimated, { interpolate, useAnimatedReaction, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
+import Svg, { Circle } from 'react-native-svg';
+import Reanimated, { Easing, interpolate, useAnimatedProps, useAnimatedReaction, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 import { EASE } from '../motion';
 import { GestureDetector, GestureHandlerRootView, GestureStateManager, usePanGesture } from 'react-native-gesture-handler';
@@ -23,10 +24,17 @@ type Options = {
   onTrigger: () => void;
   // Si fourni : l'actualisation garde la liste décalée de `distance` points pendant `ms`.
   hold?: { distance: number; ms: number };
+  // Si fourni : geste volontaire en deux temps. Maintenir le doigt immobile holdMs (un anneau se remplit,
+  // bouger avant la fin annule), puis, sans lever le doigt, glisser de `distance` points jusqu'à la cible.
+  arm?: { holdMs: number; distance: number };
 };
 
-export function usePullGesture({ dir, canPull, onTrigger, hold }: Options) {
+export function usePullGesture({ dir, canPull, onTrigger, hold, arm }: Options) {
   const offset = useSharedValue(0);
+  // Avancement du maintien (0 à 1), pour l'anneau.
+  const holdProgress = useSharedValue(0);
+  const max = arm ? arm.distance + 12 : PULL_MAX;
+  const threshold = arm ? arm.distance : PULL_THRESHOLD;
   const allowed = useRef(false);
   const armed = useRef(false);
   const busyRef = useRef(false);
@@ -45,6 +53,7 @@ export function usePullGesture({ dir, canPull, onTrigger, hold }: Options) {
   const settle = () => {
     armed.current = false;
     offset.set(withTiming(0, { duration: motion.small, easing: EASE }));
+    holdProgress.set(withTiming(0, { duration: motion.small, easing: EASE }));
   };
 
   const gesture = usePanGesture({
@@ -52,6 +61,7 @@ export function usePullGesture({ dir, canPull, onTrigger, hold }: Options) {
     disableReanimated: true,
     maxPointers: 1,
     activeOffsetY: dir === 1 ? [-10000, 8] : [-8, 10000],
+    ...(arm ? { activateAfterLongPress: arm.holdMs } : {}),
     failOffsetX: [-24, 24],
     // Pas permis au moment où le doigt se pose (pas en bas de la conversation, clavier ouvert…) : le
     // geste échoue tout de suite. Sinon il s'activait quand même au bout de 8 points et coupait le
@@ -59,15 +69,20 @@ export function usePullGesture({ dir, canPull, onTrigger, hold }: Options) {
     onTouchesDown: (event) => {
       allowed.current = !busyRef.current && latest.current.canPull();
       if (!allowed.current) GestureStateManager.fail(event.handlerTag);
+      else if (arm) holdProgress.set(withTiming(1, { duration: arm.holdMs, easing: Easing.linear }));
+    },
+    onActivate: () => {
+      if (!arm || !allowed.current) return;
+      haptics.select();
     },
     onBegin: () => {
       allowed.current = !busyRef.current && latest.current.canPull();
     },
     onUpdate: (event) => {
       if (!allowed.current) return;
-      const pulled = Math.max(0, Math.min(PULL_MAX, dir * event.translationY));
+      const pulled = Math.max(0, Math.min(max, dir * event.translationY));
       offset.set(dir * pulled);
-      const over = pulled >= PULL_THRESHOLD;
+      const over = pulled >= threshold;
       if (over !== armed.current) {
         armed.current = over;
         haptics.select();
@@ -76,7 +91,7 @@ export function usePullGesture({ dir, canPull, onTrigger, hold }: Options) {
     onDeactivate: (event) => {
       if (!allowed.current) return;
       allowed.current = false;
-      if (dir * event.translationY < PULL_THRESHOLD) return settle();
+      if (dir * event.translationY < threshold) return settle();
       armed.current = false;
       haptics.action();
       latest.current.onTrigger();
@@ -96,7 +111,7 @@ export function usePullGesture({ dir, canPull, onTrigger, hold }: Options) {
     },
   });
 
-  return { offset, gesture, busy };
+  return { offset, gesture, busy, holdProgress, threshold };
 }
 
 type PullViewProps = {
@@ -126,32 +141,69 @@ type PullPearProps = {
   // `ripening` : se remplit (éphémères). `bitten` : se fait croquer (actualiser).
   kind: 'ripening' | 'bitten';
   busy?: boolean;
-  label?: (full: boolean) => string;
+  label?: (full: boolean, held: boolean) => string;
+  // Geste en deux temps : avancement du maintien (anneau) et distance de la cible.
+  hold?: SharedValue<number>;
+  threshold?: number;
 };
 
+const RING = 54;
+const RING_STROKE = 3;
+const RING_RADIUS = (RING - RING_STROKE) / 2;
+const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
+const AnimatedCircle = Reanimated.createAnimatedComponent(Circle);
+
 // La poire qui grandit avec la distance, dans l'espace ouvert par le décalage.
-export function PullPear({ offset, dir, kind, busy, label }: PullPearProps) {
+export function PullPear({ offset, dir, kind, busy, label, hold, threshold = PULL_THRESHOLD }: PullPearProps) {
   const styles2 = useStyles();
   const colors = useColors();
   const [progress, setProgress] = useState(0);
+  const [held, setHeld] = useState(!hold);
+  useAnimatedReaction(
+    () => (hold ? hold.get() >= 1 : true),
+    (next, previous) => {
+      if (next !== previous) scheduleOnRN(setHeld, next);
+    },
+  );
+  const ring = useAnimatedProps(() => ({ strokeDashoffset: RING_LENGTH * (1 - (hold ? hold.get() : 0)) }));
   // Par pas de 5 % : la poire ne se redessine pas à chaque point parcouru.
   useAnimatedReaction(
-    () => Math.round(Math.max(0, Math.min(1, (dir * offset.get()) / PULL_THRESHOLD)) * 20) / 20,
+    () => (hold && hold.get() < 1 ? 0 : Math.round(Math.max(0, Math.min(1, (dir * offset.get()) / threshold)) * 20) / 20),
     (next, previous) => {
       if (next !== previous) scheduleOnRN(setProgress, next);
     },
   );
-  const fade = useAnimatedStyle(() => ({ opacity: interpolate(dir * offset.get(), [6, 36], [0, 1], 'clamp') }));
-  const grow = useAnimatedStyle(() => ({ transform: [{ scale: interpolate(dir * offset.get(), [0, PULL_THRESHOLD], [0.7, 1], 'clamp') }] }));
+  const fade = useAnimatedStyle(() => ({
+    opacity: Math.max(interpolate(dir * offset.get(), [6, 36], [0, 1], 'clamp'), hold ? interpolate(hold.get(), [0, 0.15], [0, 1], 'clamp') : 0),
+  }));
+  const grow = useAnimatedStyle(() => ({ transform: [{ scale: interpolate(dir * offset.get(), [0, threshold], [0.7, 1], 'clamp') }] }));
 
   const state: PearState = busy ? 'searching' : kind === 'ripening' ? 'ripening' : progress > 0 ? 'bitten' : 'idle';
   const full = progress >= 1;
   return (
     <Reanimated.View pointerEvents="none" style={[styles2.pull, dir === 1 ? styles2.top : styles2.bottom, fade]}>
-      <Reanimated.View style={grow}>
+      <Reanimated.View style={[grow, styles2.center]}>
+        {hold ? (
+          <Svg width={RING} height={RING} style={styles2.ring}>
+            <Circle cx={RING / 2} cy={RING / 2} r={RING_RADIUS} stroke={colors.border} strokeWidth={RING_STROKE} fill="none" />
+            <AnimatedCircle
+              cx={RING / 2}
+              cy={RING / 2}
+              r={RING_RADIUS}
+              stroke={colors.signatureStrong}
+              strokeWidth={RING_STROKE}
+              strokeLinecap="round"
+              fill="none"
+              strokeDasharray={RING_LENGTH}
+              animatedProps={ring}
+              rotation={-90}
+              origin={`${RING / 2}, ${RING / 2}`}
+            />
+          </Svg>
+        ) : null}
         <Pear height={36} color={full && kind === 'ripening' ? colors.signatureStrong : colors.text} state={state} progress={progress} />
       </Reanimated.View>
-      {label && !busy ? <Text style={styles2.label}>{label(full)}</Text> : null}
+      {label && !busy ? <Text style={styles2.label}>{label(full, held)}</Text> : null}
     </Reanimated.View>
   );
 }
@@ -174,6 +226,15 @@ const useStyles = createStyles((colors) => ({
   bottom: {
     bottom: spacing.sm,
     justifyContent: 'flex-end',
+  },
+  center: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: RING,
+    height: RING,
+  },
+  ring: {
+    position: 'absolute',
   },
   label: {
     fontSize: 12,
