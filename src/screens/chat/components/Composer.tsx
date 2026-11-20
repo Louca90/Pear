@@ -1,6 +1,7 @@
 import { ComponentRef, RefObject, useEffect, useMemo, useState } from 'react';
 import { findNodeHandle, Pressable, StyleSheet, TextInput, View } from 'react-native';
-import Reanimated, { useAnimatedStyle } from 'react-native-reanimated';
+import Reanimated, { useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
+import { EASE } from '../../../motion';
 import { GestureDetector } from 'react-native-gesture-handler';
 import { setIncognitoKeyboard } from '../../../../modules/pear-native';
 import { Check, Smile } from 'lucide-react-native';
@@ -89,6 +90,12 @@ export function Composer({
   // Le micro grossit à peine quand on le touche.
   const { scale } = voice;
   const micStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.get() }] }));
+  // Le champ « Message » s'efface et se resserre à gauche pendant le vocal, puis revient (180 ms après le micro).
+  const field = useSharedValue(1);
+  useEffect(() => {
+    field.set(voice.phase === 'idle' ? withDelay(180, withTiming(1, { duration: 240, easing: EASE })) : withTiming(0, { duration: 200, easing: EASE }));
+  }, [voice.phase, field]);
+  const fieldStyle = useAnimatedStyle(() => ({ opacity: field.get(), transform: [{ scaleX: 0.92 + 0.08 * field.get() }], transformOrigin: 'left center' }));
 
   const mode = useMemo(
     () => (editing ? { kind: 'edit' as const, message: editing } : replyingTo ? { kind: 'reply' as const, message: replyingTo } : null),
@@ -102,10 +109,9 @@ export function Composer({
       {attachOpen && <AttachSheet onPhotos={onPhotos} onFile={onFile} onLocation={onLocation} onStickers={onStickers} onCamera={onCamera} onOnce={onOnce} onSendRecent={onSendRecent} />}
       <ComposerModeCard mode={mode} name={name} onCancel={onCancelMode} onJump={onJump} />
       <View style={[styles.composer, { paddingBottom: keyboardOpen ? spacing.sm : bottom + spacing.sm }]}>
-        {voice.phase !== 'idle' ? (
-          <RecordingRow voice={voice} />
-        ) : (
-          <View style={styles.field}>
+        {/* Le champ reste en place sous la barre du vocal : il s'efface (planche « Vocal ») au lieu de disparaître d'un coup. */}
+        {(
+          <Reanimated.View style={[styles.field, fieldStyle]} pointerEvents={voice.phase === 'idle' ? 'auto' : 'none'}>
             <AttachButton open={attachOpen} onToggle={onToggleAttach} />
             <View style={styles.inputBox}>
             <TextInput
@@ -128,9 +134,16 @@ export function Composer({
               </IconButton>
             )}
             </View>
-          </View>
+          </Reanimated.View>
         )}
-        {voice.phase !== 'idle' ? null : (draft.trim() || editing) ? (
+        {voice.phase !== 'idle' ? (
+          <>
+            <View style={styles.attachSpace} />
+            <View style={styles.voiceLayer}>
+              <RecordingRow voice={voice} />
+            </View>
+          </>
+        ) : (draft.trim() || editing) ? (
           <IconButton
             onPress={() => {
               setSent((count) => count + 1);
@@ -216,6 +229,15 @@ const useLocalStyles = createStyles((colors) => ({
   attachSpace: {
     width: 44,
     height: 44,
+  },
+  // La barre du vocal se pose sur toute la ligne de saisie (52 de haut, centrée sur les 44 du champ).
+  voiceLayer: {
+    position: 'absolute',
+    left: spacing.md,
+    right: spacing.md,
+    top: spacing.sm - 4,
+    height: 52,
+    flexDirection: 'row',
   },
   sendCover: {
     position: 'absolute',
