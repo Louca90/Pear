@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Reanimated, {
   cancelAnimation,
@@ -6,6 +6,7 @@ import Reanimated, {
   interpolateColor,
   ReduceMotion,
   useAnimatedProps,
+  useAnimatedReaction,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
@@ -15,6 +16,7 @@ import Reanimated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 import Svg, { Circle, ClipPath, Defs, G, Mask, Path, Rect } from 'react-native-svg';
 
 import { fixed, useColors } from '../theme';
@@ -169,7 +171,6 @@ function wavePath(level: number, phase: number, shift: number) {
 
 const AnimatedPath = Reanimated.createAnimatedComponent(Path);
 const AnimatedCircle = Reanimated.createAnimatedComponent(Circle);
-const AnimatedRect = Reanimated.createAnimatedComponent(Rect);
 const AnimatedG = Reanimated.createAnimatedComponent(G);
 
 export function Pear({ height, color, state = 'idle', progress = 0, leafColor }: Props) {
@@ -297,16 +298,38 @@ export function Pear({ height, color, state = 'idle', progress = 0, leafColor }:
   const fleshProps = useAnimatedProps(() => ({ fill: interpolateColor(rest.get(), [0, 1], [FLESH, REST.flesh]), opacity: body.get() }));
   const skinProps = useAnimatedProps(() => ({ stroke: skinColor(rest.get()), opacity: body.get() }));
   const baseProps = useAnimatedProps(() => ({ opacity: 0.3 * ripen.get() }));
-  const liquidClip = useAnimatedProps(() => ({ d: wavePath(level.get(), wave.get(), 0) }));
-  // La vague arrière, un peu plus haute et décalée, à 45 % (planche « Envoi » : deux vagues).
-  const backClip = useAnimatedProps(() => ({ d: wavePath(Math.min(1, level.get() + 0.03), wave.get(), 0.45) }));
+  // Les formes de découpe (liquide, vague arrière, lien, bouchées) ne peuvent pas être animées image par
+  // image : sur Android, react-native-svg ne redessine pas un détourage ou un masque dont la forme change par
+  // animatedProps (la poire restait vide, et « Vérifié » sans contour). Elles sont donc recalculées par
+  // React, à partir d'une copie des valeurs animées, seulement quand elles bougent.
+  const [cut, setCut] = useState({ level: state === 'ripening' ? clamped : 1, link: 1, b0: 0, b1: 0, b2: 0 });
+  useAnimatedReaction(
+    () => ({
+      level: Math.round(level.get() * 250) / 250,
+      link: Math.round(link.get() * 50) / 50,
+      b0: Math.round(bite0.get() * 25) / 25,
+      b1: Math.round(bite1.get() * 25) / 25,
+      b2: Math.round(bite2.get() * 25) / 25,
+    }),
+    (next, previous) => {
+      if (!previous || next.level !== previous.level || next.link !== previous.link || next.b0 !== previous.b0 || next.b1 !== previous.b1 || next.b2 !== previous.b2) {
+        scheduleOnRN(setCut, next);
+      }
+    },
+  );
+  // La vague du liquide avance (une période en 1,4 s) seulement pendant un envoi.
+  const [phase, setPhase] = useState(0);
+  useEffect(() => {
+    if (state !== 'ripening' || reduced) return;
+    const timer = setInterval(() => setPhase((value) => (value + 0.064) % 1), 90);
+    return () => clearInterval(timer);
+  }, [state, reduced]);
+  const frontD = wavePath(cut.level, phase, 0);
+  const backD = wavePath(Math.min(1, cut.level + 0.03), phase, 0.45);
+  const revealHalf = SEED_HALF * 1.4 * cut.link + 0.01;
   const backProps = useAnimatedProps(() => ({ opacity: 0.45 * ripen.get() }));
   // Le contour en pointillés de « Connexion » est du vert de la peau (planche).
   const outlineProps = useAnimatedProps(() => ({ strokeDashoffset: dash.get(), opacity: outline.get(), strokeDasharray: [6, Math.max(0.01, gapLine.get())], stroke: skinColor(rest.get()) }));
-  const biteProps0 = useAnimatedProps(() => ({ r: BITE_R * bite0.get() }));
-  const biteProps1 = useAnimatedProps(() => ({ r: BITE_R * bite1.get() }));
-  const biteProps2 = useAnimatedProps(() => ({ r: BITE_R * bite2.get() }));
-  const biteProps = [biteProps0, biteProps1, biteProps2];
 
   // Les pépins : l'écart oscille pendant la recherche (± 24 %), la taille suit l'état.
   const gapNow = () => {
@@ -335,10 +358,6 @@ export function Pear({ height, color, state = 'idle', progress = 0, leafColor }:
       opacity: linkOpacity.get() * (state === 'searching' ? 0.6 + 0.4 * pulse.get() : 1),
       stroke: seedInk(),
     };
-  });
-  const linkReveal = useAnimatedProps(() => {
-    const half = SEED_HALF * gapNow() * link.get() + 0.01;
-    return { x: 50 - half, width: half * 2 };
   });
   // La graine verte qui va d'un pépin à l'autre en suivant la courbe du lien.
   const travelProps = useAnimatedProps(() => {
@@ -387,19 +406,20 @@ export function Pear({ height, color, state = 'idle', progress = 0, leafColor }:
             <ClipPath id={clipBody}>
               <Path d={BODY} />
             </ClipPath>
+            {/* La clé suit la forme : le détourage est reconstruit à chaque changement, sinon Android le garde. */}
             <ClipPath id={clipBack}>
-              <AnimatedPath animatedProps={backClip} />
+              <Path key={backD} d={backD} />
             </ClipPath>
             <ClipPath id={clipLiquid}>
-              <AnimatedPath animatedProps={liquidClip} />
+              <Path key={frontD} d={frontD} />
             </ClipPath>
             <ClipPath id={clipLink}>
-              <AnimatedRect y={VB_Y} height={VB_H} animatedProps={linkReveal} />
+              <Rect key={revealHalf} x={50 - revealHalf} y={VB_Y} width={revealHalf * 2} height={VB_H} />
             </ClipPath>
             <Mask id={maskBites} maskUnits="userSpaceOnUse" x={VB_X} y={VB_Y} width={VB_W} height={VB_H}>
               <Rect x={VB_X} y={VB_Y} width={VB_W} height={VB_H} fill={fixed.white} />
               {BITES.map((bite, index) => (
-                <AnimatedCircle key={bite.cx} cx={bite.cx} cy={bite.cy} r={0} fill={fixed.black} animatedProps={biteProps[index]} />
+                <Circle key={`${bite.cx}:${[cut.b0, cut.b1, cut.b2][index]}`} cx={bite.cx} cy={bite.cy} r={BITE_R * [cut.b0, cut.b1, cut.b2][index]} fill={fixed.black} />
               ))}
             </Mask>
           </Defs>
