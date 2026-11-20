@@ -81,6 +81,7 @@
       "./plugins/with-file-service",
       "./plugins/with-call-pip",
       "./plugins/with-screen-share",
+      "./plugins/with-pip-alive",
       "./plugins/with-notification-icon",
       [
         "expo-navigation-bar",

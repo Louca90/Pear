@@ -108,8 +108,8 @@ export function ConversationActions({ rect, row, actions, blurTarget, onClose }:
           </Reanimated.View>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => close()} accessibilityLabel={t('commun.fermer')} />
           <Reanimated.View pointerEvents="none" style={[styles.card, { top: card.y - origin.y, left: card.x - origin.x, width: card.width, height: card.height }, lifted]}>
-            {/* La ligne recopiée garde ses retraits d'origine : elle est recalée dans la carte. */}
-            <View style={{ position: 'absolute', top: 0, left: rect.x - card.x, width: rect.width, height: rect.height }}>{row}</View>
+            {/* La ligne, avec 12 de marge intérieure (planche) : rien n'est rogné sur les bords de la carte. */}
+            <View style={styles.cardRow}>{row}</View>
           </Reanimated.View>
           <Reanimated.View
             style={[
@@ -159,6 +159,11 @@ const useStyles = createStyles((colors) => ({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     overflow: 'hidden',
+  },
+  cardRow: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 12,
   },
   menu: {
     position: 'absolute',

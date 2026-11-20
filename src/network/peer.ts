@@ -136,7 +136,11 @@ export class PeerLink {
 
   private tick() {
     if (this.channel?.readyState === 'open') {
-      if (Date.now() - this.lastSeen > (this.media ? CALL_PEER_TIMEOUT_MS : PEER_TIMEOUT_MS)) {
+      // Pendant un appel, le son et l'image passent par la connexion elle-même : tant qu'elle est
+      // « connectée », un silence du canal de données (l'autre téléphone en fenêtre flottante, en plein
+      // partage d'écran) ne veut pas dire qu'elle est perdue. La perte réelle passe par l'état ICE.
+      const mediaAlive = !!this.media && this.pc?.connectionState === 'connected';
+      if (!mediaAlive && Date.now() - this.lastSeen > (this.media ? CALL_PEER_TIMEOUT_MS : PEER_TIMEOUT_MS)) {
         // Réseau coupé sans fermeture propre : la connexion semble ouverte mais ne répond plus.
         this.closeConnection();
         this.markOffline();

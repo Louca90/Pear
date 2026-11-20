@@ -452,10 +452,23 @@ export function toggleSpeaker() {
 
 export async function toggleCamera(core: ChatCore) {
   if (!state || state.phase !== 'active') return;
-  if (videoTrack) closeCamera();
-  else if (!(await openCamera())) return;
+  if (videoTrack) {
+    // La piste est d'abord retirée de la connexion, puis libérée : libérée alors qu'elle était encore
+    // envoyée, l'image restait figée chez l'autre.
+    const old = videoTrack;
+    videoTrack = null;
+    set({ cameraOn: false, localUrl: null });
+    attachMedia(core);
+    setTimeout(() => {
+      old.stop();
+      old.release();
+    }, 600);
+  } else {
+    if (!(await openCamera())) return;
+    if (!state) return;
+    attachMedia(core);
+  }
   if (!state) return;
-  attachMedia(core);
   sendCall(core, state.contact, { action: 'media', id: state.id, camera: !!videoTrack });
   // Caméra allumée : le son passe au haut-parleur, comme pour un appel vidéo.
   if (videoTrack && !state.speaker) toggleSpeaker();
@@ -567,6 +580,11 @@ export function receiveCall(core: ChatCore, contact: string, raw: unknown) {
     pullRemote(core);
   } else if (message.action === 'media' && typeof message.camera === 'boolean') {
     log.info('caméra du contact', message.camera ? 'allumée' : 'coupée');
+    // Caméra rallumée : une vue neuve, pour ne pas rester figé sur la dernière image d'avant.
+    if (message.camera) {
+      remoteVideoId = null;
+      set({ remoteUrl: null });
+    }
     set({ remoteCamera: message.camera });
     pullRemote(core);
   }

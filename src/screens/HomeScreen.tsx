@@ -424,11 +424,7 @@ export function HomeScreen({ contacts, onAdd, onOpen, onRequests, onQr }: Props)
         <ConversationActions
           blurTarget={blurTarget}
           rect={selected.rect}
-          row={
-            <View style={styles.row}>
-              <ConversationRow item={selected.item} now={now} index={0} arriving={false} />
-            </View>
-          }
+          row={<ConversationRow item={selected.item} now={now} index={0} arriving={false} />}
           onClose={() => setSelected(null)}
           actions={isSelf(selected.item.contact.publicKey) ? [{ label: t('liste.supprimer'), icon: Trash2, animated: TrashIcon, danger: true, onPress: () => confirmDelete(selected.item) }] : [
             { label: selected.item.pinned ? t('liste.desepingler') : t('liste.epingler'), icon: selected.item.pinned ? PinOff : Pin, animated: selected.item.pinned ? undefined : PinIcon, onPress: () => togglePin(selected.item) },

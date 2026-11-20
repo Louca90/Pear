@@ -153,15 +153,16 @@ export function RecordingRow({ voice }: { voice: Voice }) {
     <View style={styles.area} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
       <Reanimated.View style={[styles.pill, pill]}>
         <Reanimated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.bg, bg]} />
-        <Reanimated.View pointerEvents="none" style={[StyleSheet.absoluteFill, tintStyle]}>
-          <Svg width="100%" height="100%" preserveAspectRatio="none">
+        {/* Le dégradé rose est dessiné à la taille finale, ancré à droite : la pilule le découvre en s'ouvrant. */}
+        <Reanimated.View pointerEvents="none" style={[styles.tint, { width }, tintStyle]}>
+          <Svg width={Math.max(1, width)} height={HEIGHT}>
             <Defs>
               <LinearGradient id="tint" x1="0" y1="0" x2="1" y2="0">
                 <Stop offset="0.35" stopColor={colors.dangerSoft} stopOpacity={0} />
                 <Stop offset="1" stopColor={colors.dangerSoft} stopOpacity={1} />
               </LinearGradient>
             </Defs>
-            <Rect width="100%" height="100%" fill="url(#tint)" />
+            <Rect x={0} y={0} width={Math.max(1, width)} height={HEIGHT} fill="url(#tint)" />
           </Svg>
         </Reanimated.View>
 
@@ -264,6 +265,12 @@ const useStyles = createStyles((colors) => ({
   },
   bg: {
     backgroundColor: colors.surface,
+  },
+  tint: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    height: HEIGHT,
   },
   content: {
     position: 'absolute',

@@ -173,6 +173,7 @@ function wavePath(level: number, phase: number, shift: number) {
 const AnimatedPath = Reanimated.createAnimatedComponent(Path);
 const AnimatedCircle = Reanimated.createAnimatedComponent(Circle);
 const AnimatedRect = Reanimated.createAnimatedComponent(Rect);
+const AnimatedG = Reanimated.createAnimatedComponent(G);
 
 export function Pear({ height, color: wanted, state = 'idle', progress = 0, leafColor, background }: Props) {
   const colors = useColors();
@@ -297,6 +298,7 @@ export function Pear({ height, color: wanted, state = 'idle', progress = 0, leaf
   // Le corps : peau (contour de 7 découpé par BODY lui-même), chair, avec le niveau du liquide.
   const fleshProps = useAnimatedProps(() => ({ fill: interpolateColor(rest.get(), [0, 1], [FLESH, REST.flesh]), opacity: body.get() }));
   const skinProps = useAnimatedProps(() => ({ stroke: skinColor(rest.get()), opacity: body.get() }));
+  const baseProps = useAnimatedProps(() => ({ opacity: 0.3 * ripen.get() }));
   const liquidClip = useAnimatedProps(() => ({ d: wavePath(level.get(), wave.get(), 0) }));
   const outlineProps = useAnimatedProps(() => ({ strokeDashoffset: dash.get(), opacity: outline.get(), strokeDasharray: [6, Math.max(0.01, gapLine.get())] }));
   const biteProps0 = useAnimatedProps(() => ({ r: BITE_R * bite0.get() }));
@@ -396,6 +398,13 @@ export function Pear({ height, color: wanted, state = 'idle', progress = 0, leaf
             </Mask>
           </Defs>
           <G mask={`url(#${maskBites})`}>
+            {/* Envoi : la poire vide reste visible en fond (30 %), le liquide la remplit par-dessus (planche). */}
+            <AnimatedG animatedProps={baseProps}>
+              <AnimatedPath d={BODY} animatedProps={fleshProps} />
+              <G clipPath={`url(#${clipBody})`}>
+                <AnimatedPath d={BODY} fill="none" strokeWidth={skinWidth} animatedProps={skinProps} />
+              </G>
+            </AnimatedG>
             <G clipPath={`url(#${clipLiquid})`}>
               <AnimatedPath d={BODY} animatedProps={fleshProps} />
               <G clipPath={`url(#${clipBody})`}>
