@@ -51,6 +51,8 @@ declare class PearNativeModule extends NativeModule<{ onBack: (event: BackEvent)
   stopRinging?(): void;
   showOverLock?(on: boolean): Promise<void>;
   callHeadset?(): string;
+  callOutputs?(): CallOutput[];
+  setCallOutput?(id: number): void;
   setCallPip?(enabled: boolean, width: number, height: number): Promise<void>;
   startCallService?(info: Record<string, string | number | boolean>): void;
   stopCallService?(): void;
@@ -253,13 +255,29 @@ export function reloadApp() {
 
 // --- Appels (vague 5). Sans effet sur un APK plus ancien. ---
 
-export type CallRoute = 'off' | 'earpiece' | 'speaker';
+export type CallRoute = 'off' | 'earpiece' | 'speaker' | 'auto-earpiece' | 'auto-speaker';
+// Une sortie audio disponible pendant l'appel (liste d'Android) ; name vide pour l'écouteur et le haut-parleur.
+export type CallOutputType = 'earpiece' | 'speaker' | 'bluetooth' | 'wired' | 'usb';
+export type CallOutput = { id: number; type: CallOutputType; name: string; active: boolean };
 // Le casque qui remplace l'écouteur pendant un appel ; '' sans casque.
 export type Headset = 'bluetooth' | 'wired' | '';
 
 export function callHeadset(): Headset {
   const kind = PearNative.callHeadset?.();
   return kind === 'bluetooth' || kind === 'wired' ? kind : '';
+}
+
+// Les sorties audio disponibles, et laquelle est active.
+export function callOutputs(): CallOutput[] {
+  try {
+    return PearNative.callOutputs?.() ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export function setCallOutput(id: number) {
+  PearNative.setCallOutput?.(id);
 }
 
 // Un casque arrive ou part pendant l'appel (le son y bascule tout seul).

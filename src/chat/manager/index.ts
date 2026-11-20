@@ -33,7 +33,7 @@ import { downloadRelayFile, relayPending } from './relay';
 import { acceptPairing, blockPairing, declinePairing, requestPairing, startPairing, syncPairRequests } from './pairing';
 import { deliverNow, sendStatusNow, settlePushAcks, wakeIfNeeded } from './wake';
 import { notifyMessage } from './notify';
-import { acceptCall, callKeepsAwake, declineCall, getCall, hangUp, receiveCallPush, startCall, subscribeCall, switchCamera, toggleCamera, toggleMute, toggleSpeaker } from './calls';
+import { acceptCall, callKeepsAwake, declineCall, getCall, hangUp, receiveCallPush, startCall, subscribeCall, switchCamera, toggleCamera, toggleMute, toggleSpeaker, chooseOutput } from './calls';
 
 export type { CallEnd, CallPhase, CallState } from './calls';
 
@@ -65,6 +65,7 @@ class ChatManager extends ChatCore {
   }
   toggleMute = toggleMute;
   toggleSpeaker = toggleSpeaker;
+  chooseOutput = chooseOutput;
   toggleCamera() {
     return toggleCamera(this);
   }

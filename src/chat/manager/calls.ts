@@ -1,13 +1,13 @@
-import { AppState, AppStateStatus, PermissionsAndroid } from 'react-native';
+import { AppState, AppStateStatus, PermissionsAndroid, Platform } from 'react-native';
 import { mediaDevices, MediaStream, MediaStreamTrack } from 'react-native-webrtc';
 import { randombytes_buf, to_base64 } from 'react-native-libsodium';
 
 import { sendPush } from '../../network/wake';
 import type { CallMedia, PeerStatus } from '../../network/peer';
 import { callPushTag, decodeCallPush, encodeCallPush, isCallId } from '../callPayload';
-import { getContactProfile, isBlocked, setSetting } from '../database';
+import { getContactProfile, getSetting, isBlocked, setSetting } from '../database';
 import { clearCallNotification, showIncomingCall, showMissedCall, showOngoingCall } from '../notifications';
-import { addCallHangUpListener, addHeadsetListener, callHeadset, Headset, setCallAudio, setCallPip, showOverLock, startCallService, startRinging, stopCallService, stopRinging } from '../../../modules/pear-native';
+import { addCallHangUpListener, addHeadsetListener, callHeadset, callOutputs, CallOutput, Headset, setCallOutput, setCallAudio, setCallPip, showOverLock, startCallService, startRinging, stopCallService, stopRinging } from '../../../modules/pear-native';
 import { t } from '../../i18n';
 import { log } from '../../log';
 
@@ -42,6 +42,8 @@ export type CallState = {
   speaker: boolean;
   // Casque branché ou connecté : il remplace l'écouteur (le haut-parleur reste au choix).
   headset: Headset;
+  // Les sorties audio (écouteur, haut-parleur, casques avec leur nom) et laquelle est active.
+  outputs: CallOutput[];
   cameraOn: boolean;
   front: boolean;
   remoteCamera: boolean;
@@ -80,10 +82,40 @@ let headsetWatch: { remove: () => void } | null = null;
 
 // Le son de l'appel commence : on suit les casques qui arrivent ou partent.
 function startAudio(speaker: boolean) {
-  setCallAudio(speaker ? 'speaker' : 'earpiece');
+  // Un casque connecté passe avant ; sinon l'écouteur pour l'audio, le haut-parleur pour la vidéo.
+  setCallAudio(speaker ? 'auto-speaker' : 'auto-earpiece');
   set({ headset: callHeadset() });
+  refreshOutputs();
+  askBluetoothOnce();
   headsetWatch?.remove();
-  headsetWatch = addHeadsetListener((headset) => set({ headset }));
+  headsetWatch = addHeadsetListener((headset) => {
+    set({ headset });
+    refreshOutputs();
+  });
+}
+
+// La liste des sorties relue (l'appareil change de route un instant après la demande).
+export function refreshOutputs() {
+  const outputs = callOutputs();
+  const active = outputs.find((output) => output.active);
+  set({ outputs, ...(active ? { speaker: active.type === 'speaker' } : {}) });
+}
+
+// Le vrai nom d'un appareil Bluetooth demande BLUETOOTH_CONNECT (Android 12+) : demandé une seule fois, au
+// premier appel, sans bloquer ; refusé, le sélecteur affiche simplement « Bluetooth ».
+function askBluetoothOnce() {
+  if (Platform.OS !== 'android' || Number(Platform.Version) < 31 || getSetting('bluetooth_asked') === '1') return;
+  setSetting('bluetooth_asked', '1');
+  PermissionsAndroid.request('android.permission.BLUETOOTH_CONNECT' as never)
+    .then(() => refreshOutputs())
+    .catch(() => undefined);
+}
+
+// Choix dans la liste : respecté tant que l'appareil reste disponible.
+export function chooseOutput(id: number) {
+  if (!state) return;
+  setCallOutput(id);
+  setTimeout(refreshOutputs, 150);
 }
 
 export function getCall() {
@@ -234,6 +266,7 @@ export async function startCall(core: ChatCore, contact: string, video: boolean)
     muted: false,
     speaker: video,
     headset: '',
+    outputs: [],
     cameraOn: false,
     front: true,
     remoteCamera: video,
@@ -384,8 +417,11 @@ export function toggleMute() {
 export function toggleSpeaker() {
   if (!state) return;
   const speaker = !state.speaker;
-  setCallAudio(speaker ? 'speaker' : 'earpiece');
+  const target = state.outputs.find((output) => output.type === (speaker ? 'speaker' : 'earpiece'));
+  if (target) setCallOutput(target.id);
+  else setCallAudio(speaker ? 'speaker' : 'earpiece');
   set({ speaker });
+  setTimeout(refreshOutputs, 150);
 }
 
 export async function toggleCamera(core: ChatCore) {
@@ -471,6 +507,7 @@ function ring(core: ChatCore, contact: string, id: string, video: boolean) {
     muted: false,
     speaker: video,
     headset: '',
+    outputs: [],
     cameraOn: false,
     front: true,
     remoteCamera: video,

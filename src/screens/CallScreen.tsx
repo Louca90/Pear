@@ -1,7 +1,7 @@
 import { ComponentType, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Reanimated, { FadeIn, FadeOut, interpolateColor, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
-import { Bluetooth, ChevronDown, Ear, Headphones, Mic, MicOff, Phone, PhoneOff, SwitchCamera, Video, VideoOff, Volume2 } from 'lucide-react-native';
+import { BluetoothConnected, ChevronDown, Headphones, Mic, MicOff, Phone, PhoneOff, Smartphone, SwitchCamera, Video, VideoOff, Volume2, LucideIcon } from 'lucide-react-native';
 import { RTCView } from 'react-native-webrtc';
 import { StatusBar } from 'expo-status-bar';
 
@@ -9,6 +9,8 @@ import { chat, CallEnd, CallState } from '../chat/manager';
 import { getContactProfile } from '../chat/database';
 import { formatCallDuration } from '../chat/callText';
 import { Avatar, useInsets, usePressFeedback } from '../components/ui';
+import { Sheet, SheetChoice } from '../components/Sheet';
+import type { CallOutput, CallOutputType } from '../../modules/pear-native';
 import { useBackInterceptor } from '../navigation/backInterceptors';
 import { DURATION, EASE, enterUp, timing } from '../motion';
 import { createStyles, fixed, radius, spacing, useColors } from '../theme';
@@ -92,6 +94,49 @@ function Chrono({ since, style }: { since: number; style: object }) {
   return <Text style={style}>{formatCallDuration(Math.max(0, Math.floor((now - since) / 1000)))}</Text>;
 }
 
+const OUTPUT_ICONS: Record<CallOutputType, LucideIcon> = {
+  earpiece: Smartphone,
+  speaker: Volume2,
+  bluetooth: BluetoothConnected,
+  wired: Headphones,
+  usb: Headphones,
+};
+
+// Le nom affiché pour une sortie : le vrai nom de l'appareil Bluetooth s'il est connu, sinon son type.
+function outputLabel(output: CallOutput) {
+  if (output.name) return output.name;
+  const key = { earpiece: 'appel.ecouteurTel', speaker: 'appel.hautParleur', bluetooth: 'appel.bluetooth', wired: 'appel.casqueFilaire', usb: 'appel.casqueUsb' }[output.type];
+  return t(key as TextKey);
+}
+
+function OutputSheet({ outputs, onClose }: { outputs: CallOutput[]; onClose: () => void }) {
+  const colors = useColors();
+  return (
+    <Sheet title={t('appel.sortie')} onClose={onClose}>
+      {(close) => (
+        <View style={{ gap: 8 }}>
+          {outputs.map((output, index) => {
+            const Icon = OUTPUT_ICONS[output.type];
+            return (
+              <SheetChoice
+                key={output.id}
+                index={index}
+                label={outputLabel(output)}
+                selected={output.active}
+                left={<Icon size={20} color={colors.text} strokeWidth={1.75} />}
+                onPress={() => {
+                  chat.chooseOutput(output.id);
+                  close();
+                }}
+              />
+            );
+          })}
+        </View>
+      )}
+    </Sheet>
+  );
+}
+
 function CallFull({ call, name, onMinimize }: { call: CallState; name: string; onMinimize: () => void }) {
   const styles = useStyles();
   const colors = useColors();
@@ -105,9 +150,14 @@ function CallFull({ call, name, onMinimize }: { call: CallState; name: string; o
   const status = statusText(call);
   const textColor = onVideo ? colors.onMedia : colors.text;
   const mutedColor = onVideo ? colors.onDarkMuted : colors.textMuted;
+  // La sortie audio : l'icône suit la sortie ACTIVE ; avec plus de deux sorties, un appui ouvre la liste.
+  const [outputsOpen, setOutputsOpen] = useState(false);
+  const activeOutput = call.outputs.find((output) => output.active);
+  const OutputIcon = activeOutput ? OUTPUT_ICONS[activeOutput.type] : call.speaker ? Volume2 : Smartphone;
 
   return (
     <View style={[styles.root, onVideo && styles.dark]}>
+      {outputsOpen && <OutputSheet outputs={call.outputs} onClose={() => setOutputsOpen(false)} />}
       <StatusBar style={onVideo ? 'light' : 'auto'} />
       {onVideo && <VideoStage call={call} showRemote={showRemote} showLocal={showLocal} top={top} bottom={bottom} />}
 
@@ -164,10 +214,10 @@ function CallFull({ call, name, onMinimize }: { call: CallState; name: string; o
             <View style={styles.optionRow}>
               <RoundButton icon={call.muted ? MicOff : Mic} label={t(call.muted ? 'appel.microCoupe' : 'appel.micro')} active={call.muted} onPress={chat.toggleMute} onVideo={onVideo} delay={0} />
               <RoundButton
-                icon={call.speaker ? Volume2 : call.headset === 'bluetooth' ? Bluetooth : call.headset === 'wired' ? Headphones : Ear}
-                label={t(call.speaker ? 'appel.hautParleur' : call.headset ? 'appel.casque' : 'appel.hautParleurCoupe')}
+                icon={OutputIcon}
+                label={activeOutput ? outputLabel(activeOutput) : t(call.speaker ? 'appel.hautParleur' : 'appel.ecouteurTel')}
                 active={call.speaker}
-                onPress={chat.toggleSpeaker}
+                onPress={call.outputs.length > 2 ? () => setOutputsOpen(true) : chat.toggleSpeaker}
                 onVideo={onVideo}
                 delay={40}
               />

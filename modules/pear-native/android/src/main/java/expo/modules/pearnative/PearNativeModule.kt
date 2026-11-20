@@ -313,6 +313,8 @@ class PearNativeModule : Module() {
       }
       Unit
     }.runOnQueue(Queues.MAIN)
+    Function("callOutputs") { appContext.reactContext?.let { CallAudio.outputs(it) } ?: emptyList<Map<String, Any>>() }
+    Function("setCallOutput") { id: Int -> appContext.reactContext?.let { CallAudio.setOutput(it, id) }; Unit }
     Function("callHeadset") { appContext.reactContext?.let { CallAudio.headset(it) } ?: "" }
     AsyncFunction("showOverLock") { on: Boolean ->
       CallAudio.overLockWanted = on

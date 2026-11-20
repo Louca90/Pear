@@ -28,7 +28,11 @@ object CallAudio {
   private var route = "off"
   private var watcher: AudioDeviceCallback? = null
 
-  // route : "off", "earpiece" ou "speaker".
+  // Sortie choisie à la main (id d'AudioDeviceInfo) : respectée tant que cet appareil reste disponible.
+  private var chosenId: Int? = null
+
+  // route : "off", "earpiece", "speaker", ou "auto-earpiece" / "auto-speaker" (un casque d'abord, sinon
+  // l'écouteur pour l'audio, le haut-parleur pour la vidéo).
   @Suppress("DEPRECATION")
   fun setRoute(context: Context, route: String) {
     val audio = context.getSystemService(AudioManager::class.java) ?: return
@@ -42,20 +46,74 @@ object CallAudio {
         return
       }
       audio.mode = AudioManager.MODE_IN_COMMUNICATION
-      val speaker = route == "speaker"
+      val auto = route.startsWith("auto")
+      val speaker = route == "speaker" || route == "auto-speaker"
       if (Build.VERSION.SDK_INT >= 31) {
         val devices = audio.availableCommunicationDevices
         val headset = devices.firstOrNull { it.type in HEADSETS }
-        val wanted = if (speaker) devices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
-          else headset ?: devices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_EARPIECE }
+        val chosen = chosenId?.let { id -> devices.firstOrNull { it.id == id } }
+        // L'appareil choisi à la main a disparu : retour au choix automatique.
+        if (chosenId != null && chosen == null) chosenId = null
+        val builtinSpeaker = devices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+        val earpiece = devices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_EARPIECE }
+        val wanted = chosen ?: when {
+          auto -> headset ?: (if (speaker) builtinSpeaker else earpiece)
+          speaker -> builtinSpeaker
+          else -> headset ?: earpiece
+        }
         if (wanted != null) audio.setCommunicationDevice(wanted)
-        setProximity(context, !speaker && headset == null)
+        // Le capteur de proximité : seulement sur l'écouteur du téléphone, pas sur le haut-parleur ni un casque.
+        setProximity(context, wanted?.type == AudioDeviceInfo.TYPE_BUILTIN_EARPIECE)
       } else {
         audio.isSpeakerphoneOn = speaker
         setProximity(context, !speaker)
       }
     } catch (e: Exception) {
       Log.w("PearCall", "son de l'appel", e)
+    }
+  }
+
+  private fun typeName(type: Int) = when (type) {
+    AudioDeviceInfo.TYPE_BUILTIN_EARPIECE -> "earpiece"
+    AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> "speaker"
+    AudioDeviceInfo.TYPE_BLUETOOTH_SCO, 26 -> "bluetooth"
+    AudioDeviceInfo.TYPE_WIRED_HEADSET, AudioDeviceInfo.TYPE_WIRED_HEADPHONES -> "wired"
+    AudioDeviceInfo.TYPE_USB_HEADSET -> "usb"
+    else -> ""
+  }
+
+  // Les sorties disponibles : id, type, nom (le vrai nom d'un appareil Bluetooth peut demander
+  // BLUETOOTH_CONNECT, sans elle il est vide) et laquelle est active.
+  fun outputs(context: Context): List<Map<String, Any>> {
+    val audio = context.getSystemService(AudioManager::class.java) ?: return emptyList()
+    if (Build.VERSION.SDK_INT >= 31) {
+      val active = audio.communicationDevice?.id
+      return audio.availableCommunicationDevices.mapNotNull { device ->
+        val type = typeName(device.type)
+        if (type.isEmpty()) return@mapNotNull null
+        val name = if (type == "earpiece" || type == "speaker") "" else (try { device.productName?.toString() ?: "" } catch (e: Exception) { "" })
+        mapOf("id" to device.id, "type" to type, "name" to name, "active" to (device.id == active))
+      }
+    }
+    // Avant Android 12 : l'écouteur (-1), le haut-parleur (-2) et un éventuel casque.
+    val headset = audio.getDevices(AudioManager.GET_DEVICES_OUTPUTS).firstOrNull { it.type in HEADSETS }
+    val list = mutableListOf<Map<String, Any>>(
+      mapOf("id" to -1, "type" to "earpiece", "name" to "", "active" to (route != "speaker" && route != "auto-speaker" && headset == null)),
+      mapOf("id" to -2, "type" to "speaker", "name" to "", "active" to (route == "speaker" || route == "auto-speaker")),
+    )
+    if (headset != null) list.add(mapOf("id" to headset.id, "type" to typeName(headset.type), "name" to "", "active" to false))
+    return list
+  }
+
+  // Choix de l'utilisateur dans la liste des sorties.
+  fun setOutput(context: Context, id: Int) {
+    val audio = context.getSystemService(AudioManager::class.java) ?: return
+    chosenId = id
+    if (Build.VERSION.SDK_INT >= 31) {
+      route = if (route == "off") route else (if (route.endsWith("speaker")) "speaker" else "earpiece")
+      if (route != "off") setRoute(context, route)
+    } else {
+      setRoute(context, if (id == -2) "speaker" else "earpiece")
     }
   }
 
