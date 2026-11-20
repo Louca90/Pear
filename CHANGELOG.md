@@ -1,5 +1,54 @@
 # Journal des versions
 
+## 1.9.0 (versionCode 13)
+
+### Résumé
+
+- Nouvelle icône Pépins, une poire coupée en deux qui s'anime partout dans l'app : connexion, envoi d'une photo (elle se remplit avec le vrai pourcentage, puis « Vérifié »), tirer pour actualiser.
+- Partage d'écran pendant un appel, avec zoom chez celui qui regarde. Les appels marchent aussi téléphone verrouillé, avec la bonne sortie audio (Bluetooth, casque) et son nom.
+- Nouveau vocal : touchez le micro, mettez en pause, réécoutez, puis envoyez. Photo et vidéo en vue unique depuis l'appareil photo de Pear.
+- La Carte devient un onglet et le QR code a sa feuille animée (Mon code / Scanner). Une position partagée affiche maintenant la vraie commune.
+- « Envoi… » reste affiché tant que le téléphone de votre contact n'a pas reçu le message, et Pear vous dit s'il n'a pas de connexion.
+
+### Détails
+
+#### Nouveautés
+
+- Icône Pépins : nouvelle icône de l'app (écran d'accueil d'Android, démarrage, notifications) et icône animée dans Pear, avec une version claire et une sombre selon le mode.
+- Transferts : la poire remplace les barres de progression des photos, vidéos, fichiers et albums. Elle suit le vrai pourcentage, se remplit jusqu'en haut, puis passe à « Vérifié ».
+- Partage d'écran pendant un appel audio ou vidéo (bouton en haut à droite). Android demande votre accord à chaque partage. Rien ne passe par un serveur : l'image suit le même chemin chiffré que la vidéo de l'appel.
+- Chez celui qui regarde : l'écran partagé s'affiche en entier, on pince ou on touche deux fois pour zoomer, et un doigt déplace l'image zoomée.
+- Appel : un appui au milieu masque ou remet les commandes. Le choix de la sortie audio affiche le nom de l'appareil (écouteurs Bluetooth, casque, USB).
+- Vocal : un appui sur le micro enregistre, avec une barre animée (pause, arrêt, réécoute, envoi). Maintenir le micro marche toujours.
+- Vue unique : bouton « 1 » à côté d'Envoyer pour une photo ou une vidéo prise avec l'appareil photo de Pear. Votre contact ne peut l'ouvrir qu'une fois.
+- Onglet Carte à la place de Contacts. Le bouton QR code ouvre une feuille animée : Mon code et Scanner.
+- Accueil : maintenir une conversation la soulève sur un fond flouté, et ses actions apparaissent une à une.
+- Profil d'un contact : toucher sa photo l'affiche en grand.
+- Position partagée : la commune la plus proche (« À Thonon-les-Bains », « Près de Reignier-Ésery ») au lieu de la grande ville à des dizaines de kilomètres. Tout se calcule sur le téléphone, avec une liste de lieux embarquée.
+- Autorisations : plus de bandeau d'alerte. Une page Autorisations dans le Profil, et « Plus tard » sur chaque demande.
+
+#### Corrections
+
+- Statut d'envoi : « Envoi… » jusqu'à ce que le téléphone de votre contact ait reçu le message. Sans réponse après 30 secondes : « Envoi… · ton contact n'a pas de connexion ». Si c'est votre téléphone qui n'a pas de réseau : « Pas encore envoyé · tu n'as pas de connexion ».
+- Accusés de lecture : un message ne reste plus « non lu » quand le suivant est lu. « Marquer comme lu » dans la notification marque vraiment la conversation comme lue, même app fermée.
+- Appels : ils sonnent et s'affichent aussi quand le téléphone est verrouillé ou que Pear est fermé. La durée continue dans la fenêtre flottante, et la reconnexion après une coupure fonctionne.
+- Glisser pour répondre : l'icône ne passe plus sur la photo de profil.
+- Messages éphémères : le geste est plus difficile à déclencher par erreur, et les messages système sont plus discrets.
+- Recherche : elle ne prend plus le clavier toute seule, même en revenant d'une conversation. Quitter une conversation ferme le clavier.
+- Caméra : plus d'à-coup à l'ouverture.
+- Plus de son à l'envoi ni à la réception d'un message (le réglage est retiré). Les sons d'appel restent.
+
+#### Technique
+
+- Programme testeur (Profil, Mises à jour) : les pré-versions signées sont proposées sans jamais bloquer l'app.
+- Partage d'écran : service de capture MediaProjection de WebRTC, la piste de l'écran remplace celle de la caméra sans renégociation, et le partage ne reprend jamais tout seul après une reconnexion.
+- Appels : perte de connexion détectée sur l'état ICE, chronomètre natif dans la fenêtre flottante, liste des sorties audio native.
+- Accusés de lecture par curseur (« lu jusqu'à ce message »), renvoyé jusqu'à confirmation, aussi par push chiffré.
+- Lieux : 28 000 communes de France et des pays voisins (GeoNames, CC BY 4.0), générées par `scripts/build-places.mjs`.
+- Batterie : les minuteurs d'affichage de l'accueil et de la carte s'arrêtent en arrière-plan. Le journal note la taille, la durée et le débit de chaque fichier reçu.
+- Sons d'appel : Kenney, CC0.
+- Nouvel APK nécessaire (permissions, service d'appel, icônes système).
+
 ## 1.8.0 (versionCode 12)
 
 ### Résumé
