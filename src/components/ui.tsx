@@ -275,7 +275,11 @@ const useStyles = createStyles((colors) => ({
   },
   // Le fond du maintien : il se remplit de gauche à droite derrière la ligne.
   holdFill: {
-    ...StyleSheet.absoluteFill,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: colors.surface,
     transformOrigin: 'left',
   },
