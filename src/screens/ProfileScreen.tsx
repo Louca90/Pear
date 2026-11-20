@@ -1,7 +1,8 @@
 import { ComponentRef, useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Reanimated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
-import { Bell, Camera, Check, Eye, FileDown, HardDrive, Lock, Moon, Pencil, RefreshCw, Settings, ShieldCheck } from 'lucide-react-native';
+import { Bell, Camera, Check, Eye, FileDown, HardDrive, KeyRound, Lock, Moon, Pencil, RefreshCw, Settings, ShieldCheck } from 'lucide-react-native';
+import { usePermissionsMissing } from '../onboarding/permissionStatus';
 
 import { appVersionName, authenticate } from '../../modules/pear-native';
 import { getSetting, setSetting } from '../chat/database';
@@ -53,6 +54,7 @@ function EditButton({ editing, onPress }: { editing: boolean; onPress: () => voi
 // L'onglet Profil : ma carte (photo et nom, tels que mes contacts les voient), puis les réglages
 // les plus utiles, rangés par groupes. « Tous les réglages » ouvre le reste.
 export function ProfileScreen({ onSettings, onStorage, onPage }: Props) {
+  const permissionsMissing = usePermissionsMissing();
   const colors = useColors();
   const styles = useStyles();
   const barSpace = useBottomBarSpace();
@@ -161,6 +163,7 @@ export function ProfileScreen({ onSettings, onStorage, onPage }: Props) {
             <SettingsGroup title={t('profil.groupeGeneral')}>
               <SettingRow icon={Moon} label={t('profil.apparence')} value={themeLabel} onPress={() => onPage('appearance')} />
               <SettingRow icon={Bell} label={t('commun.notifications')} onPress={() => onPage('notifications')} />
+              <SettingRow icon={KeyRound} label={t('priseEnMain.pageTitre')} right={permissionsMissing ? <View style={styles.dot} /> : undefined} onPress={() => onPage('permissions')} />
               <SettingRow icon={HardDrive} label={t('stockage.titre')} onPress={onStorage} />
             </SettingsGroup>
           </Reanimated.View>
@@ -206,6 +209,12 @@ export function ProfileScreen({ onSettings, onStorage, onPage }: Props) {
 }
 
 const useStyles = createStyles((colors) => ({
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.textMuted,
+  },
   flex: {
     flex: 1,
   },

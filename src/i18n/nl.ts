@@ -474,7 +474,6 @@ export const nl: Dictionary = {
     pret: 'Alles klaar',
     pretAide: 'Scan de QR-code van een vriend om te beginnen met chatten.',
     ouvrir: 'Pear openen',
-    manque: 'Er ontbreekt een machtiging: tik hier om die te herstellen.',
   },
   liste: {
     aLinstant: 'zojuist',

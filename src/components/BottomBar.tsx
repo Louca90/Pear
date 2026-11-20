@@ -12,6 +12,7 @@ import { useNavigationBarHeight } from './ui';
 import { CameraFilled, ContactsFilled, MessagesFilled, ProfileRing } from './TabIcons';
 import { t } from '../i18n';
 import { DURATION, timing } from '../motion';
+import { usePermissionsMissing } from '../onboarding/permissionStatus';
 
 export type Tab = 'home' | 'camera' | 'contacts' | 'profile';
 
@@ -44,6 +45,7 @@ export function useBottomBarSpace() {
 
 // L'onglet Profil montre ma photo (ou une silhouette), cerclée quand l'onglet est choisi.
 function ProfileIcon({ draw }: { draw: SharedValue<number> }) {
+  const permissionsMissing = usePermissionsMissing();
   const colors = useColors();
   const styles = useStyles();
   useSyncExternalStore(chat.subscribe, chat.getVersion);
@@ -60,6 +62,7 @@ function ProfileIcon({ draw }: { draw: SharedValue<number> }) {
         </View>
       )}
       <ProfileRing size={PHOTO_SIZE + 6} draw={draw} />
+      {permissionsMissing && <View style={styles.permissionDot} />}
     </View>
   );
 }
@@ -171,6 +174,15 @@ const useStyles = createStyles((colors) => ({
     backgroundColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  permissionDot: {
+    position: 'absolute',
+    top: 4,
+    right: -2,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.textMuted,
   },
   initialText: {
     fontSize: 12,

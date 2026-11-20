@@ -32,6 +32,7 @@ import { CustomizeScreen } from './src/screens/CustomizeScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { OnboardingScreen, OnboardingStep } from './src/onboarding/OnboardingScreen';
 import { checkAllPermissions } from './src/onboarding/permissions';
+import { setPermissionsMissing } from './src/onboarding/permissionStatus';
 import { isOnboardingDone, loadOnboardingStep, markOnboardingDone } from './src/onboarding/progress';
 import { BlockedScreen } from './src/screens/BlockedScreen';
 import { DiagnosticScreen } from './src/screens/DiagnosticScreen';
@@ -43,7 +44,7 @@ import type { ChatIntent } from './src/screens/chat/ChatScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { MapScreen } from './src/screens/MapScreen';
 import { onOpenMap } from './src/map/openMap';
-import { AppearancePage, BackupPage, NotificationsPage, PrivacyPage, SettingsPage, UpdatesPage } from './src/screens/settings/SettingsPages';
+import { AppearancePage, BackupPage, NotificationsPage, PermissionsPage, PrivacyPage, SettingsPage, UpdatesPage } from './src/screens/settings/SettingsPages';
 import { ScannerScreen } from './src/screens/ScannerScreen';
 import { Contact, hasIdentity, loadContacts, loadOrCreateIdentity, saveContacts } from './src/storage';
 import { createStyles, fixed, loadTheme, motion, Palette, spacing, useColors } from './src/theme';
@@ -210,7 +211,6 @@ function App() {
   };
   const [onboarding, setOnboarding] = useState<{ mode: 'full' | 'permissions'; step: OnboardingStep } | null>(null);
   // Une autorisation retirée depuis la prise en main : un bandeau discret sur l'accueil.
-  const [permissionMissing, setPermissionMissing] = useState(false);
 
   useEffect(() => {
     // La base est ouverte et migrée avant tout : un échec affiche une erreur au lieu de planter en boucle.
@@ -376,7 +376,7 @@ function App() {
   useEffect(() => {
     if (!active || onboarding || !identity) return;
     checkAllPermissions()
-      .then((states) => setPermissionMissing(Object.values(states).some((state) => state !== 'granted')))
+      .then((states) => setPermissionsMissing(Object.values(states).some((state) => state !== 'granted')))
       .catch((e) => log.warn('autorisations', e));
   }, [active, onboarding, identity]);
 
@@ -586,6 +586,7 @@ function App() {
     }
     if (current.name === 'settingsPage') {
       const back = () => setRoute({ name: 'profile' });
+      if (current.page === 'permissions') return <PermissionsPage onBack={back} />;
       if (current.page === 'appearance') return <AppearancePage onBack={back} />;
       if (current.page === 'notifications') return <NotificationsPage onBack={back} />;
       if (current.page === 'privacy') return <PrivacyPage onBack={back} onServers={() => setRoute({ name: 'servers' })} onBlocked={() => setRoute({ name: 'blocked' })} />;
@@ -709,8 +710,6 @@ function App() {
         onAdd={() => setRoute({ name: 'contacts' })}
         onOpen={(contact, jump) => setRoute({ name: 'chat', publicKey: contact.publicKey, jump })}
         onRequests={() => setRoute({ name: 'requests' })}
-        permissionMissing={permissionMissing}
-        onFixPermissions={() => setOnboarding({ mode: 'permissions', step: 1 })}
       />
     );
   };
@@ -768,7 +767,7 @@ function App() {
 
   // Le contenu des écrans du dessous n'est recalculé que si ses données changent : la conversation sous
   // la personnalisation ne se redessine pas quand on navigue au-dessus.
-  const renderDeps = [contacts, identity, error, code, permissionMissing];
+  const renderDeps = [contacts, identity, error, code];
   const pageCache = useRef(new Map<string, { deps: unknown[]; preview: boolean; element: ReactNode }>()).current;
   for (const key of [...pageCache.keys()]) if (!mountedKeys.current.has(key)) pageCache.delete(key);
   const renderPage = (layer: Route, isTop: boolean) => {
@@ -794,7 +793,7 @@ function App() {
           onDone={() => {
             markOnboardingDone();
             setOnboarding(null);
-            setPermissionMissing(false);
+            setPermissionsMissing(false);
             // Sans contact, on ouvre directement l'onglet Contacts (montrer son code, scanner) : c'est la première chose à faire.
             if (onboarding.mode === 'full') setRoute(contacts.length === 0 ? { name: 'contacts' } : { name: 'home' });
           }}

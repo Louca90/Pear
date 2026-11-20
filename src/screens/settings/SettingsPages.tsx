@@ -1,7 +1,7 @@
 import { ReactNode, useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, AppState, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Reanimated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
-import { BatteryCharging, Bell, Ban, Download, Eye, FileDown, FileText, FileUp, Languages, Link2, Lock, RefreshCw, Share2, ShieldCheck, Sparkles, Stethoscope, Volume2 } from 'lucide-react-native';
+import { BatteryCharging, Bell, Ban, Camera, Download, Eye, FileDown, FileText, FileUp, ImageIcon, Languages, Link2, Lock, LucideIcon, MapPin, RefreshCw, Share2, ShieldCheck, Sparkles, Stethoscope, Volume2 } from 'lucide-react-native';
 
 import { appVersionCode, appVersionName, authenticate } from '../../../modules/pear-native';
 import { getBlockedKeys, getSetting, setSetting } from '../../chat/database';
@@ -18,14 +18,16 @@ import { Header, Screen, usePressFeedback } from '../../components/ui';
 import { haptics } from '../../haptics';
 import { currentLanguage, languageChoice, LANGUAGES, t } from '../../i18n';
 import { enterUp, timing } from '../../motion';
-import { checkPermission, PermissionState, requestPermission } from '../../onboarding/permissions';
+import { checkPermission, checkPermissions, ONBOARDING_PERMISSIONS, PermissionId, PERMISSIONS, PermissionState, requestPermission } from '../../onboarding/permissions';
+import { PermissionCard } from '../../onboarding/PermissionCard';
+import { setPermissionsMissing } from '../../onboarding/permissionStatus';
 import { createStyles, radius, setTextScaleIndex, setThemePreference, spacing, TEXT_SCALES, ThemePreference, useColors, useTextScaleIndex, useThemePreference } from '../../theme';
 import { pagesFor } from '../../update/pages';
 import { checkForUpdate, getInstallPermission, requestInstallPermission, useUpdateState } from '../../update/updates';
 import { WhatsNew } from '../../update/WhatsNew';
 import { setSoundsEnabled, soundsEnabled } from '../chat/sounds';
 
-export type SettingsPage = 'appearance' | 'notifications' | 'privacy' | 'backup' | 'updates';
+export type SettingsPage = 'permissions' | 'appearance' | 'notifications' | 'privacy' | 'backup' | 'updates';
 
 // Les blocs d'une page arrivent l'un après l'autre (fondu et 10 points de montée).
 const STEP_MS = 40;
@@ -436,6 +438,9 @@ const useStyles = createStyles((colors) => ({
     paddingTop: spacing.sm,
     gap: 20,
   },
+  permissionList: {
+    gap: 10,
+  },
   note: {
     marginTop: spacing.sm,
     marginHorizontal: 4,
@@ -703,3 +708,70 @@ const useStyles = createStyles((colors) => ({
     transform: [{ scale: 0.97 }],
   },
 }));
+
+// --- Autorisations ---
+
+const PERMISSION_ICONS: Record<PermissionId, LucideIcon> = {
+  notifications: Bell,
+  battery: BatteryCharging,
+  camera: Camera,
+  media: ImageIcon,
+  location: MapPin,
+  install: Download,
+};
+const PERMISSION_LIST: PermissionId[] = [...ONBOARDING_PERMISSIONS, 'install'];
+
+// L'état de chaque autorisation, relu au retour des réglages d'Android. Rien n'est imposé : chacune
+// s'active ici, quand on veut.
+export function PermissionsPage({ onBack }: { onBack: () => void }) {
+  const styles = useStyles();
+  const [states, setStates] = useState<Partial<Record<PermissionId, PermissionState>> | null>(null);
+  const refresh = useCallback(() => {
+    checkPermissions(PERMISSION_LIST)
+      .then((next) => {
+        setStates(next);
+        setPermissionsMissing(PERMISSIONS.some((id) => next[id] !== 'granted'));
+      })
+      .catch(() => undefined);
+  }, []);
+  useEffect(() => {
+    refresh();
+    const subscription = AppState.addEventListener('change', (next) => next === 'active' && refresh());
+    return () => subscription.remove();
+  }, [refresh]);
+  const ask = (id: PermissionId) => {
+    if (!states) return;
+    requestPermission(id, states[id] ?? 'missing')
+      .then((next) => {
+        setStates((current) => ({ ...current, [id]: next }));
+        refresh();
+      })
+      .catch(() => undefined);
+  };
+  return (
+    <Page title={t('priseEnMain.pageTitre')} onBack={onBack}>
+      <Block index={0}>
+        <Text style={styles.note}>{t('priseEnMain.pageAide')}</Text>
+      </Block>
+      <View style={styles.permissionList}>
+        {states &&
+          PERMISSION_LIST.map((id, index) => (
+            <PermissionCard
+              key={id}
+              index={index}
+              icon={PERMISSION_ICONS[id]}
+              title={t(`priseEnMain.${id}`)}
+              why={t(`priseEnMain.${id}Aide`)}
+              state={states[id] ?? 'missing'}
+              onPress={() => ask(id)}
+            />
+          ))}
+      </View>
+      {states && states.notifications !== 'granted' && (
+        <Block index={1}>
+          <Text style={styles.note}>{t('priseEnMain.sansNotifications')}</Text>
+        </Block>
+      )}
+    </Page>
+  );
+}

@@ -474,7 +474,6 @@ export const it: Dictionary = {
     pret: 'Tutto pronto',
     pretAide: 'Scansiona il codice QR di un amico per iniziare a chattare.',
     ouvrir: 'Apri Pear',
-    manque: 'Manca un\'autorizzazione: tocca qui per ripristinarla.',
   },
   liste: {
     aLinstant: 'proprio ora',

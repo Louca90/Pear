@@ -592,7 +592,12 @@ export const fr = {
     pret: 'Tout est prêt',
     pretAide: 'Scanne le QR code d\'un ami pour commencer à discuter.',
     ouvrir: 'Ouvrir Pear',
-    manque: 'Une autorisation manque : touche ici pour la rétablir.',
+    pageTitre: 'Autorisations',
+    pageAide: 'Pear marche sans elles. Active ce que tu veux, quand tu veux.',
+    sansNotifications: 'Sans notifications, tu verras les messages en ouvrant Pear.',
+    activer: 'Activer',
+    accordee: 'Activée',
+    ouvrirReglages: 'Ouvrir les réglages',
   },
   liste: {
     aLinstant: 'à l’instant',

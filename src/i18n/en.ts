@@ -593,7 +593,12 @@ export const en: Dictionary = {
     pret: 'All set',
     pretAide: 'Scan a friend\'s QR code to start chatting.',
     ouvrir: 'Open Pear',
-    manque: 'A permission is missing: tap here to restore it.',
+    pageTitre: 'Permissions',
+    pageAide: 'Pear works without them. Turn on what you want, when you want.',
+    sansNotifications: 'Without notifications, you will see messages when you open Pear.',
+    activer: 'Turn on',
+    accordee: 'On',
+    ouvrirReglages: 'Open settings',
   },
   liste: {
     aLinstant: 'just now',

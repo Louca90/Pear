@@ -28,7 +28,6 @@ import { useBottomBarSpace } from '../components/BottomBar';
 import { showDialog } from '../components/dialog';
 import { EmptyState } from '../components/EmptyState';
 import { Pear } from '../components/Pear';
-import { PermissionBanner } from '../components/PermissionBanner';
 import { OnlineRing, useRingArrival } from '../components/OnlineRing';
 import { RequestsBell } from '../components/RequestsBell';
 import { SearchField } from '../components/SearchField';
@@ -50,8 +49,6 @@ type Props = {
   // messageId : ouvrir la conversation sur ce message (résultat de recherche).
   onOpen: (contact: Contact, messageId?: string) => void;
   onRequests: () => void;
-  permissionMissing: boolean;
-  onFixPermissions: () => void;
 };
 
 type Filter = 'all' | 'unread' | 'pinned' | 'pending' | 'online';
@@ -153,7 +150,7 @@ const ConversationRow = memo(function ConversationRow({ item, now, index, arrivi
 }, sameRow);
 
 // Les conversations : recherche, catégories, épingles en haut, puis les plus récentes.
-export function HomeScreen({ contacts, onAdd, onOpen, onRequests, permissionMissing, onFixPermissions }: Props) {
+export function HomeScreen({ contacts, onAdd, onOpen, onRequests }: Props) {
   const colors = useColors();
   const styles = useStyles();
   useSyncExternalStore(chat.subscribe, chat.getVersion);
@@ -303,7 +300,6 @@ export function HomeScreen({ contacts, onAdd, onOpen, onRequests, permissionMiss
     return (
       <Screen>
         <Header title={title} avatar={logo} action={profileButton} />
-        <PermissionBanner visible={permissionMissing} onPress={onFixPermissions} />
         <View style={styles.empty}>
           <View style={styles.emptyPear}>
             <Pear height={56} color={colors.textMuted} state="resting" />
@@ -319,7 +315,6 @@ export function HomeScreen({ contacts, onAdd, onOpen, onRequests, permissionMiss
   return (
     <Screen>
       <Header title={title} avatar={logo} action={profileButton} />
-      <PermissionBanner visible={permissionMissing} onPress={onFixPermissions} />
       <SearchField value={query} onChange={setQuery} placeholder={t('liste.rechercher')} />
       <View>
         <ScrollView
