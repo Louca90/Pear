@@ -184,6 +184,8 @@ export function Pear({ height, color, state = 'idle', progress = 0, leafColor }:
   const rest = useSharedValue(0);
   const body = useSharedValue(1);
   const outline = useSharedValue(0);
+  // L'écart entre les pointillés du contour : 0 (trait plein) à 5 (« 6 5 ») ; le contour se casse puis se ressoude.
+  const gapLine = useSharedValue(0);
   const level = useSharedValue(state === 'ripening' ? clamped : 1);
   const link = useSharedValue(1);
   const linkOpacity = useSharedValue(1);
@@ -223,6 +225,8 @@ export function Pear({ height, color, state = 'idle', progress = 0, leafColor }:
     move(rest, t.rest, d.color, SP.color);
     move(body, t.body, d.body, SP.base);
     move(outline, t.outline, d.outline, SP.base);
+    // Vers « Connexion », le contour se casse après 220 ms ; en le quittant, il se ressoude tout de suite.
+    move(gapLine, state === 'searching' ? 5 : 0, state === 'searching' ? 220 : 0, SP.base);
     move(level, t.level, d.level, state === 'ripening' ? SP.slow : SP.slow);
     move(link, t.link, d.link, SP.soft);
     move(linkOpacity, t.linkOpacity, d.link, SP.soft);
@@ -268,7 +272,8 @@ export function Pear({ height, color, state = 'idle', progress = 0, leafColor }:
     if (state === 'searching' || state === 'ripening') dots.set(linear(520));
     if (state === 'ripening') {
       wave.set(linear(1400));
-      travel.set(sine(900));
+      // La graine de données va d'un pépin à l'autre, toujours dans le même sens.
+      travel.set(linear(900));
     }
     return () => {
       [breath, sway, dash, dots, wobble, pulse, wave, travel].forEach((value) => {
@@ -287,7 +292,7 @@ export function Pear({ height, color, state = 'idle', progress = 0, leafColor }:
   const fleshProps = useAnimatedProps(() => ({ fill: interpolateColor(rest.get(), [0, 1], [FLESH, REST.flesh]), opacity: body.get() }));
   const skinProps = useAnimatedProps(() => ({ stroke: skinColor(rest.get()), opacity: body.get() }));
   const liquidClip = useAnimatedProps(() => ({ d: wavePath(level.get(), wave.get(), 0) }));
-  const outlineProps = useAnimatedProps(() => ({ strokeDashoffset: dash.get(), opacity: outline.get() }));
+  const outlineProps = useAnimatedProps(() => ({ strokeDashoffset: dash.get(), opacity: outline.get(), strokeDasharray: [6, Math.max(0.01, gapLine.get())] }));
   const biteProps0 = useAnimatedProps(() => ({ r: BITE_R * bite0.get() }));
   const biteProps1 = useAnimatedProps(() => ({ r: BITE_R * bite1.get() }));
   const biteProps2 = useAnimatedProps(() => ({ r: BITE_R * bite2.get() }));
@@ -321,7 +326,7 @@ export function Pear({ height, color, state = 'idle', progress = 0, leafColor }:
     const u = travel.get();
     const x = (1 - u) * (1 - u) * (50 - half) + 2 * (1 - u) * u * 50 + u * u * (50 + half);
     const y = (1 - u) * (1 - u) * SEED_Y + 2 * (1 - u) * u * LINK_TOP + u * u * SEED_Y;
-    return { cx: x, cy: y, opacity: ripen.get() };
+    return { cx: x, cy: y, opacity: ripen.get() * Math.sin(Math.PI * u) };
   });
 
   const bodyStyle = useAnimatedStyle(() => ({
@@ -382,7 +387,7 @@ export function Pear({ height, color, state = 'idle', progress = 0, leafColor }:
               </G>
             </G>
           </G>
-          <AnimatedPath d={BODY} fill="none" stroke={innerInk} strokeWidth={2.5} strokeDasharray="6 5" strokeLinecap="round" animatedProps={outlineProps} />
+          <AnimatedPath d={BODY} fill="none" stroke={innerInk} strokeWidth={2.5} strokeLinecap="round" animatedProps={outlineProps} />
           <AnimatedPath fill={innerInk} animatedProps={seedLeft} />
           <AnimatedPath fill={innerInk} animatedProps={seedRight} />
           <G clipPath={`url(#${clipLink})`}>
