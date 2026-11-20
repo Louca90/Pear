@@ -188,6 +188,20 @@ function CallFull({ call, name, onMinimize }: { call: CallState; name: string; o
         ) : (
           <View style={styles.minimize} />
         )}
+        {/* Partager l'écran : en haut à droite, pour garder la rangée de quatre boutons de la planche. */}
+        {call.phase === 'active' && !ended && (
+          <Reanimated.View entering={FadeIn.duration(DURATION.small).easing(EASE)}>
+            <Pressable
+              onPress={() => (call.sharing ? chat.toggleShare() : askShare())}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel={t(call.sharing ? 'appel.arreterPartage' : 'appel.partager')}
+              style={[styles.minimize, onVideo && styles.minimizeOnVideo, call.sharing && styles.shareOn]}
+            >
+              {call.sharing ? <ScreenShareOff size={22} color={fixed.white} strokeWidth={1.75} /> : <ScreenShare size={22} color={textColor} strokeWidth={1.75} />}
+            </Pressable>
+          </Reanimated.View>
+        )}
       </View>
 
       <View style={[styles.head, onVideo && styles.headOnVideo]}>
@@ -252,15 +266,6 @@ function CallFull({ call, name, onMinimize }: { call: CallState; name: string; o
                 delay={80}
               />
               <RoundButton icon={SwitchCamera} label={t('appel.retourner')} disabled={!call.cameraOn || call.sharing} onPress={chat.switchCamera} onVideo={onVideo} delay={120} />
-              <RoundButton
-                icon={call.sharing ? ScreenShareOff : ScreenShare}
-                label={t(call.sharing ? 'appel.arreterPartage' : 'appel.partager')}
-                active={call.sharing}
-                disabled={call.phase !== 'active'}
-                onPress={() => (call.sharing ? chat.toggleShare() : askShare())}
-                onVideo={onVideo}
-                delay={140}
-              />
             </View>
             <RoundButton icon={PhoneOff} label={t('appel.raccrocher')} variant="danger" onPress={() => chat.hangUp()} onVideo={onVideo} big delay={160} />
           </View>
@@ -420,7 +425,7 @@ function RoundButton({
   const idle = onVideo ? 'rgba(255,255,255,0.18)' : colors.surface;
   const lit = onVideo ? fixed.white : colors.text;
   const fill = useAnimatedStyle(() => ({ backgroundColor: interpolateColor(on.get(), [0, 1], [idle, lit]) }));
-  const size = big ? 72 : 54;
+  const size = big ? 72 : 60;
   const solid = variant === 'danger' ? colors.danger : variant === 'accept' ? colors.signatureStrong : null;
   const iconColor = solid ? fixed.white : active ? (onVideo ? fixed.black : colors.background) : onVideo ? colors.onMedia : colors.text;
   return (
@@ -481,6 +486,7 @@ const useStyles = createStyles((colors) => ({
   },
   topBar: {
     paddingHorizontal: spacing.md,
+    justifyContent: 'space-between',
     flexDirection: 'row',
   },
   minimize: {
@@ -489,6 +495,9 @@ const useStyles = createStyles((colors) => ({
     borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  shareOn: {
+    backgroundColor: colors.danger,
   },
   minimizeOnVideo: {
     backgroundColor: 'rgba(0,0,0,0.25)',
@@ -584,7 +593,7 @@ const useStyles = createStyles((colors) => ({
   buttonWrap: {
     alignItems: 'center',
     gap: 6,
-    width: 66,
+    width: 72,
   },
   button: {
     alignItems: 'center',
