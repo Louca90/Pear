@@ -2,7 +2,6 @@ import { ComponentRef, RefObject, useEffect, useMemo, useState } from 'react';
 import { findNodeHandle, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import Reanimated, { useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
 import { EASE } from '../../../motion';
-import { GestureDetector } from 'react-native-gesture-handler';
 import { setIncognitoKeyboard } from '../../../../modules/pear-native';
 import { Check, Smile } from 'lucide-react-native';
 
@@ -158,7 +157,7 @@ export function Composer({
             {editing ? <Check size={20} color={colors.onSignature} strokeWidth={2} /> : <SendIcon size={20} color={colors.onSignature} strokeWidth={2} play={sent} />}
           </IconButton>
         ) : (
-          <GestureDetector gesture={voice.gesture}>
+          <Pressable onPress={voice.start} onPressIn={voice.pressIn} onPressOut={voice.pressOut}>
           <Reanimated.View
             accessibilityRole="button"
             accessibilityLabel={t('chat.enregistrerVocal')}
@@ -174,7 +173,7 @@ export function Composer({
               </View>
             )}
           </Reanimated.View>
-          </GestureDetector>
+          </Pressable>
         )}
         {/* Menu ouvert : un appui sur le bouton d'envoi ou le micro referme seulement le menu. */}
         {attachOpen && <Pressable onPress={onCloseAttach} accessibilityLabel={t('commun.fermer')} style={styles.sendCover} />}

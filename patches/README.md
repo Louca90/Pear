@@ -20,3 +20,11 @@ Fichier : `android/build.gradle`.
 
 - **Pourquoi** : sous Windows, le chemin de `node_modules` passé à CMake contient des barres obliques inversées (`C:\Users\...`), que CMake interprète comme des échappements : la compilation native de libsodium échoue. Le patch les remplace par des barres obliques.
 - Inutile sous macOS et Linux, sans effet sur eux. À revérifier à chaque mise à jour de react-native-libsodium.
+
+## expo-audio 58.0.11
+
+Fichier : `android/src/main/java/expo/modules/audio/AudioUtils.kt`.
+
+- **Pourquoi** : chaque lecteur d'expo-audio crée une session média Android « de base », même sans commandes sur l'écran de verrouillage. Tant qu'elle existe, Samsung (One UI) affiche lecture / pause / suivant dans la fenêtre flottante d'un appel, comme si Pear lisait une vidéo. Pear n'utilise pas ces commandes : la session de base est libérée dès sa création (la session de l'écran de verrouillage, créée par le service, n'est pas touchée).
+- Compilé depuis les sources (`buildFromSource` dans `package.json`), comme expo-camera.
+- Pour refaire ce patch sous Windows : sortir d'abord `android/build` et `android/.gradle` de `node_modules/expo-audio`, comme pour expo-camera.

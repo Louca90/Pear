@@ -70,7 +70,8 @@
     "autolinking": {
       "android": {
         "buildFromSource": [
-          "expo-camera"
+          "expo-camera",
+          "expo-audio"
         ]
       }
     }

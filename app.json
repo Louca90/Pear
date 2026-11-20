@@ -80,6 +80,7 @@
       "./plugins/with-share-intent",
       "./plugins/with-file-service",
       "./plugins/with-call-pip",
+      "./plugins/with-screen-share",
       "./plugins/with-notification-icon",
       [
         "expo-navigation-bar",

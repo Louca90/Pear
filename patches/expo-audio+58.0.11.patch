@@ -1,0 +1,12 @@
+diff --git a/node_modules/expo-audio/android/src/main/java/expo/modules/audio/AudioUtils.kt b/node_modules/expo-audio/android/src/main/java/expo/modules/audio/AudioUtils.kt
+index 81819c1..01076cc 100644
+--- a/node_modules/expo-audio/android/src/main/java/expo/modules/audio/AudioUtils.kt
++++ b/node_modules/expo-audio/android/src/main/java/expo/modules/audio/AudioUtils.kt
+@@ -38,4 +38,7 @@ fun buildBasicMediaSession(context: Context, player: Player, onPlay: () -> Unit)
+   return MediaSession.Builder(context, PlayRequestingPlayer(player, onPlay))
+     .setId("ExpoAudioBasicMediaSession_${player.hashCode()}")
+     .build()
++    // Pear : la session de base n'est jamais utilisée (pas de commandes sur l'écran de verrouillage), mais
++    // tant qu'elle existe, Samsung montre lecture / pause dans la fenêtre flottante d'un appel. Libérée tout de suite.
++    .also { it.release() }
+ }

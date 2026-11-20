@@ -297,11 +297,12 @@ class PearCameraView(context: Context, appContext: AppContext) : ExpoView(contex
         streamObserver?.let { previewView.previewStreamState.removeObserver(it) }
         extrasBound = false
         cameraProvider.unbindAll()
-        // L'aperçu seul d'abord : la première image arrive plus vite. Photo et vidéo se branchent juste
-        // après (sauf si une vidéo est en cours : elle doit continuer sur la nouvelle caméra).
+        // Aperçu, photo et vidéo branchés ensemble, en une seule configuration : brancher l'aperçu seul puis
+        // rebrancher photo et vidéo à la première image faisait figer l'aperçu un instant juste après l'ouverture.
+        // L'image floue de la fois d'avant reste affichée jusqu'à la première vraie image.
         val tracker = faceLens
         val withLens = lens != "none" && tracker != null
-        val staged = recording == null && !withLens
+        val staged = false
         val bound = if (withLens && tracker != null) {
           bindWithLens(cameraProvider, owner, video, tracker)
         } else if (staged) {

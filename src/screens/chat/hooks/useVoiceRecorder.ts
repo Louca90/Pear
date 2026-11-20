@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { AppState, Keyboard, Linking } from 'react-native';
-import { usePanGesture } from 'react-native-gesture-handler';
 import { Easing, ReduceMotion, useSharedValue, withTiming } from 'react-native-reanimated';
 import { AudioPlayer, createAudioPlayer, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder } from 'expo-audio';
 
@@ -13,15 +12,12 @@ import { VOICE_MIN_MS } from '../constants';
 // Le micro grossit un peu quand on le maintient, puis revient, sans dépasser.
 const SETTLE = { duration: 200, easing: Easing.bezier(0.2, 0.8, 0.2, 1), reduceMotion: ReduceMotion.System };
 
-// Enregistrement d'un vocal : on TOUCHE le micro (ou on le maintient, comme avant : lâcher ouvre alors la
-// relecture au lieu d'envoyer). Phases : idle → recording ⇄ paused → review ⇄ playing → sending → sent.
+// Enregistrement d'un vocal : un appui sur le micro lance l'enregistrement. Phases : idle → recording ⇄ paused → review ⇄ playing → sending → sent.
 // Le niveau du micro est relevé 10 fois par seconde : c'est la forme d'onde, en direct puis envoyée.
 const LEVEL_EVERY_MS = 100;
 const RECORDING_OPTIONS = { ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true };
 // Combien de barres de l'onde en direct, et de la relecture.
 export const LIVE_BARS = 30;
-// Un appui plus long que ça est un « maintenir » (lâcher arrête), plus court un simple toucher.
-const HOLD_MS = 350;
 // Sous cette durée, supprimer ne demande pas de confirmation.
 const CONFIRM_AFTER_MS = 5000;
 const SENT_MS = 1500;
@@ -56,8 +52,6 @@ export function useVoiceRecorder(onRecorded: (uri: string, seconds: number, wave
   const fileUri = useRef<string | null>(null);
   const totalMs = useRef(0);
   const player = useRef<AudioPlayer | null>(null);
-  const fingerDown = useRef(false);
-  const pressedAt = useRef(0);
   const sentTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const setPhase = (next: VoicePhase) => {
@@ -122,6 +116,7 @@ export function useVoiceRecorder(onRecorded: (uri: string, seconds: number, wave
   );
 
   const reset = () => {
+    scale.set(1);
     releasePlayer();
     levels.current = [];
     doneMs.current = 0;
@@ -154,8 +149,8 @@ export function useVoiceRecorder(onRecorded: (uri: string, seconds: number, wave
       setElapsed(0);
       setPhase('recording');
       haptics.action();
-      // Maintenu : le doigt s'est levé pendant la demande ? Alors c'était un toucher, l'enregistrement continue.
-      if (!fingerDown.current && Date.now() - pressedAt.current >= HOLD_MS) stop();
+      // Le micro quitte l'écran pendant l'enregistrement : il reprend sa taille tout de suite.
+      scale.set(1);
     } catch (e) {
       scale.set(withTiming(1, SETTLE));
       showDialog(t('commun.enregistrementImpossible'), String(e));
@@ -287,26 +282,16 @@ export function useVoiceRecorder(onRecorded: (uri: string, seconds: number, wave
     return () => subscription.remove();
   }, []);
 
-  // Le micro au repos : un toucher lance l'enregistrement ; maintenu, lâcher l'arrête et ouvre la relecture.
-  const latest = useRef({ begin, stop });
-  latest.current = { begin, stop };
-  const gesture = usePanGesture({
-    runOnJS: true,
-    minDistance: 0,
-    onBegin: () => {
-      if (phaseRef.current !== 'idle') return;
-      Keyboard.dismiss();
-      fingerDown.current = true;
-      pressedAt.current = Date.now();
-      scale.set(withTiming(1.2, SETTLE));
-      latest.current.begin();
-    },
-    onFinalize: () => {
-      fingerDown.current = false;
-      scale.set(withTiming(1, SETTLE));
-      if (phaseRef.current === 'recording' && Date.now() - pressedAt.current >= HOLD_MS) latest.current.stop();
-    },
-  });
+  // Un appui sur le micro lance l'enregistrement ; il grossit à peine sous le doigt.
+  const pressIn = () => {
+    if (phaseRef.current === 'idle') scale.set(withTiming(1.12, SETTLE));
+  };
+  const pressOut = () => scale.set(withTiming(1, SETTLE));
+  const start = () => {
+    if (phaseRef.current !== 'idle') return;
+    Keyboard.dismiss();
+    begin();
+  };
 
-  return { phase, seconds: Math.round((phase === 'playing' ? position * totalMs.current : elapsed) / 1000), totalSeconds: Math.round(totalMs.current / 1000), bars, position, scale, gesture, pause, resume, stop, play, pausePlay, send, discard };
+  return { phase, seconds: Math.round((phase === 'playing' ? position * totalMs.current : elapsed) / 1000), totalSeconds: Math.round(totalMs.current / 1000), bars, position, scale, pressIn, pressOut, start, pause, resume, stop, play, pausePlay, send, discard };
 }
