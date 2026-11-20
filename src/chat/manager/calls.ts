@@ -36,6 +36,9 @@ export type CallState = {
   phase: CallPhase;
   end: CallEnd | null;
   startedAt: number | null;
+  // Le même instant sur l'horloge qui ne recule jamais (performance.now) : la durée affichée se calcule
+  // toujours « maintenant moins départ », même si l'heure du téléphone change.
+  startedMono: number | null;
   // La connexion directe est tombée pendant l'appel : on attend qu'elle revienne.
   reconnecting: boolean;
   muted: boolean;
@@ -262,6 +265,7 @@ export async function startCall(core: ChatCore, contact: string, video: boolean)
     phase: 'calling',
     end: null,
     startedAt: null,
+    startedMono: null,
     reconnecting: false,
     muted: false,
     speaker: video,
@@ -382,7 +386,7 @@ function begin(core: ChatCore, video: boolean) {
   if (!state) return;
   clearTimeout(timer);
   clearTimeout(inviteTimer);
-  set({ phase: 'active', startedAt: Date.now(), speaker: video });
+  set({ phase: 'active', startedAt: Date.now(), startedMono: performance.now(), speaker: video });
   core.keepConnected(state.contact, 4 * 3600 * 1000);
   attachMedia(core);
   showActive(core);
@@ -503,6 +507,7 @@ function ring(core: ChatCore, contact: string, id: string, video: boolean) {
     phase: 'incoming',
     end: null,
     startedAt: null,
+    startedMono: null,
     reconnecting: false,
     muted: false,
     speaker: video,
@@ -610,7 +615,7 @@ export function callRemoteMedia(contact: string, media: CallMedia) {
 
 function systemCode(current: CallState, end: CallEnd) {
   const kind = current.video ? 'v' : 'a';
-  if (current.startedAt) return `call:done:${kind}:${Math.round((Date.now() - current.startedAt) / 1000)}`;
+  if (current.startedAt) return `call:done:${kind}:${Math.round((current.startedMono !== null ? performance.now() - current.startedMono : Date.now() - current.startedAt) / 1000)}`;
   if (end === 'missed') return `call:missed:${kind}`;
   if (end === 'declined') return `call:declined:${kind}`;
   if (end === 'network') return `call:network:${kind}`;

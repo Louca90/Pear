@@ -1,5 +1,5 @@
 import { ComponentType, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { AppState, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Reanimated, { FadeIn, FadeOut, interpolateColor, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { BluetoothConnected, ChevronDown, Headphones, Mic, MicOff, Phone, PhoneOff, Smartphone, SwitchCamera, Video, VideoOff, Volume2, LucideIcon } from 'lucide-react-native';
 import { RTCView } from 'react-native-webrtc';
@@ -85,13 +85,20 @@ function statusText(call: CallState) {
 }
 
 // Le chronomètre de l'appel, redessiné seul chaque seconde.
-function Chrono({ since, style }: { since: number; style: object }) {
-  const [now, setNow] = useState(Date.now());
+// La durée : toujours « maintenant moins le départ », jamais un compteur qui additionne, sur l'horloge
+// monotone. Un seul minuteur lié à l'affichage ; il recalcule aussi au retour au premier plan.
+function Chrono({ call, style }: { call: CallState; style: object }) {
+  const [, tick] = useState(0);
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
+    const id = setInterval(() => tick((count) => count + 1), 1000);
+    const subscription = AppState.addEventListener('change', (state) => state === 'active' && tick((count) => count + 1));
+    return () => {
+      clearInterval(id);
+      subscription.remove();
+    };
   }, []);
-  return <Text style={style}>{formatCallDuration(Math.max(0, Math.floor((now - since) / 1000)))}</Text>;
+  const elapsed = call.startedMono !== null ? performance.now() - call.startedMono : Date.now() - (call.startedAt ?? Date.now());
+  return <Text style={[style, { fontVariant: ['tabular-nums'] }]}>{formatCallDuration(Math.max(0, Math.floor(elapsed / 1000)))}</Text>;
 }
 
 const OUTPUT_ICONS: Record<CallOutputType, LucideIcon> = {
@@ -186,7 +193,7 @@ function CallFull({ call, name, onMinimize }: { call: CallState; name: string; o
             {status}
           </Reanimated.Text>
         ) : (
-          call.startedAt && <Chrono since={call.startedAt} style={[styles.status, { color: mutedColor }]} />
+          call.startedAt && <Chrono call={call} style={[styles.status, { color: mutedColor }]} />
         )}
         {call.phase === 'active' && !call.remoteCamera && call.video && <Text style={[styles.hint, { color: mutedColor }]}>{t('appel.cameraCoupee')}</Text>}
       </View>
@@ -274,7 +281,7 @@ function CallPip({ call, name }: { call: CallState; name: string }) {
               {status}
             </Text>
           ) : (
-            call.startedAt && <Chrono since={call.startedAt} style={[styles.pipStatus, { color: colors.textMuted }]} />
+            call.startedAt && <Chrono call={call} style={[styles.pipStatus, { color: colors.textMuted }]} />
           )}
         </View>
       )}
@@ -433,7 +440,7 @@ function CallPill({ call, name, onPress }: { call: CallState; name: string; onPr
         <Text style={[styles.pillText, styles.pillName]} numberOfLines={1}>
           {name}
         </Text>
-        {status ? <Text style={styles.pillText}>· {status}</Text> : call.startedAt ? <Chrono since={call.startedAt} style={styles.pillText} /> : null}
+        {status ? <Text style={styles.pillText}>· {status}</Text> : call.startedAt ? <Chrono call={call} style={styles.pillText} /> : null}
       </View>
       </SnapDraggable>
     </Reanimated.View>
