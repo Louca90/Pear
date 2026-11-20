@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
 import { AppState, Linking, ScrollView, Text } from 'react-native';
-import { Ban, Bell, Download, Eye, HardDrive, Languages, Link2, Lock, Sparkles, RefreshCw, Share2, ShieldCheck, Stethoscope, Volume2 } from 'lucide-react-native';
+import { Ban, Bell, Download, Eye, HardDrive, Languages, Link2, Lock, Sparkles, RefreshCw, Share2, ShieldCheck, Stethoscope } from 'lucide-react-native';
 import { linkPreviewsEnabled, setLinkPreviewsEnabled } from '../chat/linkPreview';
 
 import { getSetting, setSetting } from '../chat/database';
-import { setSoundsEnabled, soundsEnabled } from './chat/sounds';
 import { appVersionCode, appVersionName, authenticate } from '../../modules/pear-native';
 import { showDialog } from '../components/dialog';
 
@@ -40,7 +39,6 @@ export function SettingsScreen({ onBack, onDiagnostic, onBlocked, onStorage, onS
   const [languageOpen, setLanguageOpen] = useState(false);
   const [relay, setRelay] = useState(() => getSetting('relay_enabled') !== '0');
   const [linkPreviews, setLinkPreviews] = useState(linkPreviewsEnabled);
-  const [sounds, setSounds] = useState(soundsEnabled);
 
   const [lock, setLock] = useState(() => getSetting('app_lock') === '1');
   // On vérifie que l'empreinte ou le code marche avant d'activer : sinon on s'enfermerait dehors.
@@ -105,21 +103,6 @@ export function SettingsScreen({ onBack, onDiagnostic, onBlocked, onStorage, onS
 
         <SettingsGroup title={t('reglages.notifications')}>
           <SettingRow icon={Bell} label={t('commun.notifications')} onPress={() => Linking.openSettings()} />
-          <SettingRow
-            icon={Volume2}
-            label={t('reglages.sons')}
-            detail={t('reglages.sonsAide')}
-            right={
-              <Toggle
-                value={sounds}
-                label={t('reglages.sons')}
-                onChange={(value) => {
-                  setSounds(value);
-                  setSoundsEnabled(value);
-                }}
-              />
-            }
-          />
           <SettingRow icon={HardDrive} label={t('stockage.titre')} onPress={onStorage} />
           <SettingRow icon={Stethoscope} label={t('diag.ouvrir')} onPress={onDiagnostic} />
         </SettingsGroup>

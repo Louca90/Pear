@@ -444,8 +444,6 @@ export const nl: Dictionary = {
   reglages: {
     relais: 'Bestandsrelay',
     relaisAide: 'Als een contact offline is, kan een bestand versleuteld op een relayserver wachten. Uitgeschakeld gaat het alleen rechtstreeks.',
-    sons: "Gespreksgeluiden",
-    sonsAide: "Een zacht geluid bij verzenden en ontvangen als het gesprek open is.",
     notifications: 'Meldingen',
     confidentialite: 'Privacy',
     bloques: 'Geblokkeerde contacten',

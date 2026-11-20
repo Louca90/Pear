@@ -444,8 +444,6 @@ export const de: Dictionary = {
   reglages: {
     relais: 'Datei-Relay',
     relaisAide: 'Wenn ein Kontakt offline ist, kann eine Datei verschlüsselt auf einem Relay-Server warten. Ausgeschaltet geht sie nur direkt.',
-    sons: "Chat-Töne",
-    sonsAide: "Ein dezenter Ton beim Senden und Empfangen, wenn der Chat geöffnet ist.",
     notifications: 'Benachrichtigungen',
     confidentialite: 'Datenschutz',
     bloques: 'Blockierte Kontakte',

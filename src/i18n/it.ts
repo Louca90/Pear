@@ -444,8 +444,6 @@ export const it: Dictionary = {
   reglages: {
     relais: 'Relay dei file',
     relaisAide: 'Quando un contatto è offline, un file può attendere cifrato su un server relay. Se disattivato, parte solo in diretta.',
-    sons: "Suoni della conversazione",
-    sonsAide: "Un suono discreto quando invii e ricevi, con la conversazione aperta.",
     notifications: 'Notifiche',
     confidentialite: 'Privacy',
     bloques: 'Contatti bloccati',

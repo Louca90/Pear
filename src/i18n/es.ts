@@ -444,8 +444,6 @@ export const es: Dictionary = {
   reglages: {
     relais: 'Relé de archivos',
     relaisAide: 'Si un contacto está sin conexión, un archivo puede esperar cifrado en un servidor relé. Desactivado, solo se envía en directo.',
-    sons: "Sonidos de la conversación",
-    sonsAide: "Un sonido discreto al enviar y recibir, con la conversación abierta.",
     notifications: 'Notificaciones',
     confidentialite: 'Privacidad',
     bloques: 'Contactos bloqueados',

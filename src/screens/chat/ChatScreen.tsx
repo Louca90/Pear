@@ -48,7 +48,6 @@ import { ScheduleSheet, scheduleLabel } from './components/ScheduleSheet';
 import { Toast } from './components/Toast';
 import { TypingBubble } from './components/TypingBubble';
 import { dayLabel, ephemeralLabel, nextVoice } from './format';
-import { playSound, prepareSounds, releaseSounds } from './sounds';
 import { JUMP_PULSE_DELAY_MS, LIKE } from './constants';
 import { useChatScroll } from './hooks/useChatScroll';
 import { useKeyboardOpen } from './hooks/useKeyboardOpen';
@@ -147,25 +146,6 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
   }
   newestShown.current = Math.max(newestShown.current, messages[0]?.created_at ?? 0);
   const scroll = useChatScroll(list, messages, preview);
-
-  // Sons (lot 3.4) : seulement pour un message plus récent que tout ce qui était affiché, pas au
-  // chargement de la conversation ni en remontant l'historique.
-  const newestSounded = useRef<{ contact: string; at: number } | null>(null);
-  useEffect(() => {
-    if (preview) return;
-    prepareSounds();
-    return releaseSounds;
-  }, [preview]);
-  useEffect(() => {
-    const newest = messages[0];
-    const previous = newestSounded.current;
-    newestSounded.current = { contact: contactKey, at: Math.max(newest?.created_at ?? 0, previous?.contact === contactKey ? previous.at : 0) };
-    if (preview || !newest || previous?.contact !== contactKey || newest.created_at <= previous.at) return;
-    if (newest.kind === 'system' || newest.kind === 'wallpaper') return;
-    if (newest.mine === 1) {
-      if (newest.status !== 'scheduled') playSound('sent');
-    } else playSound('received');
-  }, [messages, contactKey, preview]);
 
   // Date collante (lot 3.4) : pendant qu'on fait défiler, le jour des messages du haut de l'écran.
   // Effacée 800 ms après l'arrêt du défilement.

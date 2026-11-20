@@ -1,7 +1,7 @@
 import { ReactNode, useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, AppState, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Reanimated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
-import { BatteryCharging, Bell, Ban, Camera, Download, Eye, FlaskConical, FileDown, FileText, FileUp, ImageIcon, Languages, PhoneIncoming, Link2, Lock, LucideIcon, MapPin, RefreshCw, Share2, ShieldCheck, Sparkles, Stethoscope, Volume2 } from 'lucide-react-native';
+import { BatteryCharging, Bell, Ban, Camera, Download, Eye, FlaskConical, FileDown, FileText, FileUp, ImageIcon, Languages, PhoneIncoming, Link2, LucideIcon, MapPin, RefreshCw, Share2, ShieldCheck, Sparkles, Stethoscope } from 'lucide-react-native';
 
 import { appVersionCode, appVersionName, authenticate } from '../../../modules/pear-native';
 import { getBlockedKeys, getSetting, setSetting } from '../../chat/database';
@@ -25,7 +25,6 @@ import { createStyles, radius, setTextScaleIndex, setThemePreference, spacing, T
 import { pagesFor } from '../../update/pages';
 import { acceptTestUpdate, checkForUpdate, getInstallPermission, isTestBuild, requestInstallPermission, setTesterEnabled, testerEnabled, useUpdateState } from '../../update/updates';
 import { WhatsNew } from '../../update/WhatsNew';
-import { setSoundsEnabled, soundsEnabled } from '../chat/sounds';
 
 export type SettingsPage = 'permissions' | 'appearance' | 'notifications' | 'privacy' | 'backup' | 'updates';
 
@@ -152,7 +151,6 @@ export function NotificationsPage({ onBack }: { onBack: () => void }) {
   const styles = useStyles();
   const notifications = usePermission('notifications');
   const battery = usePermission('battery');
-  const [sounds, setSounds] = useState(soundsEnabled);
   const allowed = notifications.state === 'granted';
   return (
     <Page title={t('commun.notifications')} onBack={onBack}>
@@ -168,25 +166,6 @@ export function NotificationsPage({ onBack }: { onBack: () => void }) {
         </Pressable>
       </Block>
       <Block index={1}>
-        <SettingsGroup title={t('reglages.dansApp')}>
-          <SettingRow
-            icon={Volume2}
-            label={t('reglages.sons')}
-            detail={t('reglages.sonsAide')}
-            right={
-              <Toggle
-                value={sounds}
-                label={t('reglages.sons')}
-                onChange={(value) => {
-                  setSounds(value);
-                  setSoundsEnabled(value);
-                }}
-              />
-            }
-          />
-        </SettingsGroup>
-      </Block>
-      <Block index={2}>
         <SettingsGroup title="Android">
           <SettingRow icon={Bell} label={t('reglages.notifAndroid')} detail={t('reglages.notifAndroidAide')} onPress={() => Linking.openSettings()} />
           <SettingRow
@@ -197,7 +176,7 @@ export function NotificationsPage({ onBack }: { onBack: () => void }) {
           />
         </SettingsGroup>
       </Block>
-      <Block index={3}>
+      <Block index={2}>
         <Text style={styles.note}>{t('reglages.notifParContact')}</Text>
       </Block>
     </Page>
