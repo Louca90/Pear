@@ -8,6 +8,7 @@ import { haptics } from '../haptics';
 import type { ChatIntent } from './chat/ChatScreen';
 import { chat } from '../chat/manager';
 import { showDialog } from '../components/dialog';
+import { AvatarViewer } from '../components/AvatarViewer';
 import { Avatar, Button, Header, Screen, usePressFeedback } from '../components/ui';
 import { enterUp, popIn, popOut, timing } from '../motion';
 import { ContactMedia } from './contact/ContactMedia';
@@ -213,7 +214,9 @@ export function ContactScreen({ initialName, profile, isNew, initialTab = 'profi
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.identity}>
             <Reanimated.View style={avatarStyle}>
-              <Avatar uri={profile.photo_uri} size={AVATAR} />
+              <AvatarViewer photoUri={profile.photo_uri} label={t('contact.photoGrand')}>
+                <Avatar uri={profile.photo_uri} size={AVATAR} />
+              </AvatarViewer>
               {online && <Reanimated.View entering={popIn()} exiting={popOut()} style={styles.onlineDot} />}
             </Reanimated.View>
             <Text style={styles.name} numberOfLines={1}>{initialName}</Text>

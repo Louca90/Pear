@@ -196,13 +196,14 @@ const INERTIA_MS = 220;
 type Point = { x: number; y: number };
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
-export type Viewing = { message: Message; rect: Rect; poster: string; size: { width: number; height: number } };
+// round : la photo part d'un rond (avatar) : ses coins passent de ronds à droits en s'ouvrant.
+export type Viewing = { message: Message; rect: Rect; poster: string; size: { width: number; height: number }; round?: boolean };
 
 // Le cadre passe en douceur du carré de la conversation au format réel du média : l'image, recadrée
 // en continu, ne saute jamais. Une vidéo n'est lue qu'une fois le cadre en place, et se met en pause
 // dès la fermeture. Glissé vers le bas, le média suit le doigt ; lâché trop tôt, il revient en plein écran.
 // Tout passe par Reanimated : le cadre change de taille sur le fil de l'interface, sans repasser par JS.
-export function MediaViewer({ viewing: { message, rect, poster, size }, onClose }: { viewing: Viewing; onClose: () => void }) {
+export function MediaViewer({ viewing: { message, rect, poster, size, round }, onClose }: { viewing: Viewing; onClose: () => void }) {
   const styles = useStyles();
   const colors = useMediaColors();
   const isVideo = message.kind === 'video';
@@ -396,7 +397,7 @@ export function MediaViewer({ viewing: { message, rect, poster, size }, onClose 
   const zoomed_ = useAnimatedStyle(() => ({ transform: [{ scale: zoom.get() }] }));
   const from = { left: rect.x, top: rect.y, width: rect.width, height: rect.height };
   const to = { left: (width - finalWidth) / 2, top: (height - finalHeight) / 2, width: finalWidth, height: finalHeight };
-  const corner = radius.md;
+  const corner = round ? rect.width / 2 : radius.md;
   const frame = useAnimatedStyle(() => {
     const p = progress.get();
     return {

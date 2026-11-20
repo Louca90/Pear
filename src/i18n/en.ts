@@ -213,6 +213,7 @@ export const en: Dictionary = {
     galerie: 'Your gallery',
   },
   contact: {
+    photoGrand: 'View profile picture',
     actionEphemeres: 'Disappearing',
     actionPersonnaliser: 'Customize',
     rechercher: 'Search',

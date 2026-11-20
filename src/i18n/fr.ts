@@ -212,6 +212,7 @@ export const fr = {
     galerie: 'Ta galerie',
   },
   contact: {
+    photoGrand: 'Voir la photo de profil',
     actionEphemeres: 'Éphémères',
     actionPersonnaliser: 'Personnaliser',
     rechercher: 'Rechercher',
