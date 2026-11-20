@@ -392,10 +392,13 @@ export function Pear({ height, color, state = 'idle', progress = 0, leafColor }:
   const outerColor = state === 'resting' ? REST.ink : color;
 
   const clipBody = `body${id}`;
-  const clipLiquid = `liquid${id}`;
-  const clipBack = `back${id}`;
-  const clipLink = `link${id}`;
-  const maskBites = `bites${id}`;
+  // Un identifiant neuf à chaque changement de forme : Android garde un détourage en mémoire tant que son
+  // identifiant ne change pas, même si son contenu change.
+  const waveKey = `${Math.round(cut.level * 250)}-${Math.round(phase * 100)}`;
+  const clipLiquid = `liquid${id}-${waveKey}`;
+  const clipBack = `back${id}-${waveKey}`;
+  const clipLink = `link${id}-${Math.round(cut.link * 50)}`;
+  const maskBites = `bites${id}-${Math.round(cut.b0 * 25)}-${Math.round(cut.b1 * 25)}-${Math.round(cut.b2 * 25)}`;
   const skinWidth = small ? SKIN_WIDTH + 3 : SKIN_WIDTH;
 
   return (
