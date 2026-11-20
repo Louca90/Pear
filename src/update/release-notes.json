@@ -1,7 +1,7 @@
 {
-  "version": "1.8.0",
-  "versionCode": 12,
-  "summary": "- Appels audio et vidéo : deux boutons dans l'en-tête de la conversation. L'appel passe en direct entre les deux téléphones, chiffré, sans serveur au milieu.\n- Si l'autre téléphone est fermé ou en veille, il sonne quand même, même verrouillé. Si la connexion directe est impossible, Pear le dit au lieu de sonner dans le vide.\n- Quitter Pear pendant un appel garde l'appel dans une petite fenêtre flottante. En vidéo, déplacez votre image où vous voulez ; appuyez dessus pour l'échanger avec celle de l'autre.\n- Les appels fonctionnent avec un casque Bluetooth ou filaire, et l'appel en cours apparaît dans la Now Bar des Samsung. Pour appeler quelqu'un, il faut que lui aussi ait la 1.8.0.",
+  "version": "1.9.0",
+  "versionCode": 13,
+  "summary": "- Nouvelle icône Pépins, une poire coupée en deux qui s'anime partout dans l'app : connexion, envoi d'une photo (elle se remplit avec le vrai pourcentage, puis « Vérifié »), tirer pour actualiser.\n- Partage d'écran pendant un appel, avec zoom chez celui qui regarde. Les appels marchent aussi téléphone verrouillé, avec la bonne sortie audio (Bluetooth, casque) et son nom.\n- Nouveau vocal : touchez le micro, mettez en pause, réécoutez, puis envoyez. Photo et vidéo en vue unique depuis l'appareil photo de Pear.\n- La Carte devient un onglet et le QR code a sa feuille animée (Mon code / Scanner). Une position partagée affiche maintenant la vraie commune.\n- « Envoi… » reste affiché tant que le téléphone de votre contact n'a pas reçu le message, et Pear vous dit s'il n'a pas de connexion.",
   "pages": {
     "1.6.0": [
       {
