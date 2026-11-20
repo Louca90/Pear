@@ -154,7 +154,7 @@ export const fr = {
     testeurAide: 'Reçois les nouveautés avant tout le monde. Elles peuvent contenir des bugs.',
     versionTest: 'Version de test',
     installerTest: 'Installer la version de test {version}',
-    versionTestAide: 'Elle ne s'installe que si tu le choisis.',
+    versionTestAide: "Elle ne s'installe que si tu le choisis.",
     aJour: 'Pear est à jour',
     githubInjoignable: 'Impossible de joindre GitHub',
     titre: 'Profil',
