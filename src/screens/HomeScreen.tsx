@@ -1,7 +1,7 @@
 import { QrCode } from 'lucide-react-native';
 import { PinIcon, TrashIcon } from '../components/AnimatedIcons';
 import { ComponentRef, memo, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { AppState, Pressable, ScrollView, Text, View } from 'react-native';
 import Reanimated, { LayoutAnimationConfig, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { haptics } from '../haptics';
 import { CheckCheck, Pin, PinOff, Plus, ShieldCheck, Trash2 } from 'lucide-react-native';
@@ -193,7 +193,8 @@ export function HomeScreen({ contacts, onAdd, onOpen, onRequests, onQr }: Props)
   const rows = useRef(new Map<string, ComponentRef<typeof View>>());
 
   useEffect(() => {
-    const timer = setInterval(() => setNow(parisNow()), TICK_MS);
+    // Pas de redessin en arrière-plan : le minuteur ne fait rien tant que l'app n'est pas affichée.
+    const timer = setInterval(() => AppState.currentState === 'active' && setNow(parisNow()), TICK_MS);
     return () => clearInterval(timer);
   }, []);
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { Image, PermissionsAndroid, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AppState, Image, PermissionsAndroid, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Camera, Map, Marker, type CameraRef } from '@maplibre/maplibre-react-native';
 import Reanimated, { cancelAnimation, Easing, ReduceMotion, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withRepeat, withTiming, type EntryExitAnimationFunction } from 'react-native-reanimated';
 import { Download, Eye, EyeOff, Lock, MessageCircle } from 'lucide-react-native';
@@ -205,7 +205,7 @@ export function MapScreen({ contacts, focus, onBack, onOpenChat }: Props) {
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
     keepMapOffline();
-    const timer = setInterval(() => setNow(Date.now()), TICK_MS);
+    const timer = setInterval(() => AppState.currentState === 'active' && setNow(Date.now()), TICK_MS);
     return () => clearInterval(timer);
   }, []);
   const [region, setRegion] = useState<MapRegion | null>(savedRegion);
