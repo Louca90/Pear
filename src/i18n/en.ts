@@ -259,6 +259,8 @@ export const en: Dictionary = {
   ajout: {
     copierLien: 'First copy your contact\'s Pear link.',
     partager: 'Share my link',
+    copier: 'Copy link',
+    copie: 'Link copied',
     coller: 'Paste a link',
   },
   scanner: {
@@ -504,7 +506,9 @@ export const en: Dictionary = {
     poire: 'Pear (state test)',
   },
   qr: {
-    titre: 'My code',
+    titre: 'QR code',
+    monCode: 'My code',
+    scanner: 'Scan',
     aide: 'Your contact scans it with Pear to add you.',
   },
   demandes: {

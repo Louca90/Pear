@@ -2,19 +2,19 @@ import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import Reanimated, { Easing, ReduceMotion, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
 import { haptics } from '../haptics';
-import { Camera, LucideIcon, MessageCircle, User, Users } from 'lucide-react-native';
+import { Camera, LucideIcon, Map as MapIcon, MessageCircle, User } from 'lucide-react-native';
 import { wakeCamera } from '../screens/cameraStandby';
 
 import { chat } from '../chat/manager';
 import { useMediaUri } from '../chat/media';
 import { createStyles, radius, spacing, useColors } from '../theme';
 import { useNavigationBarHeight } from './ui';
-import { CameraFilled, ContactsFilled, MessagesFilled, ProfileRing } from './TabIcons';
+import { CameraFilled, MapFilled, MessagesFilled, ProfileRing } from './TabIcons';
 import { t } from '../i18n';
 import { DURATION, timing } from '../motion';
 import { usePermissionsMissing } from '../onboarding/permissionStatus';
 
-export type Tab = 'home' | 'camera' | 'contacts' | 'profile';
+export type Tab = 'home' | 'camera' | 'map' | 'profile';
 
 type FilledIcon = typeof MessagesFilled;
 
@@ -22,7 +22,7 @@ type FilledIcon = typeof MessagesFilled;
 const TABS: { tab: Tab; icon: LucideIcon; filled: FilledIcon | null; label: string }[] = [
   { tab: 'home', icon: MessageCircle, filled: MessagesFilled, label: t('onglets.messages') },
   { tab: 'camera', icon: Camera, filled: CameraFilled, label: t('onglets.appareilPhoto') },
-  { tab: 'contacts', icon: Users, filled: ContactsFilled, label: t('contacts.titre') },
+  { tab: 'map', icon: MapIcon, filled: MapFilled, label: t('carte.titre') },
   { tab: 'profile', icon: User, filled: null, label: t('profil.titre') },
 ];
 

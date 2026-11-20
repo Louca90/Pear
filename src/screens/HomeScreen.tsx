@@ -1,5 +1,4 @@
-import { Map as MapIcon } from 'lucide-react-native';
-import { openMap } from '../map/openMap';
+import { QrCode } from 'lucide-react-native';
 import { PinIcon, TrashIcon } from '../components/AnimatedIcons';
 import { ComponentRef, memo, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
@@ -49,6 +48,8 @@ type Props = {
   // messageId : ouvrir la conversation sur ce message (résultat de recherche).
   onOpen: (contact: Contact, messageId?: string) => void;
   onRequests: () => void;
+  // Le bouton QR code (à l'ancienne place du bouton Carte).
+  onQr: () => void;
 };
 
 type Filter = 'all' | 'unread' | 'pinned' | 'pending' | 'online';
@@ -150,7 +151,7 @@ const ConversationRow = memo(function ConversationRow({ item, now, index, arrivi
 }, sameRow);
 
 // Les conversations : recherche, catégories, épingles en haut, puis les plus récentes.
-export function HomeScreen({ contacts, onAdd, onOpen, onRequests }: Props) {
+export function HomeScreen({ contacts, onAdd, onOpen, onRequests, onQr }: Props) {
   const colors = useColors();
   const styles = useStyles();
   useSyncExternalStore(chat.subscribe, chat.getVersion);
@@ -282,8 +283,8 @@ export function HomeScreen({ contacts, onAdd, onOpen, onRequests }: Props) {
   const logo = <Pear height={30} color={colors.text} />;
   const profileButton = (
     <View style={styles.headerActions}>
-      <IconButton onPress={() => openMap(null)} label={t('carte.titre')} style={styles.mapButton}>
-        <MapIcon size={20} color={colors.text} strokeWidth={1.75} />
+      <IconButton onPress={onQr} label={t('qr.titre')} style={styles.mapButton}>
+        <QrCode size={20} color={colors.text} strokeWidth={1.75} />
       </IconButton>
       <RequestsBell count={getPendingRequests().length} onPress={onRequests} />
       <IconButton onPress={onAdd} label={t('liste.nouvelleConversation')} style={styles.newButton}>

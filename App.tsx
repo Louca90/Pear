@@ -22,7 +22,7 @@ import { BottomBar, Tab } from './src/components/BottomBar';
 import { DialogHost, showDialog } from './src/components/dialog';
 import { ErrorBoundary, ErrorScreen } from './src/components/ErrorBoundary';
 import { deriveSharedSecret, getVerificationCode, Identity, PairingLink, parsePairingLink } from './src/crypto/pairing';
-import { ContactsScreen } from './src/screens/ContactsScreen';
+import { PairSheet } from './src/components/PairSheet';
 import { CameraScreen } from './src/screens/CameraScreen';
 import { ChatScreen } from './src/screens/chat/ChatScreen';
 import { isSelf } from './src/chat/self';
@@ -45,7 +45,6 @@ import { ProfileScreen } from './src/screens/ProfileScreen';
 import { MapScreen } from './src/screens/MapScreen';
 import { onOpenMap } from './src/map/openMap';
 import { AppearancePage, BackupPage, NotificationsPage, PermissionsPage, PrivacyPage, SettingsPage, UpdatesPage } from './src/screens/settings/SettingsPages';
-import { ScannerScreen } from './src/screens/ScannerScreen';
 import { Contact, hasIdentity, loadContacts, loadOrCreateIdentity, saveContacts } from './src/storage';
 import { createStyles, fixed, loadTheme, motion, Palette, spacing, useColors } from './src/theme';
 import { markUpdateSeen, pendingUpdatedInfo, UpdatedInfo } from './src/update/updated';
@@ -65,10 +64,8 @@ import { t } from './src/i18n';
 
 type Route =
   | { name: 'home' }
-  | { name: 'contacts' }
   // to : ouvert depuis une conversation, la photo part directement à ce contact.
   | { name: 'camera'; to?: string }
-  | { name: 'scan' }
   | { name: 'profile' }
   | { name: 'diagnostic' }
   | { name: 'storage' }
@@ -102,7 +99,7 @@ const TAB_SWIPE_RATIO = 0.3;
 // Les bords restent au retour par geste d'Android.
 const TAB_EDGE = 28;
 // Dans l'ordre de la barre du bas : le glissement horizontal passe de l'un à l'autre.
-const TAB_ROUTES: string[] = ['home', 'camera', 'contacts', 'profile'];
+const TAB_ROUTES: string[] = ['home', 'camera', 'map', 'profile'];
 // L'écran parent reste monté sous la page (prêt pour le retour) ; pas la caméra, qui allumerait le capteur.
 const NOT_KEPT_UNDER = ['camera', 'scan'];
 // Délai avant de monter un parent qui ne l'était pas : la page qui vient d'arriver passe d'abord.
@@ -210,7 +207,8 @@ function App() {
     setUpdatedInfo(null);
   };
   const [onboarding, setOnboarding] = useState<{ mode: 'full' | 'permissions'; step: OnboardingStep } | null>(null);
-  // Une autorisation retirée depuis la prise en main : un bandeau discret sur l'accueil.
+  // La feuille « QR code » (mon code, scanner), ouverte depuis l'accueil.
+  const [pairOpen, setPairOpen] = useState(false);
 
   useEffect(() => {
     // La base est ouverte et migrée avant tout : un échec affiche une erreur au lieu de planter en boucle.
@@ -336,7 +334,6 @@ function App() {
 
   const parentOf = (current: Route): Route | null => {
     if (current.name === 'home') return null;
-    if (current.name === 'scan') return { name: 'contacts' };
     // Ouverts depuis une page des réglages (ou depuis Tous les réglages, qui y ramène aussi).
     if (current.name === 'servers' || current.name === 'blocked') return { name: 'settingsPage', page: 'privacy' };
     if (current.name === 'diagnostic' || current.name === 'discover') return { name: 'settingsPage', page: 'updates' };
@@ -394,6 +391,8 @@ function App() {
 
   const isTabSwipe = ({ dx, dy, x0 }: { dx: number; dy: number; x0: number }) =>
     TAB_ROUTES.includes(latestRouteName.current) &&
+    // La carte garde tous les glissés (déplacer, zoomer) : on change d'onglet par la barre du bas.
+    latestRouteName.current !== 'map' &&
     !isTabSwipeLocked() && x0 > TAB_EDGE && x0 < screenWidth - TAB_EDGE && Math.abs(dx) > 24 && Math.abs(dx) > Math.abs(dy) * 2;
 
   const settleTab = (toValue: number, then: () => void) =>
@@ -539,22 +538,6 @@ function App() {
     }
     if (!identity) return <View style={styles.center} />;
 
-    if (current.name === 'contacts') {
-      return (
-        <ContactsScreen
-          publicKey={identity.publicKey}
-          contacts={contacts}
-          onScan={() => setRoute({ name: 'scan' })}
-          onKeyReceived={openKey}
-          onRequests={() => setRoute({ name: 'requests' })}
-          onOpenContact={(contact) => setRoute({ name: 'contact', publicKey: contact.publicKey })}
-          onMessage={(contact) => setRoute({ name: 'chat', publicKey: contact.publicKey })}
-        />
-      );
-    }
-    if (current.name === 'scan') {
-      return <ScannerScreen onBack={() => setRoute({ name: 'contacts' })} onKeyReceived={openKey} />;
-    }
     if (current.name === 'camera') {
       return (
         <CameraScreen
@@ -707,7 +690,8 @@ function App() {
     return (
       <HomeScreen
         contacts={contacts}
-        onAdd={() => setRoute({ name: 'contacts' })}
+        onAdd={() => setPairOpen(true)}
+        onQr={() => setPairOpen(true)}
         onOpen={(contact, jump) => setRoute({ name: 'chat', publicKey: contact.publicKey, jump })}
         onRequests={() => setRoute({ name: 'requests' })}
       />
@@ -794,8 +778,11 @@ function App() {
             markOnboardingDone();
             setOnboarding(null);
             setPermissionsMissing(false);
-            // Sans contact, on ouvre directement l'onglet Contacts (montrer son code, scanner) : c'est la première chose à faire.
-            if (onboarding.mode === 'full') setRoute(contacts.length === 0 ? { name: 'contacts' } : { name: 'home' });
+            // Sans contact, on ouvre directement la feuille QR code (montrer son code, scanner) : c'est la première chose à faire.
+            if (onboarding.mode === 'full') {
+              setRoute({ name: 'home' });
+              if (contacts.length === 0) setPairOpen(true);
+            }
           }}
         />
         <DialogHost />
@@ -852,11 +839,14 @@ function App() {
       {neighbor && (
         <NeighborLayer tabDrag={tabDrag} offset={neighbor.side * screenWidth}>
           {/* La caméra n'est pas allumée pour un simple glissement : un fond noir la représente. */}
-          {neighbor.name === 'camera' ? <View style={styles.cameraPlaceholder} /> : render({ name: neighbor.name } as Route, true)}
+          {neighbor.name === 'camera' || neighbor.name === 'map' ? <View style={styles.cameraPlaceholder} /> : render({ name: neighbor.name } as Route, true)}
         </NeighborLayer>
       )}
+      {identity && !error && (
+        <PairSheet visible={pairOpen} publicKey={identity.publicKey} onClose={() => setPairOpen(false)} onKeyReceived={openKey} />
+      )}
       {identity && !error && !filming && TAB_ROUTES.includes(route.name) && (
-        <BottomBar active={route.name as Tab} onChange={(tab) => setRoute({ name: tab } as Route)} />
+        <BottomBar active={route.name as Tab} onChange={(tab) => setRoute(tab === 'map' ? { name: 'map', focus: null } : ({ name: tab } as Route))} />
       )}
       {updatedInfo && identity && route.name === 'home' && (
         // Des pages « Quoi de neuf » pour cette version : elles remplacent la popup courte.

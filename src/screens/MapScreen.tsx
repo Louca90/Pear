@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'reac
 import { Image, PermissionsAndroid, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Camera, Map, Marker, type CameraRef } from '@maplibre/maplibre-react-native';
 import Reanimated, { cancelAnimation, Easing, ReduceMotion, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withRepeat, withTiming, type EntryExitAnimationFunction } from 'react-native-reanimated';
-import { ArrowLeft, Download, Eye, EyeOff, Lock, MessageCircle } from 'lucide-react-native';
+import { Download, Eye, EyeOff, Lock, MessageCircle } from 'lucide-react-native';
 
 import { lastKnownLocation } from '../../modules/pear-native';
 import { getContactProfile, getLocationMessages } from '../chat/database';
@@ -10,6 +10,7 @@ import { distanceKm, formatDistance, isSharing, parseLocationText, SharedLocatio
 import { chat } from '../chat/manager';
 import { useMediaUri } from '../chat/media';
 import { showDialog } from '../components/dialog';
+import { useBottomBarSpace } from '../components/BottomBar';
 import { useInsets, useNavigationBarHeight, usePressFeedback } from '../components/ui';
 import { haptics } from '../haptics';
 import { t } from '../i18n';
@@ -190,6 +191,7 @@ const cardIn: EntryExitAnimationFunction = () => {
 };
 
 type Props = { contacts: Contact[]; focus: string | null; onBack: () => void; onOpenChat: (publicKey: string) => void };
+// La carte est un onglet : plus de flèche retour, et la fiche se pose au-dessus de la barre du bas.
 
 // La carte des contacts qui me partagent leur position (planche « Carte ») : hors ligne, la zone gardée
 // sur le téléphone ; la fiche du bas rejoue son entrée quand on choisit un autre contact.
@@ -198,7 +200,7 @@ export function MapScreen({ contacts, focus, onBack, onOpenChat }: Props) {
   const ink = useInk();
   const dark = useIsDark();
   const { top } = useInsets();
-  const bottom = useNavigationBarHeight();
+  const bottom = useNavigationBarHeight() + useBottomBarSpace();
   useSyncExternalStore(chat.subscribe, chat.getVersion);
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
@@ -300,9 +302,7 @@ export function MapScreen({ contacts, focus, onBack, onOpenChat }: Props) {
       )}
 
       <Reanimated.View entering={enterUp(-10, 300)} style={[styles.header, { top: top + spacing.sm }]}>
-        <RoundButton onPress={onBack} label={t('commun.retour')}>
-          <ArrowLeft size={20} color={ink.ink} strokeWidth={1.9} />
-        </RoundButton>
+        <View style={styles.round} />
         <View style={styles.titlePill}>
           <Text style={styles.title}>{t('carte.titre')}</Text>
         </View>

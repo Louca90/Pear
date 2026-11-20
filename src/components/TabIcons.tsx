@@ -139,3 +139,23 @@ export function ProfileRing({ size, draw }: { size: number; draw: SharedValue<nu
     </Svg>
   );
 }
+
+// La carte dépliée : pleine, ses deux plis se tracent l'un après l'autre à chaque sélection.
+const MAP_BODY = 'M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z';
+const FOLD_LENGTH = 15;
+
+function Fold({ d, start, end, kick, color }: { d: string; start: number; end: number; kick: SharedValue<number>; color: string }) {
+  const props = useAnimatedProps(() => ({ strokeDashoffset: FOLD_LENGTH * interpolate(kick.get(), [0, start, (start + end) / 2, end, 1], [0, 0, 1, 0, 0], Extrapolation.CLAMP) }));
+  return <AnimatedPath d={d} fill="none" stroke={color} strokeWidth={1.75} strokeLinecap="round" strokeDasharray={`${FOLD_LENGTH} ${FOLD_LENGTH}`} animatedProps={props} />;
+}
+
+export function MapFilled({ size, kick }: IconProps) {
+  const colors = useColors();
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path d={MAP_BODY} fill={colors.text} stroke={colors.text} strokeWidth={1.75} strokeLinejoin="round" />
+      <Fold d="M15 5.764v15" start={0.1} end={0.55} kick={kick} color={colors.elevated} />
+      <Fold d="M9 3.236v15" start={0.3} end={0.75} kick={kick} color={colors.elevated} />
+    </Svg>
+  );
+}

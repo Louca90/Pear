@@ -5,7 +5,7 @@ import { EASE } from '../motion';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Camera } from 'lucide-react-native';
 
-import { Button, Header, Screen } from '../components/ui';
+import { Button } from '../components/ui';
 import { PairingLink, parsePairingLink } from '../crypto/pairing';
 import { Pear } from '../components/Pear';
 import { haptics } from '../haptics';
@@ -13,7 +13,6 @@ import { createStyles, motion, radius, spacing, useColors } from '../theme';
 import { t } from '../i18n';
 
 type Props = {
-  onBack: () => void;
   onKeyReceived: (link: PairingLink) => void;
 };
 
@@ -23,7 +22,8 @@ type Bounds = { origin: { x: number; y: number }; size: { width: number; height:
 const FRAME = 0.7;
 const LINGER_MS = 700;
 
-export function ScannerScreen({ onBack, onKeyReceived }: Props) {
+// Le lecteur de QR code, posé dans la feuille « QR code » (onglet Scanner).
+export function ScannerPanel({ onKeyReceived }: Props) {
   const styles = useStyles();
   const colors = useColors();
   const [box, setBox] = useState(0);
@@ -72,23 +72,19 @@ export function ScannerScreen({ onBack, onKeyReceived }: Props) {
     timer.current = setTimeout(() => onKeyReceived(key), motion.reduced ? 0 : LINGER_MS);
   };
 
-  if (!permission) return <Screen><Header title={t('scanner.titre')} onBack={onBack} /></Screen>;
+  if (!permission) return <View style={styles.permission} />;
 
   if (!permission.granted) {
     return (
-      <Screen>
-        <Header title={t('scanner.titre')} onBack={onBack} />
-        <View style={styles.permission}>
-          <Text style={styles.text}>{t('scanner.cameraAide')}</Text>
-          <Button label={t('scanner.autoriserCamera')} icon={Camera} onPress={requestPermission} />
-        </View>
-      </Screen>
+      <View style={styles.permission}>
+        <Text style={styles.text}>{t('scanner.cameraAide')}</Text>
+        <Button label={t('scanner.autoriserCamera')} icon={Camera} onPress={requestPermission} />
+      </View>
     );
   }
 
   return (
-    <Screen>
-      <Header title={t('scanner.titre')} onBack={onBack} />
+    <View>
       <View style={styles.cameraBox} onLayout={(event) => setBox(event.nativeEvent.layout.width)}>
         <CameraView
           style={StyleSheet.absoluteFill}
@@ -108,20 +104,18 @@ export function ScannerScreen({ onBack, onKeyReceived }: Props) {
       <Text style={styles.text}>
         {invalid ? t('scanner.pasPear') : t('scanner.viser')}
       </Text>
-    </Screen>
+    </View>
   );
 }
 
 const useStyles = createStyles((colors) => ({
   permission: {
-    flex: 1,
     justifyContent: 'center',
-    padding: spacing.lg,
+    paddingVertical: spacing.lg,
   },
   cameraBox: {
     aspectRatio: 1,
-    marginHorizontal: spacing.lg,
-    borderRadius: radius.md,
+    borderRadius: 28,
     overflow: 'hidden',
     backgroundColor: colors.surface,
   },

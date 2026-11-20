@@ -258,6 +258,8 @@ export const fr = {
   ajout: {
     copierLien: 'Copiez d\'abord le lien Pear de votre contact.',
     partager: 'Partager mon lien',
+    copier: 'Copier le lien',
+    copie: 'Lien copié',
     coller: 'Coller un lien',
   },
   scanner: {
@@ -503,7 +505,9 @@ export const fr = {
     poire: 'Poire (test des états)',
   },
   qr: {
-    titre: 'Mon code',
+    titre: 'QR code',
+    monCode: 'Mon code',
+    scanner: 'Scanner',
     aide: 'Ton contact le scanne avec Pear pour t\'ajouter.',
   },
   demandes: {
