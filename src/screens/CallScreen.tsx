@@ -19,6 +19,7 @@ import { t, TextKey } from '../i18n';
 import { addPipListener } from '../../modules/pear-native';
 import { PearChronometer, PearVideoView } from '../../modules/pear-native/video';
 import { SnapDraggable } from './call/SnapDraggable';
+import { ZoomableShare } from './call/ZoomableShare';
 
 // L'écran d'un appel (vague 5), par-dessus tout le reste, même l'écran de verrouillage de Pear.
 // Audio : fond blanc, photo du contact au centre avec un anneau qui respire tant que ça sonne.
@@ -386,18 +387,23 @@ function VideoStage({ call, showRemote, showLocal, top, bottom, onTap, chromeHid
     ];
   }, [width, height, top, bottom, chromeHidden]);
   const mainLocal = showLocal && (!showRemote || localMain);
+  // L'écran partagé du contact en grand : on peut zoomer dedans (pincer, double appui) et s'y déplacer.
+  const sharedMain = !mainLocal && call.remoteSharing;
+  const main = (
+    <RTCView
+      streamURL={mainLocal ? call.localUrl! : call.remoteUrl!}
+      // Un écran partagé s'affiche en entier (pas rogné) ; une caméra remplit l'écran.
+      objectFit={sharedMain ? 'contain' : 'cover'}
+      mirror={mainLocal && call.front}
+      zOrder={0}
+      style={StyleSheet.absoluteFill}
+    />
+  );
   return (
     <>
-      <RTCView
-        streamURL={mainLocal ? call.localUrl! : call.remoteUrl!}
-        // Un écran partagé s'affiche en entier (pas rogné) ; une caméra remplit l'écran.
-        objectFit={!mainLocal && call.remoteSharing ? 'contain' : 'cover'}
-        mirror={mainLocal && call.front}
-        zOrder={0}
-        style={StyleSheet.absoluteFill}
-      />
+      {sharedMain ? <ZoomableShare onTap={onTap}>{main}</ZoomableShare> : main}
       <Reanimated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.dark, veilStyle]} />
-      <Pressable style={StyleSheet.absoluteFill} onPress={onTap} accessibilityLabel={t('appel.commandes')} />
+      {!sharedMain && <Pressable style={StyleSheet.absoluteFill} onPress={onTap} accessibilityLabel={t('appel.commandes')} />}
       {both && (
         <SnapDraggable slots={slots} onTap={swap} style={styles.thumbWrap}>
           <Reanimated.View entering={FadeIn.duration(DURATION.small).easing(EASE)} style={styles.thumb}>

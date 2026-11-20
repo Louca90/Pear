@@ -1050,6 +1050,7 @@ export const fr = {
     partagerTitre: 'Partager ton écran ?',
     partagerAide: "Ton contact verra tout ce qui s'affiche sur ton écran, notifications comprises. Rien ne passe par un serveur : l'image suit le même chemin chiffré que la vidéo de l'appel.",
     ecranDe: 'Écran de {nom}',
+    zoomEcran: "Écran partagé. Pincer ou toucher deux fois pour zoomer, toucher une fois pour les commandes de l'appel.",
     partageEnCours: 'Partage en cours',
     casque: 'Casque',
     manqueTitre: 'Appel manqué',

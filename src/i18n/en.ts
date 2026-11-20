@@ -1051,6 +1051,7 @@ export const en: Dictionary = {
     partagerTitre: 'Share your screen?',
     partagerAide: "Your contact will see everything on your screen, notifications included. Nothing goes through a server: the picture follows the same encrypted path as the call video.",
     ecranDe: "{nom}'s screen",
+    zoomEcran: 'Shared screen. Pinch or double-tap to zoom, tap once for the call controls.',
     partageEnCours: 'Sharing your screen',
     casque: 'Headset',
     manqueTitre: 'Missed call',
