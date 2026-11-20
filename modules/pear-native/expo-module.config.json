@@ -6,7 +6,8 @@
     "modules": [
       "expo.modules.pearnative.PearNativeModule",
       "expo.modules.pearnative.PearCameraModule",
-      "expo.modules.pearnative.PearVideoModule"
+      "expo.modules.pearnative.PearVideoModule",
+      "expo.modules.pearnative.PearChronometerModule"
     ]
   }
 }

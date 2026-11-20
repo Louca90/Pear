@@ -23,7 +23,7 @@ class PearCallService : Service() {
   companion object {
     private const val CHANNEL = "appel_en_cours"
     private const val NOTIFICATION_ID = 4207
-    private const val ACTION_HANG_UP = "pear.call.HANG_UP"
+    const val ACTION_HANG_UP = "pear.call.HANG_UP"
     private const val ACTION_STOP = "pear.call.STOP"
 
     // Raccrocher depuis la notification ou la Now Bar : le module JS le transmet à l'écran d'appel.

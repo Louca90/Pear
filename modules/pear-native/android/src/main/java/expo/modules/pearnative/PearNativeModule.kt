@@ -291,19 +291,40 @@ class PearNativeModule : Module() {
     Function("stopRinging") { CallAudio.stopRinging() }
     // Appel en cours : quitter Pear (accueil, autre app) ouvre la fenêtre flottante de l'appel, à ce format.
     // Android 12 et plus ; enabled = false à la fin de l'appel.
-    AsyncFunction("setCallPip") { enabled: Boolean, width: Int, height: Int ->
+    AsyncFunction("setCallPip") { enabled: Boolean, width: Int, height: Int, hangUpLabel: String ->
       val activity = appContext.currentActivity as? ComponentActivity ?: return@AsyncFunction
       if (!pipListening) {
         pipListening = true
         activity.addOnPictureInPictureModeChangedListener { info: PictureInPictureModeChangedInfo ->
           sendEvent("onPip", mapOf("active" to info.isInPictureInPictureMode))
+          // Le changement de taille de la fenêtre n'est pas toujours remesuré tout de suite : l'écran restait
+          // à moitié dessiné jusqu'au premier toucher. On force deux mesures.
+          val decor = activity.window.decorView
+          decor.requestLayout()
+          decor.postDelayed({ decor.requestLayout() }, 200)
         }
       }
       if (Build.VERSION.SDK_INT >= 31) {
         try {
+          // Sans action à nous, Samsung (One UI) prend la fenêtre pour un lecteur vidéo et y met ses
+          // commandes lecture / pause. Une action « Raccrocher » les remplace.
+          val hangUp = android.app.PendingIntent.getService(
+            activity,
+            2,
+            Intent(activity, PearCallService::class.java).setAction(PearCallService.ACTION_HANG_UP),
+            android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT,
+          )
+          val action = android.app.RemoteAction(
+            android.graphics.drawable.Icon.createWithResource(activity, android.R.drawable.ic_menu_close_clear_cancel),
+            hangUpLabel,
+            hangUpLabel,
+            hangUp,
+          )
           activity.setPictureInPictureParams(
             PictureInPictureParams.Builder()
               .setAutoEnterEnabled(enabled)
+              .setSeamlessResizeEnabled(false)
+              .setActions(if (enabled) listOf(action) else emptyList())
               .setAspectRatio(Rational(width.coerceAtLeast(1), height.coerceAtLeast(1)))
               .build(),
           )

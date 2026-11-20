@@ -17,7 +17,7 @@ import { DURATION, EASE, enterUp, timing } from '../motion';
 import { createStyles, fixed, radius, spacing, useColors } from '../theme';
 import { t, TextKey } from '../i18n';
 import { addPipListener } from '../../modules/pear-native';
-import { PearVideoView } from '../../modules/pear-native/video';
+import { PearChronometer, PearVideoView } from '../../modules/pear-native/video';
 import { SnapDraggable } from './call/SnapDraggable';
 
 // L'écran d'un appel (vague 5), par-dessus tout le reste, même l'écran de verrouillage de Pear.
@@ -299,7 +299,8 @@ function CallPip({ call, name }: { call: CallState; name: string }) {
               {status}
             </Text>
           ) : (
-            call.startedAt && <Chrono call={call} style={[styles.pipStatus, { color: colors.textMuted }]} />
+            // Dans la fenêtre flottante, la durée est tenue par le système : un minuteur JavaScript s'y arrête.
+            call.startedMono !== null && <PearChronometer elapsedMs={Math.max(0, performance.now() - call.startedMono)} color={colors.textMuted} style={styles.pipChrono} />
           )}
         </View>
       )}
@@ -619,6 +620,10 @@ const useStyles = createStyles((colors) => ({
   pipName: {
     fontSize: 14,
     fontWeight: '600',
+  },
+  pipChrono: {
+    width: 80,
+    height: 20,
   },
   pipStatus: {
     fontSize: 12,

@@ -53,7 +53,7 @@ declare class PearNativeModule extends NativeModule<{ onBack: (event: BackEvent)
   callHeadset?(): string;
   callOutputs?(): CallOutput[];
   setCallOutput?(id: number): void;
-  setCallPip?(enabled: boolean, width: number, height: number): Promise<void>;
+  setCallPip?(enabled: boolean, width: number, height: number, hangUpLabel: string): Promise<void>;
   startCallService?(info: Record<string, string | number | boolean>): void;
   stopCallService?(): void;
   setVideoCorner?(tag: number, radius: number): Promise<boolean>;
@@ -306,7 +306,7 @@ export function showOverLock(on: boolean) {
 
 // Fenêtre flottante de l'appel (Android 12 et plus) : quitter Pear pendant l'appel l'ouvre, au format donné.
 export function setCallPip(enabled: boolean, width = 9, height = 16) {
-  return PearNative.setCallPip?.(enabled, width, height) ?? Promise.resolve();
+  return PearNative.setCallPip?.(enabled, width, height, t('appel.raccrocher')) ?? Promise.resolve();
 }
 
 // Pear passe dans la fenêtre flottante, ou en sort.
