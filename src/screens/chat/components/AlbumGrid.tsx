@@ -4,8 +4,9 @@ import { Pressable, View } from 'react-native';
 import { Message } from '../../../chat/database';
 import { chat } from '../../../chat/manager';
 import { parseMeta } from '../../../chat/meta';
-import { createStyles, radius, useColors } from '../../../theme';
+import { createStyles, radius } from '../../../theme';
 import { TransferPear } from '../../../components/TransferPear';
+import { useTransferAnimation } from '../hooks/useTransferAnimation';
 
 import { LONG_PRESS_MS, MEDIA_WIDTH } from '../constants';
 import { useChatStyles } from '../styles';
@@ -41,6 +42,7 @@ function Cell({ message, width, height, hidden, onOpen, onLongPress, onPrepare }
   const view = useRef<ViewRef>(null);
   // L'avancement du transfert est lu ici : la bulle, elle, ne se redessine que si son message change.
   const progress = useTransferProgress(message.id);
+  const transfer = useTransferAnimation(message, progress);
   const receiving = message.status === 'receiving';
   const thumb = parseMeta(message.meta).thumb;
   const size = { width, height, borderRadius: 6 };
@@ -64,7 +66,7 @@ function Cell({ message, width, height, hidden, onOpen, onLongPress, onPrepare }
           <VideoPreview message={message} style={size} />
         </View>
       )}
-      <TransferPear progress={progress} small />
+      <TransferPear transfer={transfer} small />
     </Pressable>
   );
 }
