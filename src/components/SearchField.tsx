@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type ComponentRef } from 'react';
 import { Keyboard, Pressable, TextInput, View } from 'react-native';
 import { Search, X } from 'lucide-react-native';
 
@@ -9,7 +9,7 @@ import { createStyles, radius, spacing, useColors } from '../theme';
 export function SearchField({ value, onChange, placeholder, autoFocus }: { value: string; onChange: (text: string) => void; placeholder: string; autoFocus?: boolean }) {
   const colors = useColors();
   const styles = useStyles();
-  const input = useRef<TextInput>(null);
+  const input = useRef<ComponentRef<typeof TextInput>>(null);
   // Le champ ne prend le focus qu'au toucher : en quittant l'écran, il le rend et le clavier se ferme.
   useEffect(
     () => () => {
