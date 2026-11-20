@@ -1,8 +1,9 @@
 import { QrCode } from 'lucide-react-native';
+import { BlurTargetView } from 'expo-blur';
 import { PinIcon, TrashIcon } from '../components/AnimatedIcons';
 import { ComponentRef, memo, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { AppState, Pressable, ScrollView, Text, View } from 'react-native';
-import Reanimated, { LayoutAnimationConfig, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import Reanimated, { LayoutAnimationConfig, useAnimatedStyle, useSharedValue, Easing, ReduceMotion, withTiming, type EntryExitAnimationFunction } from 'react-native-reanimated';
 import { haptics } from '../haptics';
 import { CheckCheck, Pin, PinOff, Plus, ShieldCheck, Trash2 } from 'lucide-react-native';
 
@@ -96,6 +97,16 @@ function sameRow(previous: RowProps, next: RowProps) {
 // Rafraîchit « il y a X min » tant que l'écran est affiché.
 const TICK_MS = 60 * 1000;
 
+// Épinglée : la punaise apparaît en tournant (planche « Liste · maintenir une conversation »).
+const pinIn: EntryExitAnimationFunction = () => {
+  'worklet';
+  const config = { duration: 360, easing: Easing.bezier(0.2, 0.8, 0.2, 1), reduceMotion: ReduceMotion.System };
+  return {
+    initialValues: { opacity: 0, transform: [{ scale: 0.3 }, { rotate: '-40deg' }] },
+    animations: { opacity: withTiming(1, config), transform: [{ scale: withTiming(1, config) }, { rotate: withTiming('0deg', config) }] },
+  };
+};
+
 const ConversationRow = memo(function ConversationRow({ item, now, index, arriving }: RowProps) {
   const colors = useColors();
   const styles = useStyles();
@@ -121,7 +132,11 @@ const ConversationRow = memo(function ConversationRow({ item, now, index, arrivi
       </OnlineRing>
       <View style={styles.rowText}>
         <View style={styles.nameLine}>
-          {pinned && <Pin size={13} color={colors.textMuted} strokeWidth={2} />}
+          {pinned && (
+            <Reanimated.View entering={pinIn}>
+              <Pin size={13} color={colors.textMuted} strokeWidth={2} />
+            </Reanimated.View>
+          )}
           <Text style={[styles.name, bold && styles.bold]} numberOfLines={1}>
             {contact.name}
           </Text>
@@ -191,6 +206,7 @@ export function HomeScreen({ contacts, onAdd, onOpen, onRequests, onQr }: Props)
   const arriving = useRingArrival();
   const [selected, setSelected] = useState<{ item: Item; rect: Rect } | null>(null);
   const rows = useRef(new Map<string, ComponentRef<typeof View>>());
+  const blurTarget = useRef<ComponentRef<typeof View>>(null);
 
   useEffect(() => {
     // Pas de redessin en arrière-plan : le minuteur ne fait rien tant que l'app n'est pas affichée.
@@ -316,6 +332,7 @@ export function HomeScreen({ contacts, onAdd, onOpen, onRequests, onQr }: Props)
 
   return (
     <Screen>
+      <BlurTargetView ref={blurTarget} style={styles.flex}>
       <Header title={title} avatar={logo} action={profileButton} />
       <SearchField value={query} onChange={setQuery} placeholder={t('liste.rechercher')} />
       <View>
@@ -399,8 +416,10 @@ export function HomeScreen({ contacts, onAdd, onOpen, onRequests, onQr }: Props)
         )}
       />
       </PullView>
+      </BlurTargetView>
       {selected && (
         <ConversationActions
+          blurTarget={blurTarget}
           rect={selected.rect}
           row={
             <View style={styles.row}>
@@ -428,6 +447,9 @@ export function HomeScreen({ contacts, onAdd, onOpen, onRequests, onQr }: Props)
 }
 
 const useStyles = createStyles((colors) => ({
+  flex: {
+    flex: 1,
+  },
   empty: {
     flex: 1,
     alignItems: 'center',
