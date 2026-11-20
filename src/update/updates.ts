@@ -5,7 +5,9 @@ import { addDownloadListener, appVersionCode, canRequestPackageInstalls, downloa
 import { isReleaseSigned, parseRelease, Release } from './release';
 import { log } from '../log';
 import { t } from '../i18n';
-import { LATEST_RELEASE_URL, REMOTE_CONFIG_PUBLIC_KEY, UPDATE_CHECK_INTERVAL_MS, UPDATE_CHECK_TIMEOUT_MS } from '../config';
+import { LATEST_RELEASE_URL, RELEASES_LIST_URL, REMOTE_CONFIG_PUBLIC_KEY, UPDATE_CHECK_INTERVAL_MS, UPDATE_CHECK_TIMEOUT_MS } from '../config';
+import { getSetting, setSetting } from '../chat/database';
+import { chooseRelease } from './channel';
 
 export { LATEST_RELEASE_URL };
 
@@ -27,9 +29,11 @@ type UpdateState = {
   skipped: boolean;
   // En debug, l'écran bloquant ne s'affiche que si on le demande, pour le tester.
   preview: boolean;
+  // Une version de test ne bloque jamais : elle s'installe seulement si on la choisit.
+  testAccepted: boolean;
 };
 
-let state: UpdateState = { status: 'idle', release: null, phase: 'idle', progress: 0, error: null, failures: 0, skipped: false, preview: false };
+let state: UpdateState = { status: 'idle', release: null, phase: 'idle', progress: 0, error: null, failures: 0, skipped: false, preview: false, testAccepted: false };
 let lastCheck = 0;
 const listeners = new Set<() => void>();
 
@@ -51,7 +55,7 @@ export function useUpdateState() {
 
 // Bloque l'app tant que la mise à jour n'est pas installée. Jamais en debug, sauf aperçu demandé.
 export function isBlocking(current: UpdateState) {
-  return current.status === 'available' && current.release !== null && !current.skipped && (!__DEV__ || current.preview);
+  return current.status === 'available' && current.release !== null && !current.skipped && (!current.release.prerelease || current.testAccepted) && (!__DEV__ || current.preview);
 }
 
 export function canSkipUpdate(current: UpdateState) {
@@ -64,6 +68,30 @@ export function skipUpdateOnce() {
 
 export function previewUpdateScreen(show: boolean) {
   set({ preview: show });
+}
+
+// Programme testeur (désactivé par défaut) : recevoir aussi les versions de test.
+export function testerEnabled() {
+  return getSetting('tester_program') === '1';
+}
+
+export function setTesterEnabled(on: boolean) {
+  setSetting('tester_program', on ? '1' : null);
+  set({ testAccepted: false });
+  checkForUpdate(true).catch(() => undefined);
+}
+
+// Installer la version de test proposée : seul ce choix la fait passer à l'écran d'installation.
+export function acceptTestUpdate() {
+  if (state.release?.prerelease) {
+    setSetting('tester_installed', String(state.release.versionCode));
+    set({ testAccepted: true });
+  }
+}
+
+// L'app installée est-elle une version de test ?
+export function isTestBuild() {
+  return getSetting('tester_installed') === String(appVersionCode() ?? -1);
 }
 
 function installedVersionCode() {
@@ -79,14 +107,23 @@ export async function checkForUpdate(force = false) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), UPDATE_CHECK_TIMEOUT_MS);
   try {
-    const response = await fetch(LATEST_RELEASE_URL, { headers: { Accept: 'application/vnd.github+json' }, signal: controller.signal });
-    let release = response.ok ? parseRelease(await response.json()) : null;
-    if (release && !isReleaseSigned(release, REMOTE_CONFIG_PUBLIC_KEY)) {
-      log.warn('mise à jour', 'release ignorée : signature absente ou fausse');
-      release = null;
+    const tester = testerEnabled();
+    const response = await fetch(tester ? RELEASES_LIST_URL : LATEST_RELEASE_URL, { headers: { Accept: 'application/vnd.github+json' }, signal: controller.signal });
+    let release: Release | null = null;
+    if (response.ok) {
+      const json = await response.json();
+      if (tester && Array.isArray(json)) {
+        // Programme testeur : la stable et la version de test, la stable plus récente passe devant.
+        const all = json.map((item) => parseRelease(item, { allowPrerelease: true })).filter((item): item is Release => item !== null);
+        release = chooseRelease(all, installedVersionCode(), true, REMOTE_CONFIG_PUBLIC_KEY);
+      } else {
+        const parsed = parseRelease(json);
+        if (parsed && !isReleaseSigned(parsed, REMOTE_CONFIG_PUBLIC_KEY)) log.warn('mise à jour', 'release ignorée : signature absente ou fausse');
+        else release = parsed;
+      }
     }
     if (release && release.versionCode > installedVersionCode()) {
-      set({ status: 'available', release, ...(state.release?.versionCode === release.versionCode ? {} : { failures: 0, skipped: false }) });
+      set({ status: 'available', release, ...(state.release?.versionCode === release.versionCode ? {} : { failures: 0, skipped: false, testAccepted: false }) });
     } else {
       set({ status: 'upToDate', release });
       cleanupDownloads();

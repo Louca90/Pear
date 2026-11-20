@@ -32,6 +32,8 @@ export const REMOTE_CONFIG_TIMEOUT_MS = 10 * SECOND;
 // Topic FCM des annonces de version (server/api/announce.js).
 export const UPDATES_TOPIC = 'updates';
 export const LATEST_RELEASE_URL = 'https://api.github.com/repos/Louca90/Pear/releases/latest';
+// Les 10 dernières releases, pré-versions comprises (programme testeur).
+export const RELEASES_LIST_URL = 'https://api.github.com/repos/Louca90/Pear/releases?per_page=10';
 export const RELEASES_PAGE = 'https://github.com/Louca90/Pear/releases/tag/';
 // Au premier plan, GitHub n'est pas interrogé plus souvent que ça.
 export const UPDATE_CHECK_INTERVAL_MS = 5 * MINUTE;

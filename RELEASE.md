@@ -39,6 +39,15 @@ L'app affiche la section « Résumé » (jusqu'au titre suivant) et un lien vers
 5. Commiter `src/update/release-notes.json` s'il a changé.
 6. `node scripts/release.mjs publish` : crée le tag, pousse, crée la release GitHub avec la description et envoie l'APK. Le token vient du gestionnaire d'identifiants de git ; il n'est jamais écrit ni affiché. Ensuite il appelle `/api/announce` (secret `ANNOUNCE_SECRET`, à définir sur Vercel et dans l'environnement de Louca) : notification « Pear X.Y est disponible » aux téléphones abonnés au topic FCM `updates`. Sans la variable, la release part quand même, sans annonce.
 
+## Version de test (programme testeur)
+
+Les testeurs (Profil → Mises à jour → « Programme testeur ») reçoivent aussi les pré-versions. Pour en publier une : mêmes étapes que ci-dessus (même format, même signature, `versionCode` croissant), mais `node scripts/release.mjs publish --test`, qui crée une **pré-version** GitHub (jamais « latest », jamais bloquante).
+
+- Un testeur se voit proposer la version de test seulement si son `versionCode` dépasse celui de la dernière stable ET celui installé ; une stable plus récente passe toujours devant.
+- Une version de test ne bloque jamais l'app : l'installation se choisit dans la page Mises à jour.
+- Quitter le programme : l'app reste sur la version installée jusqu'à la prochaine stable plus récente (Android n'installe pas un `versionCode` plus petit sans désinstaller).
+- Règle de choix : `src/update/channel.ts`, testée dans `channel.test.ts`.
+
 ## À savoir
 
 - Le keystore et ses mots de passe restent hors du dépôt (`~/.gradle/gradle.properties`), voir `plugins/with-release-signing.js`.

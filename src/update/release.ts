@@ -16,6 +16,8 @@ export type Release = {
   pageUrl: string;
   apkUrl: string;
   apkSize: number;
+  // Pré-version GitHub : une version de test du programme testeur (jamais bloquante).
+  prerelease: boolean;
 };
 
 const SUMMARY_FALLBACK_LINES = 5;
@@ -71,13 +73,13 @@ export function extractSummary(body: string): string {
 }
 
 // Renvoie null si la release ne suit pas le format : elle est alors ignorée, sans jamais bloquer l'app.
-export function parseRelease(json: unknown): Release | null {
+export function parseRelease(json: unknown, options: { allowPrerelease?: boolean } = {}): Release | null {
   if (!json || typeof json !== 'object') return null;
   const data = json as Record<string, unknown>;
   const tag = typeof data.tag_name === 'string' ? data.tag_name : null;
   const body = typeof data.body === 'string' ? data.body : '';
   const pageUrl = typeof data.html_url === 'string' ? data.html_url : null;
-  if (!tag || !pageUrl || data.draft === true || data.prerelease === true) return null;
+  if (!tag || !pageUrl || data.draft === true || (data.prerelease === true && !options.allowPrerelease)) return null;
 
   const versionCode = parseVersionCode(body);
   const assets = Array.isArray(data.assets) ? data.assets : [];
@@ -101,5 +103,6 @@ export function parseRelease(json: unknown): Release | null {
     pageUrl,
     apkUrl: apk.browser_download_url,
     apkSize: apk.size,
+    prerelease: data.prerelease === true,
   };
 }

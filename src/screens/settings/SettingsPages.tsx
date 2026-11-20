@@ -1,7 +1,7 @@
 import { ReactNode, useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, AppState, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Reanimated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
-import { BatteryCharging, Bell, Ban, Camera, Download, Eye, FileDown, FileText, FileUp, ImageIcon, Languages, Link2, Lock, LucideIcon, MapPin, RefreshCw, Share2, ShieldCheck, Sparkles, Stethoscope, Volume2 } from 'lucide-react-native';
+import { BatteryCharging, Bell, Ban, Camera, Download, Eye, FlaskConical, FileDown, FileText, FileUp, ImageIcon, Languages, Link2, Lock, LucideIcon, MapPin, RefreshCw, Share2, ShieldCheck, Sparkles, Stethoscope, Volume2 } from 'lucide-react-native';
 
 import { appVersionCode, appVersionName, authenticate } from '../../../modules/pear-native';
 import { getBlockedKeys, getSetting, setSetting } from '../../chat/database';
@@ -23,7 +23,7 @@ import { PermissionCard } from '../../onboarding/PermissionCard';
 import { setPermissionsMissing } from '../../onboarding/permissionStatus';
 import { createStyles, radius, setTextScaleIndex, setThemePreference, spacing, TEXT_SCALES, ThemePreference, useColors, useTextScaleIndex, useThemePreference } from '../../theme';
 import { pagesFor } from '../../update/pages';
-import { checkForUpdate, getInstallPermission, requestInstallPermission, useUpdateState } from '../../update/updates';
+import { acceptTestUpdate, checkForUpdate, getInstallPermission, isTestBuild, requestInstallPermission, setTesterEnabled, testerEnabled, useUpdateState } from '../../update/updates';
 import { WhatsNew } from '../../update/WhatsNew';
 import { setSoundsEnabled, soundsEnabled } from '../chat/sounds';
 
@@ -370,6 +370,8 @@ export function UpdatesPage({ onBack, onDiscover, onDiagnostic }: { onBack: () =
   const update = useUpdateState();
   const [canInstall, setCanInstall] = useState(getInstallPermission);
   const [whatsNewOpen, setWhatsNewOpen] = useState(false);
+  const [tester, setTester] = useState(testerEnabled);
+  const testBuild = isTestBuild();
   const version = appVersionName() ?? '?';
   const pages = pagesFor(appVersionName() ?? '');
   useEffect(() => {
@@ -399,11 +401,29 @@ export function UpdatesPage({ onBack, onDiscover, onDiagnostic }: { onBack: () =
           <Pressable onPress={() => checkForUpdate(true)} accessibilityRole="button" style={({ pressed }) => [styles.check, pressed && styles.pressed]}>
             <Text style={styles.checkLabel}>{t('profil.rechercherMaj')}</Text>
           </Pressable>
-          <Text style={styles.heroMeta}>{`${t('commun.version')} ${version} (${appVersionCode() ?? '?'})`}</Text>
+          <Text style={styles.heroMeta}>{`${t('commun.version')} ${version} (${appVersionCode() ?? '?'})${testBuild ? ` · ${t('profil.versionTest')}` : ''}`}</Text>
         </View>
       </Block>
       <Block index={1}>
         <SettingsGroup title={t('reglages.versions')}>
+          <SettingRow
+            icon={FlaskConical}
+            label={t('profil.testeur')}
+            detail={t('profil.testeurAide')}
+            right={
+              <Toggle
+                value={tester}
+                label={t('profil.testeur')}
+                onChange={(value) => {
+                  setTester(value);
+                  setTesterEnabled(value);
+                }}
+              />
+            }
+          />
+          {update.status === 'available' && update.release?.prerelease && !update.testAccepted && (
+            <SettingRow icon={Download} label={t('profil.installerTest', { version: update.release.version })} detail={t('profil.versionTestAide')} onPress={acceptTestUpdate} />
+          )}
           <SettingRow icon={Download} label={t('profil.installationMaj')} detail={canInstall ? t('profil.autorisee') : t('profil.aAutoriser')} onPress={requestInstallPermission} />
           {pages.length > 0 && <SettingRow icon={Sparkles} label={t('nouveautes.version', { version })} onPress={() => setWhatsNewOpen(true)} />}
           <SettingRow icon={RefreshCw} label={t('nouveautes.decouvrir')} onPress={onDiscover} />

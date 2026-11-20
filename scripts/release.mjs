@@ -168,6 +168,8 @@ async function github(token, url, options = {}) {
 }
 
 async function publish() {
+  // --test : version du programme testeur (pré-version GitHub, jamais bloquante, jamais « latest »).
+  const testRelease = process.argv.includes('--test');
   const { version, versionCode } = readApp();
   const tag = `v${version}`;
   const apk = apkPath(version);
@@ -183,7 +185,7 @@ async function publish() {
   const release = await github(token, `/repos/${REPO}/releases`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ tag_name: tag, name: `Pear ${version}`, body, draft: false, prerelease: false, make_latest: 'true' }),
+    body: JSON.stringify({ tag_name: tag, name: `Pear ${version}`, body, draft: false, prerelease: testRelease, make_latest: testRelease ? 'false' : 'true' }),
   });
   const uploadUrl = release.upload_url.replace(/\{.*\}$/, `?name=pear-${version}.apk`);
   await github(token, uploadUrl, {
@@ -198,7 +200,7 @@ async function publish() {
 const [command, argument] = process.argv.slice(2);
 const commands = { bump: () => bump(argument), draft, notes: writeNotes, build, publish };
 if (!commands[command]) {
-  console.log('Commandes : bump X.Y.Z | draft | notes | build [--all-abis] | publish');
+  console.log('Commandes : bump X.Y.Z | draft | notes | build [--all-abis] | publish [--test]');
   process.exit(1);
 }
 try {

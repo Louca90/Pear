@@ -67,6 +67,7 @@ describe('parseRelease', () => {
       pageUrl: 'https://github.com/Louca90/Pear/releases/tag/v1.1.1',
       apkUrl: 'https://github.com/Louca90/Pear/releases/download/v1.1.1/pear-1.1.1.apk',
       apkSize: 1234,
+      prerelease: false,
     });
   });
 
@@ -75,6 +76,7 @@ describe('parseRelease', () => {
     expect(parseRelease(release({ assets: [] }))).toBeNull();
     expect(parseRelease(release({ draft: true }))).toBeNull();
     expect(parseRelease(release({ prerelease: true }))).toBeNull();
+    expect(parseRelease(release({ prerelease: true }), { allowPrerelease: true })?.prerelease).toBe(true);
   });
 
   it('refuse un lien de téléchargement qui n’est pas en https', () => {
