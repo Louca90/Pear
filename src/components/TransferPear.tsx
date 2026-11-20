@@ -10,7 +10,7 @@ const SIZE = 56;
 const PEAR_HEIGHT = 40;
 // Une fois le transfert fini : la poire passe d'« Envoi » à « Vérifié » (la feuille repousse en vert, les
 // pépins se serrent, planche « Icône Pépins »), on la voit un instant, puis la pastille s'efface.
-const FULL_MS = 1100;
+const FULL_MS = 1600;
 
 function config(duration: number) {
   'worklet';

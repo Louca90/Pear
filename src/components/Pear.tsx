@@ -121,7 +121,7 @@ function plan(from: PearState, to: PearState) {
   const d = { level: 0, color: 0, outline: 0, body: 0, seeds: 0, link: 0, leaf: 0 };
   if (from === 'ripening') {
     // Le liquide finit de monter (ou se vide) avant le reste.
-    d.color = d.outline = d.body = d.seeds = d.link = d.leaf = 220;
+    d.color = d.outline = d.body = d.seeds = d.link = d.leaf = 340;
   }
   if (from === 'searching') {
     // Les pointillés se ressoudent avant que la poire se remplisse ou change.
@@ -298,6 +298,9 @@ export function Pear({ height, color, state = 'idle', progress = 0, leafColor }:
   const skinProps = useAnimatedProps(() => ({ stroke: skinColor(rest.get()), opacity: body.get() }));
   const baseProps = useAnimatedProps(() => ({ opacity: 0.3 * ripen.get() }));
   const liquidClip = useAnimatedProps(() => ({ d: wavePath(level.get(), wave.get(), 0) }));
+  // La vague arrière, un peu plus haute et décalée, à 45 % (planche « Envoi » : deux vagues).
+  const backClip = useAnimatedProps(() => ({ d: wavePath(Math.min(1, level.get() + 0.03), wave.get(), 0.45) }));
+  const backProps = useAnimatedProps(() => ({ opacity: 0.45 * ripen.get() }));
   const outlineProps = useAnimatedProps(() => ({ strokeDashoffset: dash.get(), opacity: outline.get(), strokeDasharray: [6, Math.max(0.01, gapLine.get())] }));
   const biteProps0 = useAnimatedProps(() => ({ r: BITE_R * bite0.get() }));
   const biteProps1 = useAnimatedProps(() => ({ r: BITE_R * bite1.get() }));
@@ -370,6 +373,7 @@ export function Pear({ height, color, state = 'idle', progress = 0, leafColor }:
 
   const clipBody = `body${id}`;
   const clipLiquid = `liquid${id}`;
+  const clipBack = `back${id}`;
   const clipLink = `link${id}`;
   const maskBites = `bites${id}`;
   const skinWidth = small ? SKIN_WIDTH + 3 : SKIN_WIDTH;
@@ -381,6 +385,9 @@ export function Pear({ height, color, state = 'idle', progress = 0, leafColor }:
           <Defs>
             <ClipPath id={clipBody}>
               <Path d={BODY} />
+            </ClipPath>
+            <ClipPath id={clipBack}>
+              <AnimatedPath animatedProps={backClip} />
             </ClipPath>
             <ClipPath id={clipLiquid}>
               <AnimatedPath animatedProps={liquidClip} />
@@ -398,6 +405,12 @@ export function Pear({ height, color, state = 'idle', progress = 0, leafColor }:
           <G mask={`url(#${maskBites})`}>
             {/* Envoi : la poire vide reste visible en fond (30 %), le liquide la remplit par-dessus (planche). */}
             <AnimatedG animatedProps={baseProps}>
+              <AnimatedPath d={BODY} animatedProps={fleshProps} />
+              <G clipPath={`url(#${clipBody})`}>
+                <AnimatedPath d={BODY} fill="none" strokeWidth={skinWidth} animatedProps={skinProps} />
+              </G>
+            </AnimatedG>
+            <AnimatedG animatedProps={backProps} clipPath={`url(#${clipBack})`}>
               <AnimatedPath d={BODY} animatedProps={fleshProps} />
               <G clipPath={`url(#${clipBody})`}>
                 <AnimatedPath d={BODY} fill="none" strokeWidth={skinWidth} animatedProps={skinProps} />

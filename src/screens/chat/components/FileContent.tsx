@@ -79,7 +79,7 @@ export function BlurThumb({ thumb, label, style }: { thumb: string; label?: stri
 }
 
 // Vrai pendant un court instant après la fin d'un transfert : la poire montre « Vérifié » avant l'icône du fichier.
-const DONE_MS = 1200;
+const DONE_MS = 1600;
 function useJustDone(progress: number | undefined) {
   const [done, setDone] = useState(false);
   const was = useRef(progress !== undefined);
