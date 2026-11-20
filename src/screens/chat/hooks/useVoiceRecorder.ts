@@ -219,6 +219,13 @@ export function useVoiceRecorder(onRecorded: (uri: string, seconds: number, wave
     }
   };
 
+  // Le bouton lecture pendant l'enregistrement : l'enregistrement s'arrête, puis le vocal se fait écouter.
+  const stopAndListen = async () => {
+    if (phaseRef.current !== 'recording' && phaseRef.current !== 'paused') return;
+    await stop();
+    play();
+  };
+
   const pausePlay = () => {
     if (phaseRef.current !== 'playing') return;
     player.current?.pause();
@@ -293,5 +300,5 @@ export function useVoiceRecorder(onRecorded: (uri: string, seconds: number, wave
     begin();
   };
 
-  return { phase, seconds: Math.round((phase === 'playing' ? position * totalMs.current : elapsed) / 1000), totalSeconds: Math.round(totalMs.current / 1000), bars, position, scale, pressIn, pressOut, start, pause, resume, stop, play, pausePlay, send, discard };
+  return { phase, seconds: Math.round((phase === 'playing' ? position * totalMs.current : elapsed) / 1000), totalSeconds: Math.round(totalMs.current / 1000), bars, position, scale, pressIn, pressOut, start, pause, resume, stop, stopAndListen, play, pausePlay, send, discard };
 }

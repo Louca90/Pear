@@ -51,6 +51,7 @@ type Voice = {
   play: () => void;
   pausePlay: () => void;
   stop: () => void;
+  stopAndListen: () => void;
   send: () => void;
   discard: () => void;
 };
@@ -145,9 +146,11 @@ export function RecordingRow({ voice }: { voice: Voice }) {
 
   const mainPress = live ? voice.stop : voice.send;
   const mainLabel = live ? t('vocal.arreter') : t('chat.envoyerVocal');
-  const playPress = phase === 'recording' ? voice.pause : phase === 'paused' ? voice.resume : phase === 'playing' ? voice.pausePlay : voice.play;
-  const playLabel = phase === 'recording' || phase === 'playing' ? t('vocal.pause') : phase === 'paused' ? t('vocal.reprendre') : t('vocal.ecouter');
-  const showPause = phase === 'recording' || phase === 'playing';
+  // Lecture / pause sert à écouter le vocal, jamais à reprendre l'enregistrement : pendant l'enregistrement,
+  // un appui l'arrête et fait écouter ce qui est enregistré.
+  const playPress = live ? voice.stopAndListen : phase === 'playing' ? voice.pausePlay : voice.play;
+  const playLabel = phase === 'playing' ? t('vocal.pause') : t('vocal.ecouter');
+  const showPause = phase === 'playing';
 
   return (
     <View style={styles.area} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
