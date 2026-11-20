@@ -556,7 +556,7 @@ export const fr = {
     serveurs: 'Ce que les serveurs voient',
     serveursAide: 'Google, Firebase et Vercel : ce qu\'ils voient, ce qu\'ils ne voient jamais.',
     sons: "Sons de la conversation",
-    sonsAide: "Un son discret à l'envoi et à la réception, quand la conversation est ouverte.",
+    sonsAide: "Un son discret à l'envoi et à la réception, quand la conversation est ouverte. Pas de son en mode silencieux ou vibreur.",
     notifications: 'Notifications',
     confidentialite: 'Confidentialité',
     bloques: 'Contacts bloqués',

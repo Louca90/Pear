@@ -557,7 +557,7 @@ export const en: Dictionary = {
     serveurs: 'What the servers see',
     serveursAide: 'Google, Firebase and Vercel: what they see, and what they never see.',
     sons: "Conversation sounds",
-    sonsAide: "A subtle sound when you send or receive a message in an open conversation.",
+    sonsAide: "A subtle sound when you send or receive a message in an open conversation. No sound in silent or vibrate mode.",
     notifications: 'Notifications',
     confidentialite: 'Privacy',
     bloques: 'Blocked contacts',
