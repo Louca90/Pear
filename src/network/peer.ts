@@ -6,7 +6,7 @@ import { open, seal } from '../crypto/box';
 import { deriveMessageKey } from '../crypto/pairing';
 import { Role, SignalingChannel } from './signaling';
 import { log } from '../log';
-import { DRAIN_POLL_MS, HEARTBEAT_MS, MAX_BUFFERED_BYTES, PEER_TIMEOUT_MS, RETRY_MS } from '../config';
+import { CALL_ICE_GRACE_MS, CALL_PEER_TIMEOUT_MS, DRAIN_POLL_MS, HEARTBEAT_MS, MAX_BUFFERED_BYTES, PEER_TIMEOUT_MS, RETRY_MS } from '../config';
 import { iceServers } from '../remoteConfig';
 
 const CONTEXT = 'pear-message-v1';
@@ -136,7 +136,7 @@ export class PeerLink {
 
   private tick() {
     if (this.channel?.readyState === 'open') {
-      if (Date.now() - this.lastSeen > PEER_TIMEOUT_MS) {
+      if (Date.now() - this.lastSeen > (this.media ? CALL_PEER_TIMEOUT_MS : PEER_TIMEOUT_MS)) {
         // Réseau coupé sans fermeture propre : la connexion semble ouverte mais ne répond plus.
         this.closeConnection();
         this.markOffline();
@@ -152,7 +152,14 @@ export class PeerLink {
     else this.signaling.send({ kind: 'hello' });
   }
 
+  // Quand la connexion a été perdue (journal de diagnostic : durée de la coupure, sans contenu).
+  private lostAt = 0;
+
   private markOffline() {
+    if (!this.lostAt) {
+      this.lostAt = Date.now();
+      log.info('connexion perdue', this.media ? 'pendant un appel' : '');
+    }
     this.callbacks.onRoute(null);
     this.callbacks.onStatus('searching');
     this.lastAttempt = 0;
@@ -189,7 +196,20 @@ export class PeerLink {
       }
     });
     pc.addEventListener('connectionstatechange', () => {
-      if (this.pc === pc && pc.connectionState === 'failed') this.markOffline();
+      if (this.pc !== pc) return;
+      log.info('état de la connexion', pc.connectionState);
+      if (pc.connectionState === 'failed') this.markOffline();
+      // Pendant un appel, une connexion « disconnected » (changement de réseau) qui ne revient pas seule
+      // est refaite sans attendre le délai du battement de cœur.
+      else if (pc.connectionState === 'disconnected' && this.media) {
+        setTimeout(() => {
+          if (this.pc === pc && !this.stopped && pc.connectionState !== 'connected') {
+            log.info('connexion refaite', 'redémarrage après coupure');
+            this.closeConnection();
+            this.markOffline();
+          }
+        }, CALL_ICE_GRACE_MS);
+      }
     });
     pc.addEventListener('datachannel', (event) => this.attachChannel(event.channel, pc));
     pc.addEventListener('track', () => {
@@ -204,6 +224,10 @@ export class PeerLink {
     channel.addEventListener('open', () => {
       if (this.pc !== pc) return;
       this.lastSeen = Date.now();
+      if (this.lostAt) {
+        log.info('connexion rétablie', `après ${Math.round((Date.now() - this.lostAt) / 1000)} s`);
+        this.lostAt = 0;
+      }
       this.callbacks.onStatus('connected');
       this.beat();
       this.signaling.clearSent();

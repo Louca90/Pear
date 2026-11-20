@@ -46,6 +46,10 @@ export const HEARTBEAT_MS = 4 * SECOND;
 // Conversation : messages lus par pages (à l'ouverture, puis à chaque approche du haut).
 export const MESSAGE_PAGE_SIZE = 40;
 export const PEER_TIMEOUT_MS = 12 * SECOND;
+// Pendant un appel, la perte est détectée plus vite : l'appel n'a que 20 s pour se rétablir.
+export const CALL_PEER_TIMEOUT_MS = 8 * SECOND;
+// Connexion « disconnected » (ICE) pendant un appel : si elle ne revient pas seule en si peu de temps, on la refait.
+export const CALL_ICE_GRACE_MS = 4 * SECOND;
 // Laisse à une négociation le temps d'aboutir avant d'en relancer une, même sur un réseau lent.
 export const RETRY_MS = 20 * SECOND;
 // Au-delà, une offre de connexion ne sert plus à rien : le téléphone qui l'a envoyée a déjà réessayé.
