@@ -142,6 +142,9 @@ function receiveEvent(core: ChatCore, contact: string, data: Payload) {
     // Le contact a réglé (ou coupé) le minuteur des messages éphémères : il vaut pour les deux.
     const seconds = validEphemeralSetting(data.seconds);
     if (seconds !== null && isCount(data.at)) applyEphemeral(contact, seconds, data.at, 0);
+  } else if (data.action === 'read-upto') {
+    // Curseur de lecture arrivé par push (le lecteur a marqué lu depuis la notification).
+    for (const id of markSentReadUpTo(contact, data.id)) deleteUpload(id, contact);
   } else if (data.action === 'viewed') {
     // Notre média à vue unique a été ouvert.
     if (getMessage(data.id, contact)?.mine === 1) markOnceOpened(data.id, contact);

@@ -5,7 +5,8 @@ import { Identity } from '../../crypto/pairing';
 import { PeerStatus, RouteType } from '../../network/peer';
 import { Contact, loadContacts, loadOrCreateIdentity, saveContacts } from '../../storage';
 import { t } from '../../i18n';
-import { addMessage, blockKey, dropMessageFile, getExpiredMessages, getSpentOnce, markOnceOpened, deleteMessage, deleteRelayIncoming, editMessage, getMessage, getPendingRequests, getRelayIncoming, unblockKey, markConversationRead, Message, addScheduledMessage, getDueScheduled, releaseScheduled, setConversationSetting, setMessagePinned, setIncomingStatus, setReaction, setStatus, getUndelivered } from '../database';
+import { addMessage, blockKey, dropMessageFile, getExpiredMessages, getSpentOnce, markOnceOpened, deleteMessage, deleteRelayIncoming, editMessage, getMessage, getPendingRequests, getRelayIncoming, unblockKey, markConversationRead, Message, addScheduledMessage, getDueScheduled, releaseScheduled, setConversationSetting, setMessagePinned, setIncomingStatus, setReaction, setStatus, getUndelivered, getReadMessages } from '../database';
+import { latestReadId } from '../readCursor';
 import { clearMessageNotification } from '../notifications';
 import { encodeMeta, MessageMeta, parseMeta } from '../meta';
 import { isSelf } from '../self';
@@ -158,15 +159,27 @@ class ChatManager extends ChatCore {
     await this.ensurePrepared();
     this.send(contact, text);
     markConversationRead(contact);
+    this.queueReadCursor(contact);
     notifyMessage(this, contact);
     await deliverNow(this, contact);
   }
 
+  // Sans connexion directe, le curseur de lecture part dans la file d'événements (push chiffré).
+  private queueReadCursor(contact: string) {
+    const cursor = latestReadId(getReadMessages(contact));
+    if (cursor && this.links.get(contact)?.status !== 'connected') sendEvent(this, contact, { action: 'read-upto', id: cursor });
+  }
+
+  // « Marquer comme lu » de la notification : le même marquage que l'ouverture de la conversation (une
+  // seule requête), puis le curseur de lecture part, en direct s'il y a une connexion, sinon par push
+  // chiffré. Sans réseau, il reste à renvoyer (la file d'événements le garde) : le marquage local ne bloque pas.
   async markReadFromNotification(contact: string) {
     await this.ensurePrepared();
     markConversationRead(contact);
     clearMessageNotification(contact);
     flush(this, contact);
+    this.queueReadCursor(contact);
+    await deliverNow(this, contact).catch((e) => log.warn('lecture', e));
     this.notify();
   }
 
