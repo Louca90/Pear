@@ -43,7 +43,7 @@ export function SystemRow({ message, name, hasWallpaper }: { message: Message; n
   return (
     <View style={[styles.systemRow, hasWallpaper && styles.metaPill, ephemeral !== null && styles.withIcon]}>
       {ephemeral !== null && (
-        <View style={ephemeral === 0 && styles.iconOff}>
+        <View>
           <Pear height={13} color={hasWallpaper ? colors.onMedia : ephemeral ? colors.signatureStrong : colors.textMuted} />
         </View>
       )}
