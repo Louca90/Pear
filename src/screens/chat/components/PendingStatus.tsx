@@ -32,6 +32,7 @@ export function PendingStatus({ message }: { message: Message }) {
   // minuteur redessine à ce moment-là.
   const showAt = message.created_at + SHOW_AFTER_MS;
   const [now, setNow] = useState(Date.now);
+  const [showTime, setShowTime] = useState(false);
   useEffect(() => {
     const next = [showAt, retryAt].filter((at): at is number => at !== null && at > now);
     if (next.length === 0) return;
@@ -39,22 +40,28 @@ export function PendingStatus({ message }: { message: Message }) {
     return () => clearTimeout(timer);
   }, [showAt, retryAt, now]);
 
+  const retryDue = retryAt !== null && now >= retryAt;
   if (!kind || now < showAt) return null;
   const label =
     kind === 'sending'
       ? t('attente.envoi')
       : kind === 'waiting' && message.last_attempt_at
-        ? t('attente.enAttente', { heure: formatTime(message.last_attempt_at) })
+        ? // Transmis, accusé pas encore reçu : « Envoyé ». L'heure du dernier essai seulement à l'appui, ou après 5 minutes.
+          showTime || retryDue
+          ? t('attente.envoyeEssai', { heure: formatTime(message.last_attempt_at) })
+          : t('attente.envoye')
         : offline === '1'
           ? t('attente.pasEnvoyeHorsLigne')
           : t('attente.pasEnvoye');
-  const retry = retryAt !== null && now >= retryAt;
+  const retry = retryDue;
 
   return (
     <View style={styles.wrap} accessibilityLiveRegion="polite">
-      <Reanimated.Text key={label} entering={enterUp(4)} style={[styles.line, { color: colors.textMuted }]}>
-        {label}
-      </Reanimated.Text>
+      <Pressable onPress={() => setShowTime((shown) => !shown)} hitSlop={6} accessibilityRole="text">
+        <Reanimated.Text key={label} entering={enterUp(4)} style={[styles.line, { color: colors.textMuted }]}>
+          {label}
+        </Reanimated.Text>
+      </Pressable>
       {retry && (
         <Reanimated.View entering={enterUp(4)} exiting={exitFade()} style={styles.retryBlock}>
           <Text style={[styles.line, styles.explain, { color: colors.textMuted }]}>{t('attente.toujours')}</Text>

@@ -825,7 +825,8 @@ export const en: Dictionary = {
   },
   attente: {
     envoi: 'Sending…',
-    enAttente: 'Waiting for contact · last try {heure}',
+    envoye: 'Sent',
+    envoyeEssai: 'Sent · last try {heure}',
     pasEnvoye: 'Not sent yet',
     pasEnvoyeHorsLigne: 'Not sent yet · no connection',
     toujours: "Still waiting. Delivery needs your contact's phone to be reachable.",

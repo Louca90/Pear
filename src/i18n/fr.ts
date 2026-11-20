@@ -824,10 +824,11 @@ export const fr = {
   },
   attente: {
     envoi: 'Envoi…',
-    enAttente: 'En attente du contact · dernier essai {heure}',
+    envoye: 'Envoyé',
+    envoyeEssai: 'Envoyé · dernier essai {heure}',
     pasEnvoye: 'Pas encore envoyé',
     pasEnvoyeHorsLigne: 'Pas encore envoyé · pas de connexion',
-    toujours: 'Toujours en attente. La livraison demande que le téléphone de ton contact soit joignable.',
+    toujours: 'Toujours pas de confirmation. Le téléphone de ton contact doit être joignable.',
     reessayer: 'Réessayer',
   },
   unique: {
