@@ -179,7 +179,8 @@ async function publish() {
   const signature = signRelease(versionCode, hash);
   const body = `${releaseBody(version)}\n\nversionCode: ${versionCode}\nsha256: ${hash}\nsignature: ${signature}\n`;
 
-  run(`git tag -a ${tag} -m "Pear ${version}"`);
+  // Une publication interrompue (push refusé, réseau) se reprend : le tag déjà créé est gardé.
+  if (!output(`git tag -l ${tag}`)) run(`git tag -a ${tag} -m "Pear ${version}"`);
   run(`git push origin HEAD ${tag}`);
   const token = githubToken();
   const release = await github(token, `/repos/${REPO}/releases`, {
