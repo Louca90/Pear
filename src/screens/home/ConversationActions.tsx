@@ -20,7 +20,7 @@ const CLOSE_MS = 200;
 const EASE = Easing.bezier(0.2, 0.8, 0.2, 1);
 const MENU_GAP = 10;
 const ITEM_HEIGHT = 52;
-const MENU_PADDING = 8;
+const MENU_PADDING = 10;
 // Un filet avant « Supprimer » : l'action dangereuse est séparée des autres.
 const SEPARATOR = 9;
 const MENU_WIDTH = 236;
@@ -67,7 +67,7 @@ export function ConversationActions({ rect, row, actions, blurTarget, onClose }:
   const start = { x: rowX + rowW * 0.015, y: rect.y + rect.height * 0.015, width: rowW * 0.97, height: rect.height * 0.97 };
   const menuHeight = actions.length * ITEM_HEIGHT + MENU_PADDING * 2 + SEPARATOR;
   // Le menu ne touche jamais le bas de l'écran ni la barre d'onglets.
-  const below = rect.y + rect.height + MENU_GAP + menuHeight < height - barSpace - spacing.md;
+  const below = rect.y + rect.height + MENU_GAP + menuHeight < height - barSpace - 24;
   const menuTop = below ? card.y + card.height + MENU_GAP : card.y - MENU_GAP - menuHeight;
 
   useEffect(() => {
