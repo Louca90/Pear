@@ -71,6 +71,19 @@ function CodePane({ publicKey }: { publicKey: string }) {
   useEffect(() => {
     shine.set(withDelay(DRAW_MS, withSequence(withTiming(1, { duration: 700, easing: Easing.inOut(Easing.cubic), reduceMotion: ReduceMotion.System }), withTiming(0, { duration: 0 }))));
   }, [shine]);
+  // Le QR se dessine depuis le centre : un disque qui grandit le révèle, en 600 ms.
+  const draw = useSharedValue(0);
+  useEffect(() => {
+    draw.set(withDelay(100, withTiming(1, { duration: DRAW_MS, easing: EASE, reduceMotion: ReduceMotion.System })));
+  }, [draw]);
+  const reveal = useAnimatedStyle(() => {
+    const size = QR_SIZE * 1.5 * draw.get();
+    return { width: Math.min(QR_SIZE, size), height: Math.min(QR_SIZE, size), borderRadius: size >= QR_SIZE ? 8 : size / 2 };
+  });
+  const qrInner = useAnimatedStyle(() => {
+    const size = Math.min(QR_SIZE, QR_SIZE * 1.5 * draw.get());
+    return { left: -(QR_SIZE - size) / 2, top: -(QR_SIZE - size) / 2, opacity: Math.min(1, draw.get() * 3) };
+  });
   const shineStyle = useAnimatedStyle(() => ({ opacity: shine.get() > 0 ? 0.55 : 0, transform: [{ translateX: -260 + 520 * shine.get() }, { rotate: '18deg' }] }));
 
   // Luminosité au maximum tant que le code est affiché ; le réglage du téléphone revient ensuite.
@@ -94,7 +107,11 @@ function CodePane({ publicKey }: { publicKey: string }) {
         </View>
         {/* Noir sur blanc quel que soit le thème : lisible par tous les appareils photo. */}
         <View style={styles.qr}>
-          <QRCode value={link} size={QR_SIZE} ecl="L" color={fixed.black} backgroundColor={fixed.white} />
+          <Reanimated.View style={[styles.reveal, reveal]}>
+            <Reanimated.View style={[styles.qrInner, qrInner]}>
+              <QRCode value={link} size={QR_SIZE} ecl="L" color={fixed.black} backgroundColor={fixed.white} />
+            </Reanimated.View>
+          </Reanimated.View>
           <Reanimated.View pointerEvents="none" style={[styles.shine, shineStyle]} />
         </View>
       </Reanimated.View>
@@ -145,7 +162,9 @@ const useStyles = createStyles((colors) => ({
   card: { alignSelf: 'center', alignItems: 'center', gap: 12, padding: 18, borderRadius: 28, backgroundColor: fixed.white },
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   name: { maxWidth: 180, fontSize: 15, fontWeight: '700', color: fixed.black },
-  qr: { overflow: 'hidden', borderRadius: 12 },
+  qr: { width: QR_SIZE, height: QR_SIZE, overflow: 'hidden', borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  reveal: { overflow: 'hidden' },
+  qrInner: { position: 'absolute', width: QR_SIZE, height: QR_SIZE },
   shine: { position: 'absolute', top: -40, bottom: -40, width: 60, backgroundColor: fixed.white },
   text: { fontSize: 14, lineHeight: 20, textAlign: 'center', color: colors.textMuted },
   share: { flexDirection: 'row', gap: 8, height: 52, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.text },

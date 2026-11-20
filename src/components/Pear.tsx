@@ -76,12 +76,14 @@ type Props = {
   leafColor?: string;
 };
 
-// Un ressort amorti à fond : il arrive sans jamais dépasser.
-function spring(stiffness: number) {
+// Les ressorts de la planche « Icône Pépins » (raideur, amortissement) : défaut 170/26, doux 90/19, lent 55/15,
+// couleurs 140/24, rebond léger 260/17 (pépins, feuille, bouchées, lien), tressaillement 300/14.
+type Spring = readonly [number, number];
+function spring([stiffness, damping]: Spring) {
   'worklet';
-  return { stiffness, damping: 2 * Math.sqrt(stiffness), mass: 1, overshootClamping: true, reduceMotion: ReduceMotion.System };
+  return { stiffness, damping, mass: 1, reduceMotion: ReduceMotion.System };
 }
-const SP = { base: 170, soft: 90, slow: 55, color: 140, nudge: 260, shake: 300 };
+const SP = { base: [170, 26], soft: [90, 19], slow: [55, 15], color: [140, 24], nudge: [260, 17], shake: [300, 14] } as const;
 
 type Targets = {
   rest: number; // 0 normal, 1 inactif (couleurs)
@@ -209,9 +211,9 @@ export function Pear({ height, color, state = 'idle', progress = 0, leafColor }:
   const previous = useRef<PearState>(state);
   const bites = [bite0, bite1, bite2];
 
-  const move = (value: { set: (v: number) => void }, target: number, delay: number, stiffness: number) => {
+  const move = (value: { set: (v: number) => void }, target: number, delay: number, k: Spring) => {
     if (reduced) value.set(withDelay(0, withTiming(target, { duration: 160 })));
-    else value.set(withDelay(delay, withSpring(target, spring(stiffness))));
+    else value.set(withDelay(delay, withSpring(target, spring(k))));
   };
 
   // Changement d'état : chaque propriété part de sa valeur actuelle vers sa nouvelle cible.
