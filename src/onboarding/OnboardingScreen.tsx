@@ -46,6 +46,7 @@ const ICONS: Record<PermissionId, LucideIcon> = {
   media: ImageIcon,
   location: MapPin,
   install: Download,
+  fullScreen: Download,
 };
 // Les apps inconnues (mises à jour de Pear) : carte en plus, seulement s'il manque l'autorisation.
 const CHECKED: PermissionId[] = [...ONBOARDING_PERMISSIONS, 'install'];

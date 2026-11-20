@@ -146,6 +146,10 @@ object CallAudio {
   }
 
   // Appel reçu téléphone verrouillé : l'écran de l'appel s'affiche par-dessus le verrou et allume l'écran.
+  // Demandé avant même que l'activité existe (app fermée réveillée par un appel) : il est appliqué dès
+  // qu'elle passe au premier plan (OnActivityEntersForeground du module).
+  @Volatile var overLockWanted = false
+
   fun showOverLock(activity: Activity, on: Boolean) {
     if (Build.VERSION.SDK_INT >= 27) {
       activity.setShowWhenLocked(on)

@@ -5,7 +5,7 @@ import { randombytes_buf, to_base64 } from 'react-native-libsodium';
 import { sendPush } from '../../network/wake';
 import type { CallMedia, PeerStatus } from '../../network/peer';
 import { callPushTag, decodeCallPush, encodeCallPush, isCallId } from '../callPayload';
-import { getContactProfile, isBlocked } from '../database';
+import { getContactProfile, isBlocked, setSetting } from '../database';
 import { clearCallNotification, showIncomingCall, showMissedCall, showOngoingCall } from '../notifications';
 import { addCallHangUpListener, addHeadsetListener, callHeadset, Headset, setCallAudio, setCallPip, showOverLock, startCallService, startRinging, stopCallService, stopRinging } from '../../../modules/pear-native';
 import { t } from '../../i18n';
@@ -479,6 +479,8 @@ function ring(core: ChatCore, contact: string, id: string, video: boolean) {
   };
   listeners.forEach((listener) => listener());
   log.info('appel reçu', video ? 'vidéo' : 'audio');
+  // Pour la page de diagnostic des appels (Profil → Autorisations) : quand la dernière invitation est arrivée.
+  setSetting('last_call_invite', String(Date.now()));
   core.callContact = contact;
   core.keepConnected(contact, RING_MS + 10 * 1000);
   sendCall(core, contact, { action: 'ringing', id });
@@ -488,6 +490,7 @@ function ring(core: ChatCore, contact: string, id: string, video: boolean) {
   // plein écran prend le relais.
   const notify = () => {
     if (state?.id === id && state.phase === 'incoming') {
+      log.info('notification d’appel postée');
       showIncomingCall(contact, nameOf(core, contact), getContactProfile(contact).photo_uri, video).catch((e) => log.warn('notification d’appel', e));
     }
   };

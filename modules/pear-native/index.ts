@@ -31,6 +31,8 @@ declare class PearNativeModule extends NativeModule<{ onBack: (event: BackEvent)
   requestIgnoreBatteryOptimizations(): boolean;
   canRequestPackageInstalls(): boolean;
   openUnknownAppSourcesSettings(): boolean;
+  canUseFullScreenIntent?(): boolean;
+  openFullScreenIntentSettings?(): boolean;
   downloadFile(url: string, fileUri: string): Promise<void>;
   sha256File(fileUri: string): Promise<string>;
   resizeImage(inputUri: string, outputUri: string, maxSize: number, quality: number): Promise<string>;
@@ -107,6 +109,15 @@ export function canRequestPackageInstalls() {
 }
 
 // Ouvre le réglage « Installer des apps inconnues » de Pear.
+// Les notifications plein écran (appel entrant téléphone verrouillé) : autorisation spéciale d'Android 14+.
+export function canUseFullScreenIntent(): boolean {
+  return PearNative.canUseFullScreenIntent?.() ?? true;
+}
+
+export function openFullScreenIntentSettings() {
+  return PearNative.openFullScreenIntentSettings?.() ?? false;
+}
+
 export function openUnknownAppSourcesSettings() {
   return PearNative.openUnknownAppSourcesSettings();
 }

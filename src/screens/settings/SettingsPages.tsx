@@ -1,7 +1,7 @@
 import { ReactNode, useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, AppState, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Reanimated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
-import { BatteryCharging, Bell, Ban, Camera, Download, Eye, FlaskConical, FileDown, FileText, FileUp, ImageIcon, Languages, Link2, Lock, LucideIcon, MapPin, RefreshCw, Share2, ShieldCheck, Sparkles, Stethoscope, Volume2 } from 'lucide-react-native';
+import { BatteryCharging, Bell, Ban, Camera, Download, Eye, FlaskConical, FileDown, FileText, FileUp, ImageIcon, Languages, PhoneIncoming, Link2, Lock, LucideIcon, MapPin, RefreshCw, Share2, ShieldCheck, Sparkles, Stethoscope, Volume2 } from 'lucide-react-native';
 
 import { appVersionCode, appVersionName, authenticate } from '../../../modules/pear-native';
 import { getBlockedKeys, getSetting, setSetting } from '../../chat/database';
@@ -738,14 +738,16 @@ const PERMISSION_ICONS: Record<PermissionId, LucideIcon> = {
   media: ImageIcon,
   location: MapPin,
   install: Download,
+  fullScreen: PhoneIncoming,
 };
-const PERMISSION_LIST: PermissionId[] = [...ONBOARDING_PERMISSIONS, 'install'];
+const PERMISSION_LIST: PermissionId[] = [...ONBOARDING_PERMISSIONS, 'install', 'fullScreen'];
 
 // L'état de chaque autorisation, relu au retour des réglages d'Android. Rien n'est imposé : chacune
 // s'active ici, quand on veut.
 export function PermissionsPage({ onBack }: { onBack: () => void }) {
   const styles = useStyles();
   const [states, setStates] = useState<Partial<Record<PermissionId, PermissionState>> | null>(null);
+  const lastInvite = Number(getSetting('last_call_invite') ?? 0);
   const refresh = useCallback(() => {
     checkPermissions(PERMISSION_LIST)
       .then((next) => {
@@ -787,6 +789,11 @@ export function PermissionsPage({ onBack }: { onBack: () => void }) {
             />
           ))}
       </View>
+      {lastInvite && (
+        <Block index={1}>
+          <Text style={styles.note}>{t('priseEnMain.dernierAppel', { date: new Date(lastInvite).toLocaleString() })}</Text>
+        </Block>
+      )}
       {states && states.notifications !== 'granted' && (
         <Block index={1}>
           <Text style={styles.note}>{t('priseEnMain.sansNotifications')}</Text>

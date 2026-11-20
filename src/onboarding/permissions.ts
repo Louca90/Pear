@@ -5,6 +5,8 @@ import * as MediaLibrary from 'expo-media-library/legacy';
 
 import {
   canRequestPackageInstalls,
+  canUseFullScreenIntent,
+  openFullScreenIntentSettings,
   isIgnoringBatteryOptimizations,
   openUnknownAppSourcesSettings,
   requestIgnoreBatteryOptimizations,
@@ -16,7 +18,7 @@ import { log } from '../log';
 // Les autorisations que Pear demande. Batterie et apps inconnues s'accordent dans les réglages
 // d'Android : leur état se relit au retour dans l'app.
 
-export type PermissionId = 'notifications' | 'battery' | 'camera' | 'media' | 'location' | 'install';
+export type PermissionId = 'notifications' | 'battery' | 'camera' | 'media' | 'location' | 'install' | 'fullScreen';
 // blocked : refusée pour de bon, il faut passer par les réglages de l'app.
 export type PermissionState = 'granted' | 'missing' | 'blocked';
 
@@ -51,6 +53,7 @@ export async function checkPermission(id: PermissionId): Promise<PermissionState
       return locationBlocked ? 'blocked' : 'missing';
     }
     if (id === 'battery') return isIgnoringBatteryOptimizations() ? 'granted' : 'missing';
+    if (id === 'fullScreen') return canUseFullScreenIntent() ? 'granted' : 'missing';
     return canRequestPackageInstalls() ? 'granted' : 'missing';
   } catch (e) {
     log.warn('autorisation', e);
@@ -103,6 +106,7 @@ export async function requestPermission(id: PermissionId, state: PermissionState
     return locationBlocked ? 'blocked' : 'missing';
   }
   if (id === 'battery') requestIgnoreBatteryOptimizations();
+  else if (id === 'fullScreen') openFullScreenIntentSettings();
   else openUnknownAppSourcesSettings();
   return 'missing';
 }

@@ -315,9 +315,30 @@ class PearNativeModule : Module() {
     }.runOnQueue(Queues.MAIN)
     Function("callHeadset") { appContext.reactContext?.let { CallAudio.headset(it) } ?: "" }
     AsyncFunction("showOverLock") { on: Boolean ->
+      CallAudio.overLockWanted = on
       appContext.currentActivity?.let { CallAudio.showOverLock(it, on) }
       Unit
     }.runOnQueue(Queues.MAIN)
+
+    // Android 14+ : « notifications plein écran » est une autorisation spéciale, retirable. Sans elle, un
+    // appel qui arrive téléphone verrouillé n'allume pas l'écran. Avant Android 14, toujours vrai.
+    Function("canUseFullScreenIntent") {
+      val context = appContext.reactContext ?: return@Function true
+      if (Build.VERSION.SDK_INT >= 34) context.getSystemService(android.app.NotificationManager::class.java).canUseFullScreenIntent() else true
+    }
+
+    Function("openFullScreenIntentSettings") {
+      val activity = appContext.currentActivity ?: return@Function false
+      try {
+        val intent = if (Build.VERSION.SDK_INT >= 34) Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.parse("package:${activity.packageName}"))
+        else Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, activity.packageName)
+        activity.startActivity(intent)
+        true
+      } catch (e: Exception) {
+        Log.w("PearCall", "réglage plein écran", e)
+        false
+      }
+    }
 
     // Captures d'écran et aperçu des apps récentes bloqués (FLAG_SECURE), réappliqué à chaque retour au premier plan.
     AsyncFunction("setSecureWindow") { enabled: Boolean ->
@@ -347,6 +368,8 @@ class PearNativeModule : Module() {
 
     OnActivityEntersForeground {
       appContext.currentActivity?.runOnUiThread {
+        // Appel reçu app fermée : l'activité n'existait pas quand l'écran de l'appel l'a demandé.
+        appContext.currentActivity?.let { CallAudio.showOverLock(it, CallAudio.overLockWanted) }
         applySecure()
         watchInsets()
         emitInsets()
