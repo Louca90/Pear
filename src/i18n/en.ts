@@ -83,6 +83,7 @@ export const en: Dictionary = {
     envoyer: 'Send',
     envoyerVocal: 'Send voice message',
     maintenirVocal: 'Hold to record a voice message',
+    enregistrerVocal: 'Record a voice message',
     refuseParContact: ' · Declined by your contact',
     refuse: ' · Declined',
     recevoir: 'Receive',
@@ -803,6 +804,12 @@ export const en: Dictionary = {
   vocal: {
     vitesse: 'Playback speed: {vitesse}',
     annulerCourt: '‹ Cancel',
+    pause: 'Pause',
+    reprendre: 'Resume',
+    arreter: 'Stop',
+    ecouter: 'Listen',
+    supprimerQuestion: 'Delete this voice message?',
+    supprimerAide: 'It will be erased from your phone.',
   },
   ephemere: {
     apercuActive: 'Disappearing messages on',

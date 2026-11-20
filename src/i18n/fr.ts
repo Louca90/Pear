@@ -82,6 +82,7 @@ export const fr = {
     envoyer: 'Envoyer',
     envoyerVocal: 'Envoyer le vocal',
     maintenirVocal: 'Maintenir pour enregistrer un vocal',
+    enregistrerVocal: 'Enregistrer un vocal',
     refuseParContact: ' · Refusé par ton contact',
     refuse: ' · Refusé',
     recevoir: 'Recevoir',
@@ -802,6 +803,12 @@ export const fr = {
   vocal: {
     vitesse: 'Vitesse de lecture : {vitesse}',
     annulerCourt: '‹ Annuler',
+    pause: 'Mettre en pause',
+    reprendre: 'Reprendre',
+    arreter: 'Arrêter',
+    ecouter: 'Écouter',
+    supprimerQuestion: 'Supprimer ce vocal ?',
+    supprimerAide: 'Il sera effacé de ton téléphone.',
   },
   ephemere: {
     apercuActive: 'Messages éphémères activés',

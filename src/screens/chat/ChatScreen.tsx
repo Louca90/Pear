@@ -440,13 +440,15 @@ export function ChatScreen({ contactKey, name, pending, onBack, onInfo, onCustom
   const sendPicked = async (file: PickedFile) => {
     if (file.size > MAX_FILE_BYTES) {
       showDialog(t('chat.fichierTropLourd'), t('chat.limite', { taille: formatSize(MAX_FILE_BYTES) }));
-      return;
+      return false;
     }
     try {
       await chat.sendFile(contactKey, file);
       scroll.followSent();
+      return true;
     } catch (e) {
       showDialog(t('chat.envoiImpossible'), String(e));
+      return false;
     }
   };
 

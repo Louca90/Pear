@@ -1,21 +1,20 @@
 import { ComponentRef, RefObject, useEffect, useMemo, useState } from 'react';
 import { findNodeHandle, Pressable, StyleSheet, TextInput, View } from 'react-native';
-import Reanimated, { interpolate, useAnimatedStyle } from 'react-native-reanimated';
+import Reanimated, { useAnimatedStyle } from 'react-native-reanimated';
 import { GestureDetector } from 'react-native-gesture-handler';
 import { setIncognitoKeyboard } from '../../../../modules/pear-native';
-import { ArrowUp, Check, ChevronUp, Lock, Smile, Trash2 } from 'lucide-react-native';
+import { Check, Smile } from 'lucide-react-native';
 
 import { Message } from '../../../chat/database';
 import { MAX_TEXT_LENGTH } from '../../../chat/manager';
 import { IconButton, useNavigationBarHeight } from '../../../components/ui';
 import { MicIcon, SendIcon } from '../../../components/AnimatedIcons';
-import { createStyles, fixed, radius, spacing, useColors } from '../../../theme';
+import { createStyles, radius, spacing, useColors } from '../../../theme';
 
-import { VOICE_CANCEL_DISTANCE, VOICE_LOCK_DISTANCE } from '../constants';
 import { useVoiceRecorder } from '../hooks/useVoiceRecorder';
 import { useChatStyles } from '../styles';
 import { ComposerModeCard } from './ComposerModeCard';
-import { RecordingRow } from './RecordingRow';
+import { RecordingRow, VoiceActionButton } from './RecordingRow';
 import { AttachButton, AttachSheet } from './AttachMenu';
 import { PickedFile } from '../../../chat/manager';
 import { useBackInterceptor } from '../../../navigation/backInterceptors';
@@ -46,7 +45,7 @@ type Props = {
   onOnce?: () => void;
   // Photos récentes choisies dans le menu Joindre.
   onSendRecent: (files: PickedFile[]) => void;
-  onVoiceRecorded: (uri: string, seconds: number, wave?: string) => void;
+  onVoiceRecorded: (uri: string, seconds: number, wave?: string) => Promise<boolean | void> | void;
   onVoiceTooShort: () => void;
 };
 
@@ -84,18 +83,12 @@ export function Composer({
   const [sent, setSent] = useState(0);
   const [holds, setHolds] = useState(0);
   useEffect(() => {
-    if (voice.phase === 'holding') setHolds((count) => count + 1);
+    if (voice.phase === 'recording') setHolds((count) => count + 1);
   }, [voice.phase]);
   useBackInterceptor(attachOpen, onCloseAttach);
-  // Le micro devient progressivement une poubelle, au fil du glissé vers la gauche.
-  const { dragX, dragY, lockProgress, scale } = voice;
-  const micStyle = useAnimatedStyle(() => ({ transform: [{ translateX: dragX.get() }, { translateY: dragY.get() }, { scale: scale.get() }] }));
-  const trashStyle = useAnimatedStyle(() => ({ opacity: interpolate(dragX.get(), [-VOICE_CANCEL_DISTANCE, -VOICE_CANCEL_DISTANCE * 0.2], [1, 0], 'clamp') }));
-  const micIconStyle = useAnimatedStyle(() => ({
-    opacity: (1 - interpolate(dragX.get(), [-VOICE_CANCEL_DISTANCE, -VOICE_CANCEL_DISTANCE * 0.2], [1, 0], 'clamp')) * (1 - lockProgress.get()),
-  }));
-  const lockedIconStyle = useAnimatedStyle(() => ({ opacity: lockProgress.get() }));
-  const lockHintStyle = useAnimatedStyle(() => ({ transform: [{ scale: interpolate(dragY.get(), [-VOICE_LOCK_DISTANCE, 0], [1.25, 1], 'clamp') }] }));
+  // Le micro grossit à peine quand on le touche.
+  const { scale } = voice;
+  const micStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.get() }] }));
 
   const mode = useMemo(
     () => (editing ? { kind: 'edit' as const, message: editing } : replyingTo ? { kind: 'reply' as const, message: replyingTo } : null),
@@ -110,7 +103,7 @@ export function Composer({
       <ComposerModeCard mode={mode} name={name} onCancel={onCancelMode} onJump={onJump} />
       <View style={[styles.composer, { paddingBottom: keyboardOpen ? spacing.sm : bottom + spacing.sm }]}>
         {voice.phase !== 'idle' ? (
-          <RecordingRow seconds={voice.seconds} locked={voice.phase === 'locked'} dragX={voice.dragX} level={voice.liveLevel} onDiscard={voice.discard} />
+          <RecordingRow voice={voice} />
         ) : (
           <View style={styles.field}>
             <AttachButton open={attachOpen} onToggle={onToggleAttach} />
@@ -137,13 +130,9 @@ export function Composer({
             </View>
           </View>
         )}
-        {voice.phase === 'holding' && (
-          <Reanimated.View pointerEvents="none" style={[styles.voiceLockHint, lockHintStyle]}>
-            <Lock size={18} color={colors.text} strokeWidth={1.75} />
-            <ChevronUp size={16} color={colors.textMuted} strokeWidth={1.75} />
-          </Reanimated.View>
-        )}
-        {(draft.trim() || editing) && voice.phase === 'idle' ? (
+        {voice.phase !== 'idle' ? (
+          <VoiceActionButton phase={voice.phase} onStop={voice.stop} onSend={voice.send} />
+        ) : (draft.trim() || editing) ? (
           <IconButton
             onPress={() => {
               setSent((count) => count + 1);
@@ -161,13 +150,10 @@ export function Composer({
           <GestureDetector gesture={voice.gesture}>
           <Reanimated.View
             accessibilityRole="button"
-            accessibilityLabel={voice.phase === 'locked' ? t('chat.envoyerVocal') : t('chat.maintenirVocal')}
+            accessibilityLabel={t('chat.enregistrerVocal')}
             style={[styles.send, micStyle]}
           >
-            <Reanimated.View style={[styles.micLayer, styles.micTrash, trashStyle]}>
-              <Trash2 size={20} color={fixed.white} strokeWidth={2} />
-            </Reanimated.View>
-            <Reanimated.View style={[styles.micLayer, micIconStyle]}>
+            <Reanimated.View style={styles.micLayer}>
               <MicIcon size={20} color={colors.onSignature} strokeWidth={2} play={holds} />
             </Reanimated.View>
             {/* Le message vient de partir : l'avion s'envole par-dessus le micro qui a repris sa place. */}
@@ -176,9 +162,6 @@ export function Composer({
                 <SendIcon size={20} color={colors.onSignature} strokeWidth={2} away autoPlay />
               </View>
             )}
-            <Reanimated.View style={[styles.micLayer, lockedIconStyle]}>
-              <ArrowUp size={20} color={colors.onSignature} strokeWidth={2} />
-            </Reanimated.View>
           </Reanimated.View>
           </GestureDetector>
         )}

@@ -1,246 +1,253 @@
 import { useEffect } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import Reanimated, {
-  cancelAnimation,
-  Easing,
-  interpolate,
-  useAnimatedStyle,
-  useReducedMotion,
-  useSharedValue,
-  withRepeat,
-  withSequence,
-  withTiming,
-  type SharedValue,
-} from 'react-native-reanimated';
-import { Lock, Trash2 } from 'lucide-react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import Reanimated, { cancelAnimation, Easing, FadeIn, FadeInRight, interpolateColor, useAnimatedStyle, useReducedMotion, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
+import { ArrowUp, Check, Pause, Play, Square, Trash2 } from 'lucide-react-native';
 
-import { IconButton } from '../../../components/ui';
-import { popIn } from '../../../motion';
 import { createStyles, radius, spacing, useColors } from '../../../theme';
 
-import { VOICE_CANCEL_DISTANCE, VOICE_DOT_MS } from '../constants';
+import { VOICE_DOT_MS } from '../constants';
 import { formatClock } from '../format';
+import { LIVE_BARS, VoicePhase } from '../hooks/useVoiceRecorder';
 import { t } from '../../../i18n';
+import { Waveform } from './Waveform';
 
-// Onde « en direct » : des barres qui respirent et défilent vers la gauche. Le motif se répète toutes
-// les PATTERN barres : quand le défilement revient à zéro (fin d'un tour d'horloge), rien ne saute.
-const LIVE_BARS = 40;
+const BAR_HEIGHT = 52;
+const WAVE_HEIGHT = 30;
 const LIVE_BAR_WIDTH = 3;
-const LIVE_BAR_GAP = 2;
-const LIVE_HEIGHT = 24;
-const PATTERN = 12;
-const LIVE_LOOP_MS = 1200;
-const NUDGE_MS = 800;
-const NUDGE_DISTANCE = 6;
-// Sans niveau du micro, l'onde garde une amplitude moyenne.
-const DEFAULT_LEVEL = 0.6;
 
-function LiveBar({ index, clock, level, color }: { index: number; clock: SharedValue<number>; level: SharedValue<number>; color: string }) {
-  const slot = index % PATTERN;
-  const phase = ((slot * 7) % PATTERN) / PATTERN;
-  // Vitesse entière : la barre i et la barre i + PATTERN se retrouvent dans le même état à chaque tour.
-  const turns = 1 + (slot % 2);
-  const style = useAnimatedStyle(() => {
-    const breath = 0.5 + 0.5 * Math.sin(2 * Math.PI * (clock.get() * turns + phase));
-    const amplitude = 0.3 + 0.7 * level.get();
-    return { transform: [{ scaleY: 0.2 + 0.8 * amplitude * breath }] };
-  });
-  return <Reanimated.View style={[localStyles.liveBar, { backgroundColor: color }, style]} />;
+type Voice = {
+  phase: VoicePhase;
+  seconds: number;
+  totalSeconds: number;
+  bars: number[];
+  position: number;
+  pause: () => void;
+  resume: () => void;
+  play: () => void;
+  pausePlay: () => void;
+  discard: () => void;
+};
+
+// La barre d'un vocal en cours (planche « Vocal ») : elle s'étire depuis le micro et recouvre le champ.
+// De gauche à droite : poubelle, pause / lecture, onde (en direct, puis la relecture), point, chrono.
+// Les couleurs suivent l'état : rouge en enregistrement, grise en pause et en relecture, verte pour la
+// partie écoutée ou envoyée. Tout s'anime sur Reanimated, sans rebond.
+export function RecordingRow({ voice }: { voice: Voice }) {
+  const colors = useColors();
+  const styles = useStyles();
+  const reduced = useReducedMotion();
+  const { phase } = voice;
+  const live = phase === 'recording' || phase === 'paused';
+  const sending = phase === 'sending' || phase === 'sent';
+  const blink = useSharedValue(1);
+  const tint = useSharedValue(live ? 1 : 0);
+
+  useEffect(() => {
+    if (reduced || phase !== 'recording') {
+      cancelAnimation(blink);
+      blink.set(withTiming(phase === 'recording' ? 1 : 0.35, { duration: 200 }));
+      return;
+    }
+    blink.set(withRepeat(withSequence(withTiming(0.25, { duration: VOICE_DOT_MS, easing: Easing.inOut(Easing.ease) }), withTiming(1, { duration: VOICE_DOT_MS, easing: Easing.inOut(Easing.ease) })), -1));
+    return () => cancelAnimation(blink);
+  }, [phase, reduced, blink]);
+
+  // La teinte rose du côté droit pâlit en pause et s'efface à l'arrêt.
+  useEffect(() => {
+    tint.set(withTiming(phase === 'recording' ? 1 : phase === 'paused' ? 0.4 : 0, { duration: 260, easing: Easing.out(Easing.cubic) }));
+  }, [phase, tint]);
+  const dotStyle = useAnimatedStyle(() => ({ opacity: blink.get() }));
+  const dotColor = phase === 'paused' ? colors.disabled : colors.danger;
+  const tintStyle = useAnimatedStyle(() => ({ opacity: tint.get() }));
+  const dim = sending ? styles.dim : null;
+
+  const main =
+    phase === 'recording' ? (
+      <ControlButton label={t('vocal.pause')} onPress={voice.pause}>
+        <Pause size={18} color={colors.text} strokeWidth={2} />
+      </ControlButton>
+    ) : phase === 'paused' ? (
+      <ControlButton label={t('vocal.reprendre')} onPress={voice.resume}>
+        <Play size={18} color={colors.text} strokeWidth={2} />
+      </ControlButton>
+    ) : phase === 'playing' ? (
+      <ControlButton label={t('vocal.pause')} onPress={voice.pausePlay} disabled={sending}>
+        <Pause size={18} color={colors.text} strokeWidth={2} />
+      </ControlButton>
+    ) : (
+      <ControlButton label={t('vocal.ecouter')} onPress={voice.play} disabled={sending}>
+        <Play size={18} color={colors.text} strokeWidth={2} />
+      </ControlButton>
+    );
+
+  return (
+    <Reanimated.View entering={reduced ? FadeIn.duration(150) : FadeInRight.duration(260).easing(Easing.out(Easing.cubic))} style={styles.row}>
+      <Reanimated.View pointerEvents="none" style={[styles.tint, tintStyle]} />
+      <Pressable onPress={voice.discard} disabled={sending} hitSlop={6} accessibilityRole="button" accessibilityLabel={t('chat.supprimerVocal')} style={[styles.trash, dim]}>
+        <Trash2 size={20} color={colors.danger} strokeWidth={1.75} />
+      </Pressable>
+      <View style={dim}>{main}</View>
+      <View style={styles.wave}>
+        {live ? (
+          <LiveWave bars={voice.bars} color={phase === 'recording' ? colors.danger : colors.disabled} />
+        ) : (
+          <Waveform
+            bars={voice.bars}
+            position={sending ? (phase === 'sent' ? 1 : voice.position) : voice.position}
+            color={colors.signatureStrong}
+            restColor={colors.disabled}
+            label={t('chat.deplacerVocal')}
+            onSeek={() => {}}
+          />
+        )}
+      </View>
+      <Reanimated.View style={[styles.dot, { backgroundColor: dotColor }, live ? dotStyle : styles.dotHidden]} />
+      <Text style={styles.time} accessibilityLabel={live ? undefined : formatClock(voice.totalSeconds)}>
+        {formatClock(live || phase === 'playing' ? voice.seconds : voice.totalSeconds)}
+      </Text>
+    </Reanimated.View>
+  );
 }
 
-function LiveWave({ level, color }: { level?: SharedValue<number>; color: string }) {
-  const reduced = useReducedMotion();
-  const clock = useSharedValue(0);
-  const fallback = useSharedValue(DEFAULT_LEVEL);
-  useEffect(() => {
-    if (reduced) return;
-    clock.set(withRepeat(withTiming(1, { duration: LIVE_LOOP_MS, easing: Easing.linear }), -1));
-    return () => cancelAnimation(clock);
-  }, [clock, reduced]);
-  const scroll = useAnimatedStyle(() => ({ transform: [{ translateX: -clock.get() * PATTERN * (LIVE_BAR_WIDTH + LIVE_BAR_GAP) }] }));
+// L'onde en direct : chaque nouveau niveau du micro arrive à droite et pousse les autres vers la gauche.
+function LiveWave({ bars, color }: { bars: number[]; color: string }) {
   return (
-    <View style={localStyles.liveFrame} pointerEvents="none">
-      <Reanimated.View style={[localStyles.liveRow, scroll]}>
-        {Array.from({ length: LIVE_BARS }, (_, index) => (
-          <LiveBar key={index} index={index} clock={clock} level={level ?? fallback} color={color} />
-        ))}
-      </Reanimated.View>
+    <View style={localStyles.live} pointerEvents="none">
+      {bars.slice(-LIVE_BARS).map((level, index) => (
+        <View key={index} style={[localStyles.liveBar, { height: 3 + level * (WAVE_HEIGHT - 3), backgroundColor: color }]} />
+      ))}
     </View>
   );
 }
 
-// Ligne d'enregistrement d'un vocal (refonte, planche « Vocaux ») : point rouge qui clignote, chrono,
-// onde en direct, puis « ‹ Annuler » qui se balance pour inviter à glisser. Au fil du glissé vers la
-// gauche, l'onde s'efface et « Lâchez pour annuler » prend la place. Verrouillé : poubelle et cadenas.
-export function RecordingRow({
-  seconds,
-  locked,
-  dragX,
-  level,
-  onDiscard,
-}: {
-  seconds: number;
-  locked: boolean;
-  dragX: SharedValue<number>;
-  // Niveau du micro de 0 à 1 (useVoiceRecorder → liveLevel) ; facultatif.
-  level?: SharedValue<number>;
-  onDiscard: () => void;
-}) {
+function ControlButton({ label, onPress, disabled, children }: { label: string; onPress: () => void; disabled?: boolean; children: React.ReactNode }) {
+  const styles = useStyles();
+  return (
+    <Pressable onPress={onPress} disabled={disabled} hitSlop={4} accessibilityRole="button" accessibilityLabel={label} style={({ pressed }) => [styles.control, pressed && styles.pressed]}>
+      {children}
+    </Pressable>
+  );
+}
+
+// Le bouton rond à droite de la barre : rouge avec un carré « arrêter » pendant l'enregistrement, vert
+// avec une flèche « envoyer » en relecture, un anneau pendant l'envoi, puis une coche.
+export function VoiceActionButton({ phase, onStop, onSend }: { phase: VoicePhase; onStop: () => void; onSend: () => void }) {
   const colors = useColors();
   const styles = useStyles();
-  const reduced = useReducedMotion();
-  const blink = useSharedValue(1);
-  const nudge = useSharedValue(0);
-
+  const tone = useSharedValue(0);
   useEffect(() => {
-    if (reduced) return;
-    blink.set(
-      withRepeat(
-        withSequence(
-          withTiming(0.25, { duration: VOICE_DOT_MS, easing: Easing.inOut(Easing.ease) }),
-          withTiming(1, { duration: VOICE_DOT_MS, easing: Easing.inOut(Easing.ease) }),
-        ),
-        -1,
-      ),
-    );
-    return () => cancelAnimation(blink);
-  }, [blink, reduced]);
-
-  useEffect(() => {
-    if (reduced || locked) {
-      cancelAnimation(nudge);
-      nudge.set(0);
-      return;
-    }
-    nudge.set(
-      withRepeat(
-        withSequence(
-          withTiming(-NUDGE_DISTANCE, { duration: NUDGE_MS, easing: Easing.inOut(Easing.ease) }),
-          withTiming(0, { duration: NUDGE_MS, easing: Easing.inOut(Easing.ease) }),
-        ),
-        -1,
-      ),
-    );
-    return () => cancelAnimation(nudge);
-  }, [nudge, reduced, locked]);
-
-  const dotStyle = useAnimatedStyle(() => ({ opacity: blink.get() }));
-  const nudgeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: nudge.get() }] }));
-  // 1 au repos, 0 quand le doigt atteint la distance d'annulation.
-  const stay = (x: number) => {
-    'worklet';
-    return interpolate(x, [-VOICE_CANCEL_DISTANCE, -VOICE_CANCEL_DISTANCE * 0.5], [0, 1], 'clamp');
-  };
-  const waveStyle = useAnimatedStyle(() => ({ opacity: locked ? 1 : stay(dragX.get()) }));
-  const cancelHint = useAnimatedStyle(() => {
-    const amount = stay(dragX.get());
-    return { opacity: amount, transform: [{ translateX: -14 * (1 - amount) }] };
-  });
-  const releaseHint = useAnimatedStyle(() => {
-    const amount = stay(dragX.get());
-    return { opacity: 1 - amount, transform: [{ translateX: 14 * amount }] };
-  });
-
+    tone.set(withTiming(phase === 'recording' || phase === 'paused' ? 0 : 1, { duration: 260, easing: Easing.out(Easing.cubic) }));
+  }, [phase, tone]);
+  const background = useAnimatedStyle(() => ({ backgroundColor: interpolateColor(tone.get(), [0, 1], [colors.danger, colors.signatureStrong]) }));
+  const recording = phase === 'recording' || phase === 'paused';
+  const label = recording ? t('vocal.arreter') : t('chat.envoyerVocal');
   return (
-    <View style={styles.recordingRow}>
-      {locked && (
-        <Reanimated.View entering={popIn()}>
-          <IconButton onPress={onDiscard} label={t('chat.supprimerVocal')} hitSlop={8}>
-            <Trash2 size={20} color={colors.danger} strokeWidth={1.75} />
-          </IconButton>
-        </Reanimated.View>
-      )}
-      <Reanimated.View style={[styles.recordingDot, dotStyle]} />
-      <Text style={styles.recordingTime}>{formatClock(seconds)}</Text>
-      <Reanimated.View style={[styles.wave, waveStyle]}>
-        <LiveWave level={level} color={colors.text} />
+    <Pressable onPress={recording ? onStop : onSend} disabled={phase === 'sending' || phase === 'sent'} accessibilityRole="button" accessibilityLabel={label} style={styles.action}>
+      <Reanimated.View style={[StyleSheet.absoluteFill, styles.actionFill, background]} />
+      <Reanimated.View key={phase === 'recording' || phase === 'paused' ? 'stop' : phase === 'sending' ? 'ring' : phase === 'sent' ? 'check' : 'send'} entering={FadeIn.duration(180)} style={styles.actionIcon}>
+        {recording ? (
+          <Square size={16} color="#FFFFFF" fill="#FFFFFF" strokeWidth={2} />
+        ) : phase === 'sending' ? (
+          <ActivityIndicator size="small" color={colors.onSignature} />
+        ) : phase === 'sent' ? (
+          <Check size={22} color={colors.onSignature} strokeWidth={2.5} />
+        ) : (
+          <ArrowUp size={22} color={colors.onSignature} strokeWidth={2.2} />
+        )}
       </Reanimated.View>
-      {locked ? (
-        <Reanimated.View entering={popIn()} style={styles.recordingLock} accessibilityLabel={t('chat.vocalVerrouille')}>
-          <Lock size={18} color={colors.text} strokeWidth={1.75} />
-        </Reanimated.View>
-      ) : (
-        <View style={styles.recordingHints} accessibilityLabel={t('chat.glisserAnnuler')}>
-          <Reanimated.View style={cancelHint}>
-            <Reanimated.Text numberOfLines={1} style={[styles.recordingHint, nudgeStyle]}>
-              {t('vocal.annulerCourt')}
-            </Reanimated.Text>
-          </Reanimated.View>
-          <Reanimated.Text numberOfLines={1} style={[styles.recordingHint, styles.releaseHint, { color: colors.danger }, releaseHint]}>
-            {t('chat.lacherAnnuler')}
-          </Reanimated.Text>
-        </View>
-      )}
-    </View>
+    </Pressable>
   );
 }
 
 const localStyles = StyleSheet.create({
-  liveFrame: {
+  live: {
     flex: 1,
-    height: LIVE_HEIGHT,
-    overflow: 'hidden',
-    justifyContent: 'center',
-  },
-  liveRow: {
+    height: WAVE_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: LIVE_BAR_GAP,
-    height: LIVE_HEIGHT,
+    justifyContent: 'flex-end',
+    gap: 2,
+    overflow: 'hidden',
   },
   liveBar: {
     width: LIVE_BAR_WIDTH,
-    height: LIVE_HEIGHT,
     borderRadius: LIVE_BAR_WIDTH / 2,
   },
 });
 
 const useStyles = createStyles((colors) => ({
-  recordingRow: {
+  row: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    height: 44,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.lg,
+    gap: 8,
+    height: BAR_HEIGHT,
+    paddingHorizontal: spacing.sm,
+    borderRadius: BAR_HEIGHT / 2,
     backgroundColor: colors.surface,
     overflow: 'hidden',
   },
-  recordingDot: {
+  // Un léger fond rose du côté droit pendant l'enregistrement.
+  tint: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    right: 0,
+    width: '55%',
+    backgroundColor: colors.dangerSoft,
+    opacity: 0,
+  },
+  trash: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  control: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.full,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  wave: {
+    flex: 1,
+    height: WAVE_HEIGHT,
+    justifyContent: 'center',
+  },
+  dot: {
     width: 9,
     height: 9,
     borderRadius: radius.full,
-    backgroundColor: colors.danger,
   },
-  recordingTime: {
+  dotHidden: {
+    opacity: 0,
+  },
+  time: {
+    minWidth: 38,
     fontSize: 14,
     fontWeight: '600',
     fontVariant: ['tabular-nums'],
     color: colors.text,
   },
-  wave: {
-    flex: 1,
-    height: LIVE_HEIGHT,
+  dim: {
+    opacity: 0.35,
   },
-  recordingLock: {
-    alignItems: 'flex-end',
+  pressed: {
+    opacity: 0.7,
   },
-  recordingHints: {
-    height: 20,
+  action: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
     justifyContent: 'center',
   },
-  recordingHint: {
-    fontSize: 12,
-    color: colors.textMuted,
-    textAlign: 'right',
+  actionFill: {
+    borderRadius: radius.full,
   },
-  releaseHint: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    bottom: 0,
-    width: 200,
-    textAlignVertical: 'center',
+  actionIcon: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 }));
