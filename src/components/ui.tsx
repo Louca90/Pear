@@ -2,7 +2,7 @@ import { ReactNode, useEffect, useRef, useSyncExternalStore } from 'react';
 import { Image, Pressable, StyleProp, Text, View, ViewStyle } from 'react-native';
 import { ArrowLeft, LucideIcon, NotebookPen, User } from 'lucide-react-native';
 
-import Reanimated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Reanimated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { getInsets, subscribeInsets } from '../../modules/pear-native';
 import { DURATION, EASE, timing } from '../motion';
@@ -147,26 +147,40 @@ type RowPressableProps = {
   onLongPress?: () => void;
   style?: StyleProp<ViewStyle>;
   label?: string;
+  // Maintien : la ligne rétrécit doucement et un fond se remplit de gauche à droite pendant ce délai ; le
+  // maintien aboutit à la fin (onLongPress), relâcher avant annule tout.
+  holdMs?: number;
   children: ReactNode;
 };
 
 // Une ligne qu'on touche (liste, menu) : le fond d'appui suit ses coins arrondis au lieu de déborder
 // en rectangle sur les bords du conteneur.
-export function RowPressable({ onPress, onLongPress, style, label, children }: RowPressableProps) {
+export function RowPressable({ onPress, onLongPress, style, label, holdMs, children }: RowPressableProps) {
   const styles = useStyles();
   // Une ligne se touche souvent : l'effet reste presque imperceptible (0,99), le fond fait le reste.
   const feedback = usePressFeedback(0.99, 1);
+  const hold = useSharedValue(0);
+  const holdStyle = useAnimatedStyle(() => ({ transform: [{ scale: 1 - 0.03 * hold.get() }] }));
+  const fillStyle = useAnimatedStyle(() => ({ transform: [{ scaleX: hold.get() }] }));
   return (
-    <Reanimated.View style={feedback.style}>
+    <Reanimated.View style={[feedback.style, holdMs ? holdStyle : null]}>
       <Pressable
         onPress={onPress}
         onLongPress={onLongPress}
-        onPressIn={feedback.onPressIn}
-        onPressOut={feedback.onPressOut}
+        delayLongPress={holdMs}
+        onPressIn={() => {
+          feedback.onPressIn();
+          if (holdMs) hold.set(withTiming(1, { duration: holdMs, easing: Easing.out(Easing.quad) }));
+        }}
+        onPressOut={() => {
+          feedback.onPressOut();
+          if (holdMs) hold.set(withTiming(0, { duration: 160, easing: Easing.out(Easing.quad) }));
+        }}
         accessibilityRole="button"
         accessibilityLabel={label}
         style={({ pressed }) => [styles.rowPressable, style, pressed && styles.rowPressed]}
       >
+        {holdMs ? <Reanimated.View pointerEvents="none" style={[styles.holdFill, fillStyle]} /> : null}
         {children}
       </Pressable>
     </Reanimated.View>
@@ -258,6 +272,12 @@ const useStyles = createStyles((colors) => ({
   },
   rowPressed: {
     backgroundColor: colors.surface,
+  },
+  // Le fond du maintien : il se remplit de gauche à droite derrière la ligne.
+  holdFill: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: colors.surface,
+    transformOrigin: 'left',
   },
   button: {
     flexDirection: 'row',

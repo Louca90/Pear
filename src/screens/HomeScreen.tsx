@@ -384,12 +384,12 @@ export function HomeScreen({ contacts, onAdd, onOpen, onRequests, onQr }: Props)
             {sectioned && item.contact.publicKey === firstRecent && <Text style={styles.section}>{t('liste.sectionRecentes')}</Text>}
             {isSelf(item.contact.publicKey) ? (
               // Mes notes : ni épingle ni « lu » à glisser, seulement ouvrir (et vider, par appui long).
-              <RowPressable onPress={() => onOpen(item.contact)} onLongPress={item.last ? () => select(item) : undefined} style={styles.row}>
+              <RowPressable onPress={() => onOpen(item.contact)} onLongPress={item.last ? () => select(item) : undefined} holdMs={420} style={styles.row}>
                 <ConversationRow item={item} now={now} index={index} arriving={false} />
               </RowPressable>
             ) : (
               <SwipeRow pinned={item.pinned} canMarkRead={item.unread > 0} onPin={() => togglePin(item)} onMarkRead={() => markRead(item)}>
-                <RowPressable onPress={() => onOpen(item.contact)} onLongPress={() => select(item)} style={styles.row}>
+                <RowPressable onPress={() => onOpen(item.contact)} onLongPress={() => select(item)} holdMs={420} style={styles.row}>
                   <ConversationRow item={item} now={now} index={index} arriving={arriving.current} />
                 </RowPressable>
               </SwipeRow>
