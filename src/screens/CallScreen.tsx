@@ -44,9 +44,14 @@ const useCall = () => useSyncExternalStore(chat.subscribeCall, chat.getCall);
 // Pear est-il dans la fenêtre flottante d'Android (on a quitté l'app pendant l'appel) ?
 function usePip() {
   const [pip, setPip] = useState(false);
+  // Chaque événement de la fenêtre flottante force un redessin, même si l'état n'a pas changé.
+  const [, redraw] = useState(0);
   const { width } = useWindowDimensions();
   useEffect(() => {
-    const subscription = addPipListener(setPip);
+    const subscription = addPipListener((active) => {
+      setPip(active);
+      redraw((count) => count + 1);
+    });
     return () => subscription.remove();
   }, []);
   return pip || width < 300;

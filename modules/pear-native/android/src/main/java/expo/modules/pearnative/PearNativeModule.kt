@@ -291,40 +291,32 @@ class PearNativeModule : Module() {
     Function("stopRinging") { CallAudio.stopRinging() }
     // Appel en cours : quitter Pear (accueil, autre app) ouvre la fenêtre flottante de l'appel, à ce format.
     // Android 12 et plus ; enabled = false à la fin de l'appel.
-    AsyncFunction("setCallPip") { enabled: Boolean, width: Int, height: Int, hangUpLabel: String ->
+    AsyncFunction("setCallPip") { enabled: Boolean, width: Int, height: Int ->
       val activity = appContext.currentActivity as? ComponentActivity ?: return@AsyncFunction
       if (!pipListening) {
         pipListening = true
         activity.addOnPictureInPictureModeChangedListener { info: PictureInPictureModeChangedInfo ->
-          sendEvent("onPip", mapOf("active" to info.isInPictureInPictureMode))
+          val active = info.isInPictureInPictureMode
+          sendEvent("onPip", mapOf("active" to active))
           // Le changement de taille de la fenêtre n'est pas toujours remesuré tout de suite : l'écran restait
-          // à moitié dessiné jusqu'au premier toucher. On force deux mesures.
+          // à moitié dessiné jusqu'au premier toucher. On remesure et on redessine plusieurs fois, et on
+          // redit l'état à JavaScript pour qu'il redessine aussi.
           val decor = activity.window.decorView
-          decor.requestLayout()
-          decor.postDelayed({ decor.requestLayout() }, 200)
+          for (delay in longArrayOf(0, 80, 200, 450, 900)) {
+            decor.postDelayed({
+              decor.requestLayout()
+              decor.invalidate()
+              if (delay > 0) sendEvent("onPip", mapOf("active" to active))
+            }, delay)
+          }
         }
       }
       if (Build.VERSION.SDK_INT >= 31) {
         try {
-          // Sans action à nous, Samsung (One UI) prend la fenêtre pour un lecteur vidéo et y met ses
-          // commandes lecture / pause. Une action « Raccrocher » les remplace.
-          val hangUp = android.app.PendingIntent.getService(
-            activity,
-            2,
-            Intent(activity, PearCallService::class.java).setAction(PearCallService.ACTION_HANG_UP),
-            android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT,
-          )
-          val action = android.app.RemoteAction(
-            android.graphics.drawable.Icon.createWithResource(activity, android.R.drawable.ic_menu_close_clear_cancel),
-            hangUpLabel,
-            hangUpLabel,
-            hangUp,
-          )
           activity.setPictureInPictureParams(
             PictureInPictureParams.Builder()
               .setAutoEnterEnabled(enabled)
               .setSeamlessResizeEnabled(false)
-              .setActions(if (enabled) listOf(action) else emptyList())
               .setAspectRatio(Rational(width.coerceAtLeast(1), height.coerceAtLeast(1)))
               .build(),
           )
@@ -332,6 +324,12 @@ class PearNativeModule : Module() {
           Log.w("PearCall", "fenêtre flottante", e)
         }
       }
+      Unit
+    }.runOnQueue(Queues.MAIN)
+    // Fin de l'appel : la fenêtre flottante se ferme tout de suite (l'app reste ouverte en arrière-plan).
+    AsyncFunction("closeCallPip") {
+      val activity = appContext.currentActivity ?: return@AsyncFunction
+      if (Build.VERSION.SDK_INT >= 26 && activity.isInPictureInPictureMode) activity.moveTaskToBack(true)
       Unit
     }.runOnQueue(Queues.MAIN)
     Function("callOutputs") { appContext.reactContext?.let { CallAudio.outputs(it) } ?: emptyList<Map<String, Any>>() }

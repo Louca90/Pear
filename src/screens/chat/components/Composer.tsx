@@ -14,7 +14,7 @@ import { createStyles, radius, spacing, useColors } from '../../../theme';
 import { useVoiceRecorder } from '../hooks/useVoiceRecorder';
 import { useChatStyles } from '../styles';
 import { ComposerModeCard } from './ComposerModeCard';
-import { RecordingRow, VoiceActionButton } from './RecordingRow';
+import { RecordingRow } from './RecordingRow';
 import { AttachButton, AttachSheet } from './AttachMenu';
 import { PickedFile } from '../../../chat/manager';
 import { useBackInterceptor } from '../../../navigation/backInterceptors';
@@ -130,9 +130,7 @@ export function Composer({
             </View>
           </View>
         )}
-        {voice.phase !== 'idle' ? (
-          <VoiceActionButton phase={voice.phase} onStop={voice.stop} onSend={voice.send} />
-        ) : (draft.trim() || editing) ? (
+        {voice.phase !== 'idle' ? null : (draft.trim() || editing) ? (
           <IconButton
             onPress={() => {
               setSent((count) => count + 1);

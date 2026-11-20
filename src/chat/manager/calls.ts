@@ -7,7 +7,7 @@ import type { CallMedia, PeerStatus } from '../../network/peer';
 import { callPushTag, decodeCallPush, encodeCallPush, isCallId } from '../callPayload';
 import { getContactProfile, getSetting, isBlocked, setSetting } from '../database';
 import { clearCallNotification, showIncomingCall, showMissedCall, showOngoingCall } from '../notifications';
-import { addCallHangUpListener, addHeadsetListener, callHeadset, callOutputs, CallOutput, Headset, setCallOutput, setCallAudio, setCallPip, showOverLock, startCallService, startRinging, stopCallService, stopRinging } from '../../../modules/pear-native';
+import { addCallHangUpListener, addHeadsetListener, callHeadset, callOutputs, CallOutput, Headset, setCallOutput, setCallAudio, setCallPip, closeCallPip, showOverLock, startCallService, startRinging, stopCallService, stopRinging } from '../../../modules/pear-native';
 import { t } from '../../i18n';
 import { log } from '../../log';
 
@@ -722,6 +722,8 @@ function finish(core: ChatCore, end: CallEnd, record = false) {
   releaseMedia();
   setCallAudio('off');
   showOverLock(false).catch(() => undefined);
+  // La fenêtre flottante se ferme tout de suite à la fin de l'appel.
+  closeCallPip().catch(() => undefined);
   clearCallNotification(current.contact).catch((e) => log.warn('notification d’appel', e));
   stopCallService();
   hangUpWatch?.remove();
