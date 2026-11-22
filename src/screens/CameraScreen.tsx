@@ -221,8 +221,11 @@ function CaptureReview({ capture, contacts, onDiscard, onSent, to }: ReviewProps
             extra: (
               <>
               <IconButton onPress={toggleOnce} label={t('unique.bouton')} style={styles.roundControl}>
+                {/* Même icône que dans le sélecteur de la galerie : un « 1 » dans un anneau en pointillés. */}
                 <Reanimated.View style={[styles.onceFill, onceStyle]}>
-                  <Text style={styles.onceLabel}>1</Text>
+                  <View style={[styles.onceRing, { borderColor: once ? colors.onSignature : colors.background }]}>
+                    <Text style={[styles.onceLabel, { color: once ? colors.onSignature : colors.background }]}>1</Text>
+                  </View>
                 </Reanimated.View>
               </IconButton>
               <IconButton onPress={save} disabled={saved} label={saved ? t('camera.enregistre') : t('camera.enregistrerGalerie')} style={styles.roundControl}>
@@ -904,10 +907,18 @@ const useStyles = createMediaStyles((colors) => ({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  onceRing: {
+    width: 26,
+    height: 26,
+    borderRadius: radius.full,
+    borderWidth: 1.75,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   onceLabel: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: colors.background,
+    fontSize: 13,
+    fontWeight: '700',
   },
   onceHint: {
     position: 'absolute',
