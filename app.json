@@ -3,7 +3,7 @@
     "name": "Pear",
     "slug": "pear",
     "scheme": "pear",
-    "version": "1.9.0",
+    "version": "1.9.1",
     "platforms": [
       "android"
     ],
@@ -12,7 +12,7 @@
     "userInterfaceStyle": "automatic",
     "android": {
       "package": "com.louca.pear",
-      "versionCode": 13,
+      "versionCode": 14,
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/android-icon-foreground.png",

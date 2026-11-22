@@ -1,5 +1,38 @@
 # Journal des versions
 
+## 1.9.1 (versionCode 14)
+
+### Résumé
+
+- Répondre à un appel quand le téléphone est verrouillé ne fait plus planter Pear.
+- Changer de langue ne fait plus planter Pear : l'app redémarre proprement dans la nouvelle langue.
+- Le bouton du micro ne disparaît plus pendant un appel.
+- Après une mise à jour, les nouveautés s'ouvrent en grand, avec une petite démo pour chacune.
+- La mise à jour se télécharge avec une vraie barre de progression, et la notification « Pear est disponible » marche désormais app fermée.
+
+### Détails
+
+#### Nouveautés
+
+- Après une mise à jour, les nouveautés de la 1.9 s'ouvrent en grand : la poire des transferts, le partage d'écran, le nouveau vocal, le statut d'envoi.
+- Écran de mise à jour : une barre de progression sous le pourcentage, pleine pendant la vérification et l'installation.
+
+#### Corrections
+
+- Appels : décrocher téléphone verrouillé, ou depuis la notification, faisait planter Pear une dizaine de secondes plus tard.
+- Appels : le bouton du micro devenait parfois invisible après plusieurs appels.
+- Langue : changer de langue (et restaurer une sauvegarde) faisait planter la version publiée. L'app redémarre maintenant entièrement.
+- Notification de mise à jour : elle ne s'affichait jamais quand Pear était fermé.
+- Accueil : un seul bouton pour ajouter quelqu'un, le QR code (le « + » faisait la même chose).
+- Appareil photo : le bouton « 1 » de la vue unique a la même icône que dans la galerie.
+
+#### Technique
+
+- Service d'appel : micro + caméra, puis micro, puis synchronisation (permis en arrière-plan) ; relancé en micro dès que Pear est à l'écran.
+- Redémarrage complet de l'app au lieu de recharger le JavaScript à chaud.
+- La version annoncée par push est vérifiée par `src/update/announce.ts` (testée). Une version corrective reprend les pages « Quoi de neuf » de sa version.
+- Nouvel APK nécessaire (service d'appel et redémarrage natifs).
+
 ## 1.9.0 (versionCode 13)
 
 ### Résumé
