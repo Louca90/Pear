@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import Reanimated, { FadeIn, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { AppState, BackHandler, Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import { ArrowRight, Download, ExternalLink, LogOut, RotateCw, Settings } from 'lucide-react-native';
 
@@ -9,6 +10,7 @@ import { createStyles, radius, spacing, useColors } from '../theme';
 import { Release } from './release';
 import { canSkipUpdate, getInstallPermission, previewUpdateScreen, requestInstallPermission, skipUpdateOnce, startUpdate, useUpdateState } from './updates';
 import { t } from '../i18n';
+import { DURATION, EASE, timing } from '../motion';
 
 // Plein écran et bloquant : ni le bouton retour ni le geste ne le ferment. On met à jour, ou on quitte.
 export function UpdateScreen({ release }: { release: Release }) {
@@ -64,6 +66,7 @@ export function UpdateScreen({ release }: { release: Release }) {
         </Pressable>
 
         {status && <Text style={[styles.status, phase === 'failed' && styles.statusError]}>{status}</Text>}
+        {(busy || phase === 'installing') && <DownloadBar progress={phase === 'downloading' ? progress : 1} />}
 
 
         <View style={styles.actions}>
@@ -86,6 +89,22 @@ export function UpdateScreen({ release }: { release: Release }) {
         </View>
       </View>
     </Screen>
+  );
+}
+
+// La barre du téléchargement : elle suit le pourcentage en glissant (jamais par à-coups), et reste
+// pleine pendant la vérification et l'installation.
+function DownloadBar({ progress }: { progress: number }) {
+  const styles = useStyles();
+  const level = useSharedValue(progress);
+  useEffect(() => {
+    level.set(timing(Math.min(1, Math.max(0, progress)), 240));
+  }, [progress, level]);
+  const fill = useAnimatedStyle(() => ({ width: `${level.get() * 100}%` }));
+  return (
+    <Reanimated.View entering={FadeIn.duration(DURATION.small).easing(EASE)} style={styles.track}>
+      <Reanimated.View style={[styles.fill, fill]} />
+    </Reanimated.View>
   );
 }
 
@@ -144,6 +163,18 @@ const useStyles = createStyles((colors) => ({
   },
   statusError: {
     color: colors.danger,
+  },
+  track: {
+    height: 6,
+    borderRadius: radius.full,
+    overflow: 'hidden',
+    backgroundColor: colors.surface,
+    marginBottom: spacing.md,
+  },
+  fill: {
+    height: '100%',
+    borderRadius: radius.full,
+    backgroundColor: colors.signatureStrong,
   },
 
   actions: {
