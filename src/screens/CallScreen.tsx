@@ -1,6 +1,6 @@
 import { ComponentType, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { AppState, Keyboard, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import Reanimated, { FadeIn, FadeOut, interpolateColor, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
+import Reanimated, { cancelAnimation, FadeIn, FadeOut, interpolateColor, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withTiming } from 'react-native-reanimated';
 import { BluetoothConnected, ChevronDown, Headphones, Mic, MicOff, Phone, PhoneOff, Smartphone, SwitchCamera, Video, VideoOff, Volume2, LucideIcon, ScreenShare, ScreenShareOff } from 'lucide-react-native';
 import { RTCView } from 'react-native-webrtc';
 import { StatusBar } from 'expo-status-bar';
@@ -464,8 +464,18 @@ function RoundButton({
   const size = big ? 72 : 60;
   const solid = variant === 'danger' ? colors.danger : variant === 'accept' ? colors.signatureStrong : null;
   const iconColor = solid ? fixed.white : active ? (onVideo ? fixed.black : colors.background) : onVideo ? colors.onMedia : colors.text;
+  // L'arrivée en cascade est une valeur animée qui finit toujours à 1, pas une animation d'entrée de
+  // Reanimated : interrompue (appel réduit, appel suivant), celle-ci laissait parfois un bouton
+  // invisible, souvent le micro, le premier de la rangée.
+  const shown = useSharedValue(delay === undefined ? 1 : 0);
+  useEffect(() => {
+    if (delay === undefined) return;
+    shown.set(withDelay(delay, timing(1, DURATION.screen)));
+    return () => cancelAnimation(shown);
+  }, [delay, shown]);
+  const arrive = useAnimatedStyle(() => ({ opacity: shown.get(), transform: [{ translateY: 14 * (1 - shown.get()) }] }));
   return (
-    <Reanimated.View entering={delay === undefined ? undefined : enterUp(14, DURATION.screen, delay)}>
+    <Reanimated.View style={arrive}>
     <Pressable onPress={onPress} onPressIn={feedback.onPressIn} onPressOut={feedback.onPressOut} disabled={disabled} accessibilityRole="button" accessibilityLabel={label} style={[styles.buttonWrap, disabled && styles.disabled]}>
       <Reanimated.View style={[{ width: size, height: size, borderRadius: size / 2 }, styles.button, solid ? { backgroundColor: solid } : fill, feedback.style]}>
         <Icon size={big ? 30 : 24} color={iconColor} strokeWidth={1.75} />
