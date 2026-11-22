@@ -1,7 +1,7 @@
 {
-  "version": "1.9.0",
-  "versionCode": 13,
-  "summary": "- Nouvelle icône Pépins, une poire coupée en deux qui s'anime partout dans l'app : connexion, envoi d'une photo (elle se remplit avec le vrai pourcentage, puis « Vérifié »), tirer pour actualiser.\n- Partage d'écran pendant un appel, avec zoom chez celui qui regarde. Les appels marchent aussi téléphone verrouillé, avec la bonne sortie audio (Bluetooth, casque) et son nom.\n- Nouveau vocal : touchez le micro, mettez en pause, réécoutez, puis envoyez. Photo et vidéo en vue unique depuis l'appareil photo de Pear.\n- La Carte devient un onglet et le QR code a sa feuille animée (Mon code / Scanner). Une position partagée affiche maintenant la vraie commune.\n- « Envoi… » reste affiché tant que le téléphone de votre contact n'a pas reçu le message, et Pear vous dit s'il n'a pas de connexion.",
+  "version": "1.9.1",
+  "versionCode": 14,
+  "summary": "- Répondre à un appel quand le téléphone est verrouillé ne fait plus planter Pear.\n- Changer de langue ne fait plus planter Pear : l'app redémarre proprement dans la nouvelle langue.\n- Le bouton du micro ne disparaît plus pendant un appel.\n- Après une mise à jour, les nouveautés s'ouvrent en grand, avec une petite démo pour chacune.\n- La mise à jour se télécharge avec une vraie barre de progression, et la notification « Pear est disponible » marche désormais app fermée.",
   "pages": {
     "1.6.0": [
       {
