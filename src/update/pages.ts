@@ -22,9 +22,13 @@ export const ACTIONS: Record<string, () => void> = {};
 
 const PAGES = (notes as unknown as { pages?: Record<string, WhatsNewPage[]> }).pages ?? {};
 
-// Les pages d'une version (4 au plus) ; vide : la popup courte reste.
-export function pagesFor(version: string): WhatsNewPage[] {
-  return (PAGES[version] ?? []).slice(0, MAX_PAGES);
+// Les pages d'une version (4 au plus). Une version corrective sans pages à elle (1.9.1) montre celles de
+// sa version (1.9.0) : après une mise à jour, on voit toujours les nouveautés en grand quand elles
+// existent. Vide : la popup courte reste.
+export function pagesFor(version: string, pages: Record<string, WhatsNewPage[]> = PAGES): WhatsNewPage[] {
+  const minor = /^(\d+)\.(\d+)\.\d+$/.exec(version);
+  const own = pages[version] ?? (minor ? pages[`${minor[1]}.${minor[2]}.0`] : undefined);
+  return (own ?? []).slice(0, MAX_PAGES);
 }
 
 // La visite guidée de « Découvrir Pear » : ce que fait l'app, en quatre pages.

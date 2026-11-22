@@ -18,3 +18,17 @@ describe('pages « Quoi de neuf »', () => {
     for (const group of groups) expect(group.pages.every((page) => page.theme === group.theme)).toBe(true);
   });
 });
+
+describe('pages d’une version corrective', () => {
+  const page = { theme: 'conversation' as const, titre: 'nouveautes.transfertTitre' as const, texte: 'nouveautes.transfertTexte' as const };
+  const pages = { '1.9.0': [page] };
+
+  it('reprend les pages de sa version quand elle n’en a pas', () => {
+    expect(pagesFor('1.9.1', pages)).toEqual([page]);
+    expect(pagesFor('1.9.0', pages)).toEqual([page]);
+  });
+
+  it('rien pour une autre version', () => {
+    expect(pagesFor('1.10.0', pages)).toEqual([]);
+  });
+});

@@ -13,6 +13,7 @@ import { TypingBubble } from '../../screens/chat/components/TypingBubble';
 import { bubblePalette, createStyles, ephemeralBubble, motion, radius, spacing, useColors } from '../../theme';
 import { PhoneFrame } from './PhoneFrame';
 import { DISCOVER_DEMOS } from './discover';
+import { V19_DEMOS } from './v19';
 
 // Fait tourner une valeur parmi `values`, une à chaque `ms`.
 function useCycle<T>(values: T[], ms: number): T {
@@ -244,6 +245,7 @@ export const DEMOS: Record<string, ComponentType> = {
   stickers: StickerDemo,
   actualiser: RefreshDemo,
   ...DISCOVER_DEMOS,
+  ...V19_DEMOS,
 };
 
 const useStyles = createStyles((colors) => ({

@@ -52,6 +52,32 @@
         "texte": "nouveautes.signatureTexte",
         "demo": "signature"
       }
+    ],
+    "1.9.0": [
+      {
+        "theme": "conversation",
+        "titre": "nouveautes.transfertTitre",
+        "texte": "nouveautes.transfertTexte",
+        "demo": "transfert"
+      },
+      {
+        "theme": "conversation",
+        "titre": "nouveautes.partageEcranTitre",
+        "texte": "nouveautes.partageEcranTexte",
+        "demo": "partageEcran"
+      },
+      {
+        "theme": "conversation",
+        "titre": "nouveautes.vocalTitre",
+        "texte": "nouveautes.vocalTexte",
+        "demo": "vocal"
+      },
+      {
+        "theme": "securite",
+        "titre": "nouveautes.statutTitre",
+        "texte": "nouveautes.statutTexte",
+        "demo": "statutEnvoi"
+      }
     ]
   }
 }
