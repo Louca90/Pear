@@ -296,7 +296,8 @@ export function HomeScreen({ contacts, onAdd, onOpen, onRequests, onQr }: Props)
       { label: t('commun.annuler'), style: 'cancel' },
     ]);
 
-  // En-tête : la poire, « Messages », les demandes et un bouton pour ajouter quelqu'un.
+  // En-tête : la poire, « Messages », le QR code (ajouter quelqu'un : Mon code / Scanner) et les demandes.
+  // Un seul bouton pour ajouter : le « + » faisait la même chose que le QR code.
   const logo = <Pear height={30} color={colors.text} />;
   const profileButton = (
     <View style={styles.headerActions}>
@@ -304,9 +305,6 @@ export function HomeScreen({ contacts, onAdd, onOpen, onRequests, onQr }: Props)
         <QrCode size={20} color={colors.text} strokeWidth={1.75} />
       </IconButton>
       <RequestsBell count={getPendingRequests().length} onPress={onRequests} />
-      <IconButton onPress={onAdd} label={t('liste.nouvelleConversation')} style={styles.newButton}>
-        <Plus size={20} color={colors.onSignature} strokeWidth={2} />
-      </IconButton>
     </View>
   );
   const title = t('onglets.messages');
@@ -519,14 +517,6 @@ const useStyles = createStyles((colors) => ({
     height: 40,
     borderRadius: radius.full,
     backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  newButton: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.full,
-    backgroundColor: colors.signature,
     alignItems: 'center',
     justifyContent: 'center',
   },
