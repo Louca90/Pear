@@ -56,7 +56,7 @@ declare class PearNativeModule extends NativeModule<{ onBack: (event: BackEvent)
   setCallOutput?(id: number): void;
   setCallPip?(enabled: boolean, width: number, height: number): Promise<void>;
   closeCallPip?(): Promise<void>;
-  startCallService?(info: Record<string, string | number | boolean>): void;
+  startCallService?(info: Record<string, string | number | boolean>): boolean | void;
   stopCallService?(): void;
   setVideoCorner?(tag: number, radius: number): Promise<boolean>;
 }
@@ -335,11 +335,11 @@ export function addPipListener(listener: (active: boolean) => void) {
 
 export type CallServiceInfo = { name: string; photo: string; video: boolean; startedAt: number; text: string; channelName: string; hangUpLabel: string };
 
-// Notification de l'appel en cours au format appel d'Android (Now Bar de Samsung) ; false avec un ancien APK.
+// Notification de l'appel en cours au format appel d'Android (Now Bar de Samsung) ; false avec un ancien
+// APK, ou si Android refuse de lancer le service (un APK d'avant la 1.9.1 ne renvoie rien : lancé).
 export function startCallService(info: CallServiceInfo) {
   if (!PearNative.startCallService) return false;
-  PearNative.startCallService(info);
-  return true;
+  return PearNative.startCallService(info) !== false;
 }
 
 export function stopCallService() {

@@ -249,9 +249,16 @@ function releaseMedia() {
 // d'état), par le service natif ; un APK plus ancien garde celle de Notifee.
 let hangUpWatch: { remove: () => void } | null = null;
 let nativeService = false;
+// Décroché alors que Pear n'était pas encore à l'écran (téléphone verrouillé) : Android n'a permis
+// qu'un service de « synchronisation ». Dès que Pear est à l'écran, on le relance en service « micro »
+// (et caméra), sans quoi Android coupe le micro en arrière-plan.
+let foregroundWatch: { remove: () => void } | null = null;
 
 function showActive(core: ChatCore) {
   if (!state) return;
+  foregroundWatch ??= AppState.addEventListener('change', (next) => {
+    if (next === 'active' && state?.phase === 'active') showActive(core);
+  });
   const name = nameOf(core, state.contact);
   const camera = state.video || state.cameraOn;
   nativeService = startCallService({
@@ -746,6 +753,8 @@ function finish(core: ChatCore, end: CallEnd, record = false) {
   stopCallService();
   hangUpWatch?.remove();
   hangUpWatch = null;
+  foregroundWatch?.remove();
+  foregroundWatch = null;
   if (core.callContact === current.contact) core.callContact = null;
   log.info('appel fini', end);
   // Pear en arrière-plan : la connexion gardée pour l'appel n'a plus de raison de rester ouverte.

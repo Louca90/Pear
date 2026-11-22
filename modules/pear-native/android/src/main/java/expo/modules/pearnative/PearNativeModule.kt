@@ -187,8 +187,7 @@ class PearNativeModule : Module() {
     // Notification de l'appel en cours (service de premier plan). info : name, photo, video, startedAt
     // (0 = pas encore répondu), text, channelName, hangUpLabel.
     Function("startCallService") { info: Map<String, Any?> ->
-      appContext.reactContext?.let { PearCallService.start(it, info) }
-      Unit
+      appContext.reactContext?.let { PearCallService.start(it, info) } ?: false
     }
     Function("stopCallService") {
       appContext.reactContext?.let { PearCallService.stop(it) }

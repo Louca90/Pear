@@ -29,7 +29,9 @@ class PearCallService : Service() {
     // Raccrocher depuis la notification ou la Now Bar : le module JS le transmet à l'écran d'appel.
     var onHangUp: (() -> Unit)? = null
 
-    fun start(context: Context, info: Map<String, Any?>) {
+    // false si Android refuse de lancer le service (app en arrière-plan sans exemption) : le JavaScript
+    // garde alors la notification de Notifee.
+    fun start(context: Context, info: Map<String, Any?>): Boolean {
       val intent = Intent(context, PearCallService::class.java)
       info.forEach { (key, value) ->
         when (value) {
@@ -38,7 +40,13 @@ class PearCallService : Service() {
           is Number -> intent.putExtra(key, value.toLong())
         }
       }
-      context.startForegroundService(intent)
+      return try {
+        context.startForegroundService(intent)
+        true
+      } catch (e: Exception) {
+        Log.w("PearCall", "service de l'appel refusé", e)
+        false
+      }
     }
 
     fun stop(context: Context) {
@@ -59,21 +67,26 @@ class PearCallService : Service() {
     }
     val video = intent?.getBooleanExtra("video", false) ?: false
     val notification = build(intent)
-    try {
-      if (Build.VERSION.SDK_INT >= 30) {
-        var types = ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-        if (video) types = types or ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
-        startForeground(NOTIFICATION_ID, notification, types)
-      } else {
-        startForeground(NOTIFICATION_ID, notification)
-      }
-    } catch (e: Exception) {
-      // Caméra refusée en arrière-plan, par exemple : on garde au moins le micro.
-      Log.w("PearCall", "service de l'appel", e)
+    if (Build.VERSION.SDK_INT < 30) {
+      startForeground(NOTIFICATION_ID, notification)
+      return START_NOT_STICKY
+    }
+    // Un service lancé par startForegroundService DOIT passer au premier plan : sinon Android tue l'app
+    // une dizaine de secondes plus tard (« did not then call startForeground »). Or, Pear pas encore
+    // visible (appel décroché téléphone verrouillé, depuis la notification), Android 14 refuse les types
+    // « micro » et « caméra ». On essaie donc micro + caméra, puis micro, puis « synchronisation »
+    // (permis en arrière-plan) ; le JavaScript relance le service en « micro » dès que Pear est à l'écran.
+    val attempts = buildList {
+      if (video) add(ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA)
+      add(ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+      add(ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+    }
+    for (types in attempts) {
       try {
-        if (Build.VERSION.SDK_INT >= 30) startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
-      } catch (again: Exception) {
-        Log.w("PearCall", "service de l'appel", again)
+        startForeground(NOTIFICATION_ID, notification, types)
+        return START_NOT_STICKY
+      } catch (e: Exception) {
+        Log.w("PearCall", "service de l'appel (types $types)", e)
       }
     }
     return START_NOT_STICKY

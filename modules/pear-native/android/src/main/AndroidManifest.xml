@@ -4,7 +4,7 @@
     <service
       android:name="expo.modules.pearnative.PearCallService"
       android:exported="false"
-      android:foregroundServiceType="microphone|camera" />
+      android:foregroundServiceType="microphone|camera|dataSync" />
     <!-- Donne à l'installeur d'Android l'accès à l'APK de mise à jour téléchargé dans le cache. -->
     <provider
       android:name="expo.modules.pearnative.PearUpdateProvider"
