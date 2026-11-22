@@ -271,11 +271,17 @@ class PearNativeModule : Module() {
     AsyncFunction("completeBack") { completeBack() }.runOnQueue(Queues.MAIN)
 
     // Recharge l'interface (changement de langue) : le code JS repart de zéro, l'app reste ouverte.
+    // Redémarre vraiment l'app (nouvelle langue). Recharger seulement le JavaScript (reactHost.reload)
+    // faisait planter la version publiée : les modules natifs (appels, vidéo, carte, animations) ne
+    // supportent pas d'être rechargés à chaud. On relance l'activité principale dans une tâche neuve,
+    // puis le processus s'arrête : Android rouvre Pear dans un processus propre.
     AsyncFunction("reloadApp") {
-      val app = appContext.currentActivity?.application as? com.facebook.react.ReactApplication
-        ?: throw IllegalStateException("Application introuvable.")
-      val host = app.reactHost ?: throw IllegalStateException("Hôte React introuvable.")
-      host.reload("langue")
+      val context = appContext.reactContext ?: throw IllegalStateException("Contexte introuvable.")
+      val launch = context.packageManager.getLaunchIntentForPackage(context.packageName)
+        ?: throw IllegalStateException("Activité introuvable.")
+      val restart = Intent.makeRestartActivityTask(launch.component)
+      context.startActivity(restart)
+      android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ Runtime.getRuntime().exit(0) }, 150)
       Unit
     }.runOnQueue(Queues.MAIN)
 
